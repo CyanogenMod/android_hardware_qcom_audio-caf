@@ -435,6 +435,13 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                 }
                 else
                     mHandle->module->open(mHandle);
+
+                if(mHandle->handle == NULL) {
+                   ALOGE("read:: PCM device re-open failed");
+                   mParent->mLock.unlock();
+                   return 0;
+                }
+
                 mParent->mLock.unlock();
                 continue;
             }
@@ -445,6 +452,10 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
             else {
                 read += static_cast<ssize_t>((period_size));
                 read_pending -= period_size;
+                //Set mute by cleanning buffers read
+                if (mParent->mMicMute) {
+                    memset(buffer, 0, period_size);
+                }
                 buffer = ((uint8_t *)buffer) + period_size;
             }
 
@@ -491,7 +502,6 @@ status_t AudioStreamInALSA::close()
                return NO_ERROR;
         }
         mParent->mVoipStreamCount = 0;
-        mParent->mVoipMicMute = 0;
 #ifdef QCOM_USBAUDIO_ENABLED
     } else {
         ALOGD("Deregistering REC bit, musbRecordingState:%d", mParent->musbRecordingState);

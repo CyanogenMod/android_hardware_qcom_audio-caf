@@ -22,6 +22,7 @@
 #include <utils/Log.h>
 #include <cutils/properties.h>
 #include <linux/ioctl.h>
+#include "AudioUtil.h"
 #include "AudioHardwareALSA.h"
 #include <media/AudioRecord.h>
 #include <dlfcn.h>
@@ -46,6 +47,7 @@ static int (*csd_stop_voice)();
 #define BTSCO_RATE_16KHZ 16000
 #define USECASE_TYPE_RX 1
 #define USECASE_TYPE_TX 2
+#define MAX_HDMI_CHANNEL_CNT 6
 
 namespace android_audio_legacy
 {
@@ -96,7 +98,6 @@ static uint32_t mDevSettingsFlag = TTY_OFF | DMIC_FLAG;
 static uint32_t mDevSettingsFlag = TTY_OFF;
 #endif
 static int btsco_samplerate = 8000;
-static bool pflag = false;
 static ALSAUseCaseList mUseCaseList;
 static void *csd_handle;
 
@@ -226,6 +227,36 @@ int deviceName(alsa_handle_t *handle, unsigned flags, char **value)
     return ret;
 }
 
+status_t setHDMIChannelCount()
+{
+    status_t err = NO_ERROR;
+    int channel_count = 0;
+    const char *channel_cnt_str = NULL;
+    EDID_AUDIO_INFO info = { 0 };
+
+    ALSAControl control("/dev/snd/controlC0");
+    if (AudioUtil::getHDMIAudioSinkCaps(&info)) {
+        for (int i = 0; i < info.nAudioBlocks && i < MAX_EDID_BLOCKS; i++) {
+            if (info.AudioBlocksArray[i].nChannels > channel_count &&
+                  info.AudioBlocksArray[i].nChannels <= MAX_HDMI_CHANNEL_CNT) {
+                channel_count = info.AudioBlocksArray[i].nChannels;
+            }
+        }
+    }
+
+    switch (channel_count) {
+    case 6: channel_cnt_str = "Six"; break;
+    case 5: channel_cnt_str = "Five"; break;
+    case 4: channel_cnt_str = "Four"; break;
+    case 3: channel_cnt_str = "Three"; break;
+    default: channel_cnt_str = "Two"; break;
+    }
+    ALOGD("HDMI channel count: %s", channel_cnt_str);
+    control.set("HDMI_RX Channels", channel_cnt_str);
+
+    return err;
+}
+
 status_t setHardwareParams(alsa_handle_t *handle)
 {
     struct snd_pcm_hw_params *params;
@@ -342,8 +373,8 @@ status_t setSoftwareParams(alsa_handle_t *handle)
           params->start_threshold = periodSize/2;
           params->stop_threshold = INT_MAX;
      } else {
-         params->avail_min = periodSize/2;
-         params->start_threshold = channels * (periodSize/4);
+         params->avail_min = periodSize/(channels * 2);
+         params->start_threshold = periodSize/(channels * 2);
          params->stop_threshold = INT_MAX;
      }
     params->silence_threshold = 0;
@@ -378,6 +409,11 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
         } else if (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC) {
             if (mode == AudioSystem::MODE_IN_CALL) {
                 devices |= AudioSystem::DEVICE_OUT_EARPIECE;
+            } else if (mode == AudioSystem::MODE_IN_COMMUNICATION) {
+                if (!strncmp(curRxUCMDevice, SND_USE_CASE_DEV_SPEAKER, MAX_LEN(curRxUCMDevice, SND_USE_CASE_DEV_SPEAKER))) {
+                    devices &= ~AudioSystem::DEVICE_IN_BUILTIN_MIC;
+                    devices |= AudioSystem::DEVICE_IN_BACK_MIC;
+                }
             }
         } else if (devices & AudioSystem::DEVICE_OUT_EARPIECE) {
             devices = devices | AudioSystem::DEVICE_IN_BUILTIN_MIC;
@@ -399,8 +435,12 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
                       AudioSystem::DEVICE_IN_BUILTIN_MIC);
 #endif
         } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
-            devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
-                      AudioSystem::DEVICE_IN_AUX_DIGITAL);
+            if (mode == AudioSystem::MODE_IN_CALL)
+                devices = devices | (AudioSystem::DEVICE_IN_BACK_MIC |
+                           AudioSystem::DEVICE_OUT_SPEAKER);
+            else
+                devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
+                          AudioSystem::DEVICE_IN_BACK_MIC);
 #ifdef QCOM_PROXY_DEVICE_ENABLED
         } else if ((devices & AudioSystem::DEVICE_OUT_PROXY) ||
                   (devices & AudioSystem::DEVICE_IN_PROXY)) {
@@ -545,7 +585,7 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
         rx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
 
         if (((rx_dev_id == DEVICE_SPEAKER_MONO_RX_ACDB_ID ) || (rx_dev_id == DEVICE_SPEAKER_STEREO_RX_ACDB_ID ))
-		 && tx_dev_id == DEVICE_HANDSET_TX_ACDB_ID) {
+         && tx_dev_id == DEVICE_HANDSET_TX_ACDB_ID) {
             tx_dev_id = DEVICE_SPEAKER_TX_ACDB_ID;
         }
 
@@ -561,20 +601,6 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
             }
         }
 #endif
-    }
-
-    if (rxDevice != NULL) {
-        if (pflag && (((!strncmp(rxDevice, DEVICE_SPEAKER_HEADSET, strlen(DEVICE_SPEAKER_HEADSET))) &&
-            ((!strncmp(curRxUCMDevice, DEVICE_HEADPHONES, strlen(DEVICE_HEADPHONES))) ||
-            (!strncmp(curRxUCMDevice, DEVICE_HEADSET, strlen(DEVICE_HEADSET))))) ||
-            (((!strncmp(curRxUCMDevice, DEVICE_SPEAKER_HEADSET, strlen(DEVICE_SPEAKER_HEADSET))) &&
-            ((!strncmp(rxDevice, DEVICE_HEADPHONES, strlen(DEVICE_HEADPHONES))) ||
-            (!strncmp(rxDevice, DEVICE_HEADSET, strlen(DEVICE_HEADSET))))))) &&
-            ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI, strlen(SND_USE_CASE_VERB_HIFI))) ||
-            (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC, strlen(SND_USE_CASE_MOD_PLAY_MUSIC))))) {
-            s_open(handle);
-            pflag = false;
-        }
     }
 
     if (rxDevice != NULL) {
@@ -604,6 +630,13 @@ static status_t s_open(alsa_handle_t *handle)
     unsigned flags = 0;
     int err = NO_ERROR;
 
+    if(handle->devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+        err = setHDMIChannelCount();
+        if(err != OK) {
+            ALOGE("setHDMIChannelCount err = %d", err);
+            return err;
+        }
+    }
     /* No need to call s_close for LPA as pcm device open and close is handled by LPAPlayer in stagefright */
     if((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) || (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA))
     ||(!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) || (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
@@ -629,8 +662,10 @@ static status_t s_open(alsa_handle_t *handle)
         flags |= PCM_MMAP;
         flags |= DEBUG_ON;
     } else if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC))) {
         ALOGV("Music case");
         flags = PCM_OUT;
@@ -640,18 +675,20 @@ static status_t s_open(alsa_handle_t *handle)
     if (handle->channels == 1) {
         flags |= PCM_MONO;
     }
-#ifdef QCOM_SSR_ENABLED
     else if (handle->channels == 4 ) {
         flags |= PCM_QUAD;
     } else if (handle->channels == 6 ) {
+#ifdef QCOM_SSR_ENABLED
         if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
             || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
             flags |= PCM_QUAD;
         } else {
             flags |= PCM_5POINT1;
         }
-    }
+#else
+        flags |= PCM_5POINT1;
 #endif
+    }
     else {
         flags |= PCM_STEREO;
     }
@@ -1056,6 +1093,21 @@ static status_t s_close(alsa_handle_t *handle)
     handle->rxHandle = 0;
     ALOGV("s_close: handle %p h %p", handle, h);
     if (h) {
+        if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_VOICECALL) ||
+             !strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_VOICE)) &&
+            platform_is_Fusion3()) {
+#ifdef QCOM_CSDCLIENT_ENABLED
+            if (csd_stop_voice == NULL) {
+                ALOGE("dlsym:Error:%s Loading csd_client_disable_device", dlerror());
+            } else {
+                err = csd_stop_voice();
+                if (err < 0) {
+                    ALOGE("s_close: csd_client error %d\n", err);
+                }
+            }
+#endif
+        }
+
         ALOGV("s_close rxHandle\n");
         err = pcm_close(h);
         if(err != NO_ERROR) {
@@ -1071,21 +1123,6 @@ static status_t s_close(alsa_handle_t *handle)
         err = pcm_close(h);
         if(err != NO_ERROR) {
             ALOGE("s_close: pcm_close failed for handle with err %d", err);
-        }
-
-        if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_VOICECALL) ||
-             !strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_VOICE)) &&
-            platform_is_Fusion3()) {
-#ifdef QCOM_CSDCLIENT_ENABLED
-            if (csd_stop_voice == NULL) {
-                ALOGE("dlsym:Error:%s Loading csd_client_disable_device", dlerror());
-            } else {
-                err = csd_stop_voice();
-                if (err < 0) {
-                    ALOGE("s_close: csd_client error %d\n", err);
-                }
-            }
-#endif
         }
 
         disableDevice(handle);
@@ -1154,65 +1191,75 @@ int getUseCaseType(const char *useCase)
 {
     ALOGD("use case is %s\n", useCase);
     if (!strncmp(useCase, SND_USE_CASE_VERB_HIFI,
-           strlen(SND_USE_CASE_VERB_HIFI)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI2,
+            MAX_LEN(useCase, SND_USE_CASE_VERB_HIFI2)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC,
-           strlen(SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
-            strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
-            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI2,
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI2)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_DIGITAL_RADIO,
-            strlen(SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
-            strlen(SND_USE_CASE_MOD_PLAY_MUSIC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_MUSIC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+            MAX_LEN(useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC,
-            strlen(SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_LPA,
-            strlen(SND_USE_CASE_MOD_PLAY_LPA)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_LPA)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_TUNNEL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_FM,
-            strlen(SND_USE_CASE_MOD_PLAY_FM))) {
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_FM))) {
         return USECASE_TYPE_RX;
     } else if (!strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC,
-            strlen(SND_USE_CASE_VERB_HIFI_REC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC,
-            strlen(SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_FM_REC,
-            strlen(SND_USE_CASE_VERB_FM_REC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_FM_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_FM_A2DP_REC,
-            strlen(SND_USE_CASE_VERB_FM_A2DP_REC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_FM_A2DP_REC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC,
-            strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_MUSIC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC,
-            strlen(SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_FM,
-            strlen(SND_USE_CASE_MOD_CAPTURE_FM)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_FM)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_A2DP_FM,
-            strlen(SND_USE_CASE_MOD_CAPTURE_A2DP_FM))) {
+            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_A2DP_FM))) {
         return USECASE_TYPE_TX;
     } else if (!strncmp(useCase, SND_USE_CASE_VERB_VOICECALL,
-            strlen(SND_USE_CASE_VERB_VOICECALL)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_VOICECALL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_IP_VOICECALL,
-            strlen(SND_USE_CASE_VERB_IP_VOICECALL)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_IP_VOICECALL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_DL_REC,
-            strlen(SND_USE_CASE_VERB_DL_REC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_DL_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_UL_DL_REC,
-            strlen(SND_USE_CASE_VERB_UL_DL_REC)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_UL_DL_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_INCALL_REC,
+            MAX_LEN(useCase,SND_USE_CASE_VERB_INCALL_REC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOICE,
-            strlen(SND_USE_CASE_MOD_PLAY_VOICE)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_VOICE)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOIP,
-            strlen(SND_USE_CASE_MOD_PLAY_VOIP)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_VOIP)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_DL,
-            strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_DL)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_VOICE_DL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL,
-            strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL)) ||
+            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE,
-            strlen(SND_USE_CASE_MOD_CAPTURE_VOICE)) ||
+            MAX_LEN(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_VOLTE,
-            strlen(SND_USE_CASE_VERB_VOLTE)) ||
+            MAX_LEN(useCase,SND_USE_CASE_VERB_VOLTE)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOLTE,
-            strlen(SND_USE_CASE_MOD_PLAY_VOLTE))) {
+            MAX_LEN(useCase, SND_USE_CASE_MOD_PLAY_VOLTE))) {
         return (USECASE_TYPE_RX | USECASE_TYPE_TX);
     } else {
         ALOGE("unknown use case %s\n", useCase);
@@ -1288,6 +1335,9 @@ char *getUCMDevice(uint32_t devices, int input, char *rxDevice)
             } else {
                 return strdup(SND_USE_CASE_DEV_SPEAKER_HEADSET); /* COMBO SPEAKER+HEADSET RX */
             }
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
+            ((devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL))) {
+            return strdup(SND_USE_CASE_DEV_HDMI_SPEAKER);
 #ifdef QCOM_ANC_HEADSET_ENABLED
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
             ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET) ||
@@ -1428,8 +1478,6 @@ char *getUCMDevice(uint32_t devices, int input, char *rxDevice)
 #ifdef SEPERATED_AUDIO_INPUT
                 if(input_source == AUDIO_SOURCE_VOICE_RECOGNITION) {
                     return strdup(SND_USE_CASE_DEV_VOICE_RECOGNITION ); /* VOICE RECOGNITION TX */
-                } else if(input_source == AUDIO_SOURCE_CAMCORDER) {
-                    return strdup(SND_USE_CASE_DEV_CAMCORDER_TX ); /* CAMCORDER TX */
                 }
 #endif
                 else {
@@ -1481,6 +1529,10 @@ char *getUCMDevice(uint32_t devices, int input, char *rxDevice)
             } else {
                 if (callMode == AudioSystem::MODE_IN_CALL) {
                     return strdup(SND_USE_CASE_DEV_VOC_LINE); /* Voice BUILTIN-MIC TX */
+#ifdef SEPERATED_AUDIO_INPUT
+                } else if(input_source == AUDIO_SOURCE_CAMCORDER) {
+                    return strdup(SND_USE_CASE_DEV_CAMCORDER_TX ); /* CAMCORDER TX */
+#endif
                 } else
                     return strdup(SND_USE_CASE_DEV_LINE); /* BUILTIN-MIC TX */
             }

@@ -33,11 +33,15 @@
 #include <cutils/properties.h>
 #include <media/AudioRecord.h>
 #include <hardware_legacy/power.h>
-
+#include "AudioUtil.h"
 #include "AudioHardwareALSA.h"
 
 namespace android_audio_legacy
 {
+
+// unused 'enumVal;' is to catch error at compile time if enumVal ever changes
+// or applied on a non-existent enum
+#define ENUM_TO_STRING(var, enumVal) {var = #enumVal; enumVal;}
 
 // ----------------------------------------------------------------------------
 
@@ -61,7 +65,6 @@ ALSAStreamOps::~ALSAStreamOps()
             }
        }
        mParent->mVoipStreamCount = 0;
-       mParent->mVoipMicMute = 0;
        mParent->mVoipBitRate = 0;
     }
     close();
@@ -101,6 +104,11 @@ status_t ALSAStreamOps::set(int      *format,
         *channels = 0;
         if (mHandle->devices & AudioSystem::DEVICE_OUT_ALL) {
             switch(mHandle->channels) {
+                case 6:
+                case 5:
+                    *channels |= audio_channel_out_mask_from_count(mHandle->channels);
+                    break;
+                    // Do not fall through
                 case 4:
                     *channels |= AudioSystem::CHANNEL_OUT_BACK_LEFT;
                     *channels |= AudioSystem::CHANNEL_OUT_BACK_RIGHT;
@@ -206,12 +214,16 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
 
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
-        ALOGD("setParameters(): keyRouting with device %d", device);
+        ALOGD("setParameters(): keyRouting with device 0x%x", device);
         // reset to speaker when disconnecting HDMI to avoid timeout due to write errors
         if ((device == 0) && (mDevices == AudioSystem::DEVICE_OUT_AUX_DIGITAL)) {
             device = AudioSystem::DEVICE_OUT_SPEAKER;
         }
-        mDevices = device;
+        if (device)
+            mDevices = device;
+        else
+            ALOGV("must not change mDevices to 0");
+
         if(device) {
             mParent->doRouting(device);
         }
@@ -254,6 +266,37 @@ String8 ALSAStreamOps::getParameters(const String8& keys)
                 param.addInt(key, false);
         }
 #endif
+    }
+    key = String8(AUDIO_PARAMETER_STREAM_SUP_CHANNELS);
+    if (param.get(key, value) == NO_ERROR) {
+        EDID_AUDIO_INFO info = { 0 };
+        bool first = true;
+        value = String8();
+        if (AudioUtil::getHDMIAudioSinkCaps(&info)) {
+            for (int i = 0; i < info.nAudioBlocks && i < MAX_EDID_BLOCKS; i++) {
+                String8 append;
+                switch (info.AudioBlocksArray[i].nChannels) {
+                //Do not handle stereo output in Multi-channel cases
+                //Stereo case is handled in normal playback path
+                case 6:
+                    ENUM_TO_STRING(append, AUDIO_CHANNEL_OUT_5POINT1);
+                    break;
+                case 8:
+                    ENUM_TO_STRING(append, AUDIO_CHANNEL_OUT_7POINT1);
+                    break;
+                default:
+                    ALOGD("Unsupported number of channels %d", info.AudioBlocksArray[i].nChannels);
+                    break;
+                }
+                if (!append.isEmpty()) {
+                    value += (first ? append : String8("|") + append);
+                    first = false;
+                }
+            }
+        } else {
+            ALOGE("Failed to get HDMI sink capabilities");
+        }
+        param.add(key, value);
     }
     ALOGV("getParameters() %s", param.toString().string());
     return param.toString();
@@ -314,6 +357,11 @@ uint32_t ALSAStreamOps::channels() const
 
     if (mDevices & AudioSystem::DEVICE_OUT_ALL)
         switch(count) {
+            case 6:
+            case 5:
+                channels |=audio_channel_out_mask_from_count(count);
+                break;
+                // Do not fall through
             case 4:
                 channels |= AudioSystem::CHANNEL_OUT_BACK_LEFT;
                 channels |= AudioSystem::CHANNEL_OUT_BACK_RIGHT;
@@ -352,7 +400,6 @@ void ALSAStreamOps::close()
     ALOGD("close");
     if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
-       mParent->mVoipMicMute = false;
        mParent->mVoipBitRate = 0;
        mParent->mVoipStreamCount = 0;
     }
