@@ -326,6 +326,7 @@ public:
 
 protected:
     virtual status_t    dump(int fd, const Vector<String16>& args);
+    status_t setupDeviceforVoipCall(bool value);
 
 private:
 
@@ -662,7 +663,9 @@ private:
             friend class AudioStreamInMSM72xx;
             Mutex       mLock;
             int mVoipFd;
-            int mNumVoipStreams;
+            bool mVoipInActive;
+            bool mVoipOutActive;
+            Mutex mVoipLock;
             int mVoipSession;
 
 };
