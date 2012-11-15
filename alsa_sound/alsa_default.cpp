@@ -409,16 +409,23 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
         } else if (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC) {
             if (mode == AudioSystem::MODE_IN_CALL) {
                 devices |= AudioSystem::DEVICE_OUT_EARPIECE;
+//use QCOM_BACK_MIC_ENABLED only when BACK_MIC is supported by HW
+#ifdef QCOM_BACK_MIC_ENABLED
             } else if (mode == AudioSystem::MODE_IN_COMMUNICATION) {
                 if (!strncmp(curRxUCMDevice, SND_USE_CASE_DEV_SPEAKER, MAX_LEN(curRxUCMDevice, SND_USE_CASE_DEV_SPEAKER))) {
                     devices &= ~AudioSystem::DEVICE_IN_BUILTIN_MIC;
                     devices |= AudioSystem::DEVICE_IN_BACK_MIC;
                 }
+#endif
             }
         } else if (devices & AudioSystem::DEVICE_OUT_EARPIECE) {
             devices = devices | AudioSystem::DEVICE_IN_BUILTIN_MIC;
         } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
+#ifdef QCOM_BACK_MIC_ENABLED
             devices = devices | (AudioSystem::DEVICE_IN_BACK_MIC |
+#else
+            devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+#endif
                        AudioSystem::DEVICE_OUT_SPEAKER);
         } else if ((devices & AudioSystem::DEVICE_OUT_BLUETOOTH_SCO) ||
                    (devices & AudioSystem::DEVICE_OUT_BLUETOOTH_SCO_HEADSET) ||
@@ -436,11 +443,19 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
 #endif
         } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
             if (mode == AudioSystem::MODE_IN_CALL)
+#ifdef QCOM_BACK_MIC_ENABLED
                 devices = devices | (AudioSystem::DEVICE_IN_BACK_MIC |
+#else
+                devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+#endif
                            AudioSystem::DEVICE_OUT_SPEAKER);
             else
                 devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
+#ifdef QCOM_BACK_MIC_ENABLED
                           AudioSystem::DEVICE_IN_BACK_MIC);
+#else
+                          AudioSystem::DEVICE_IN_BUILTIN_MIC);
+#endif
 #ifdef QCOM_PROXY_DEVICE_ENABLED
         } else if ((devices & AudioSystem::DEVICE_OUT_PROXY) ||
                   (devices & AudioSystem::DEVICE_IN_PROXY)) {
@@ -1481,7 +1496,11 @@ char *getUCMDevice(uint32_t devices, int input, char *rxDevice)
                 }
 #endif
                 else {
+#ifdef QCOM_BACK_MIC_ENABLED
                     return strdup(SND_USE_CASE_DEV_HANDSET); /* BUILTIN-MIC TX */
+#else
+                    return strdup(SND_USE_CASE_DEV_LINE); /* BUILTIN-MIC TX */
+#endif
                 }
             }
         } else if (devices & AudioSystem::DEVICE_IN_AUX_DIGITAL) {
