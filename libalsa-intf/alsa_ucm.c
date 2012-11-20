@@ -1075,6 +1075,7 @@ const char *ident, int enable, int ctrl_list_type)
             if ((uc_index = get_use_case_index(uc_mgr, current_device,
                        CTRL_LIST_DEVICE)) < 0) {
                 ALOGE("No valid device found: %s", current_device);
+                free(current_device);
                 continue;
             }
             dev_cap = dev_list[uc_index].capability;
@@ -1114,8 +1115,8 @@ const char *ident, int enable, int ctrl_list_type)
                           enable, ctrl_list_type, uc_index);
                 }
                 use_case[0] = 0;
-                free(current_device);
             }
+            free(current_device);
         }
     }
     if (intdev_flag) {
