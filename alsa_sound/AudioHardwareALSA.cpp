@@ -37,6 +37,7 @@
 #include <cutils/properties.h>
 #include <media/AudioRecord.h>
 #include <hardware_legacy/power.h>
+#include <audio_utils/resampler.h>
 #include <pthread.h>
 
 #include "AudioHardwareALSA.h"
@@ -270,8 +271,8 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mUsbDevice = NULL;
     mUsbStream = NULL;
     mExtOutStream = NULL;
+    mResampler = NULL;
     mExtOutActiveUseCases = USECASE_NONE;
-    mActiveExtOut = 0;
     mIsExtOutEnabled = false;
     mKillExtOutThread = false;
     mExtOutThreadAlive = false;
@@ -291,6 +292,10 @@ AudioHardwareALSA::~AudioHardwareALSA()
             it != mDeviceList.end(); ++it) {
         it->useCase[0] = 0;
         mDeviceList.erase(it);
+    }
+    if (mResampler) {
+        release_resampler(mResampler);
+        mResampler = NULL;
     }
 #ifdef QCOM_ACDB_ENABLED
      if (acdb_deallocate == NULL) {
@@ -2439,6 +2444,7 @@ status_t AudioHardwareALSA::stopExtOutThread()
 void AudioHardwareALSA::switchExtOut(int device) {
 
     ALOGV("switchExtOut");
+    uint32_t sampleRate;
     Mutex::Autolock autolock1(mExtOutMutex);
     if (device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
         mExtOutStream = mA2dpStream;
@@ -2446,6 +2452,37 @@ void AudioHardwareALSA::switchExtOut(int device) {
         mExtOutStream = mUsbStream;
     } else {
         mExtOutStream = NULL;
+    }
+    if (mExtOutStream != NULL) {
+        sampleRate = mExtOutStream->common.get_sample_rate(&mExtOutStream->common);
+        if (sampleRate > AFE_PROXY_SAMPLE_RATE) {
+            ALOGW(" Requested samplerate %d is greater than supported so fall back to %d ",
+                  sampleRate,AFE_PROXY_SAMPLE_RATE);
+            sampleRate = AFE_PROXY_SAMPLE_RATE;
+        }
+        if (mResampler != NULL) {
+            release_resampler(mResampler);
+            mResampler = NULL;
+        }
+        if (sampleRate != AFE_PROXY_SAMPLE_RATE) {
+            mResampler = (struct resampler_itfe *)calloc(1, sizeof(struct resampler_itfe));
+            if (mResampler != NULL ) {
+                status_t err = create_resampler(AFE_PROXY_SAMPLE_RATE,
+                                                sampleRate,
+                                                2, //channel count
+                                                RESAMPLER_QUALITY_DEFAULT,
+                                                NULL,
+                                                &mResampler);
+                ALOGV(" sampleRate %d mResampler %p",sampleRate,mResampler);
+                if (err) {
+                    ALOGE(" Failed to create resampler");
+                    free(mResampler);
+                    mResampler = NULL;
+                }
+            } else{
+                ALOGE(" Failed to allocate memory for mResampler = %p",mResampler);
+            }
+        }
     }
 }
 
@@ -2481,12 +2518,12 @@ void AudioHardwareALSA::extOutThreadFunc() {
     void  *data;
     int err = NO_ERROR;
     ssize_t size = 0;
+    void * outbuffer= malloc(AFE_PROXY_PERIOD_SIZE);
 
     mALSADevice->resetProxyVariables();
 
     ALOGV("mKillExtOutThread = %d", mKillExtOutThread);
     while(!mKillExtOutThread) {
-
         {
             Mutex::Autolock autolock1(mExtOutMutex);
             if (!mExtOutStream || !mIsExtOutEnabled ||
@@ -2521,12 +2558,26 @@ void AudioHardwareALSA::extOutThreadFunc() {
         void *copyBuffer = data;
         numBytesRemaining = size;
         proxyBufferTime = mALSADevice->mProxyParams.mBufferTime;
+        {
+            Mutex::Autolock autolock1(mExtOutMutex);
+            if (mResampler != NULL) {
+                uint32_t inFrames = size/(AFE_PROXY_CHANNEL_COUNT*2);
+                uint32_t outFrames = inFrames;
+                mResampler->resample_from_input(mResampler,
+                                               (int16_t *)data,
+                                               &inFrames,
+                                               (int16_t *)outbuffer,
+                                               &outFrames);
+                copyBuffer = outbuffer;
+                numBytesRemaining = outFrames*(AFE_PROXY_CHANNEL_COUNT*2);
+                ALOGV("inFrames %d outFrames %d",inFrames,outFrames);
+            }
+        }
         while (err == OK && (numBytesRemaining  > 0) && !mKillExtOutThread
                 && mIsExtOutEnabled ) {
             {
                 Mutex::Autolock autolock1(mExtOutMutex);
                 if(mExtOutStream != NULL ) {
-
                     bytesAvailInBuffer = mExtOutStream->common.get_buffer_size(&mExtOutStream->common);
                     uint32_t writeLen = bytesAvailInBuffer > numBytesRemaining ?
                                     numBytesRemaining : bytesAvailInBuffer;

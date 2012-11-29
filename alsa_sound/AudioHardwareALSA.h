@@ -166,6 +166,7 @@ static int USBRECBIT_FM = (1 << 3);
 #define NUM_FDS 2
 #define AFE_PROXY_SAMPLE_RATE 48000
 #define AFE_PROXY_CHANNEL_COUNT 2
+#define AFE_PROXY_PERIOD_SIZE 3072
 
 #define MAX_SLEEP_RETRY 100  /*  Will check 100 times before continuing */
 #define AUDIO_INIT_SLEEP_WAIT 50 /* 50 ms */
@@ -877,6 +878,8 @@ protected:
     audio_stream_out   *mUsbStream;
     audio_hw_device_t  *mUsbDevice;
     audio_stream_out   *mExtOutStream;
+    struct resampler_itfe *mResampler;
+
 
     bool                mKillExtOutThread;
     bool                mExtOutThreadAlive;
@@ -894,12 +897,6 @@ protected:
       USECASE_FM = 0x10,
     };
     uint32_t mExtOutActiveUseCases;
-
-    enum {
-      A2DP_STREAM = 0x1,
-      USB_STREAM  = 0x10,
-    };
-    uint32_t mActiveExtOut;
 
 public:
     bool mRouteAudioToExtOut;
