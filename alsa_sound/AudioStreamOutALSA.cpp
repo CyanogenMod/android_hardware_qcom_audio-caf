@@ -1,7 +1,7 @@
 /* AudioStreamOutALSA.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+ ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -53,12 +53,19 @@ static const int DEFAULT_SAMPLE_RATE = ALSA_DEFAULT_SAMPLE_RATE;
 AudioStreamOutALSA::AudioStreamOutALSA(AudioHardwareALSA *parent, alsa_handle_t *handle) :
     ALSAStreamOps(parent, handle),
     mParent(parent),
-    mFrameCount(0)
+    mFrameCount(0),
+    mUseCase(AudioHardwareALSA::USECASE_NONE)
 {
 }
 
 AudioStreamOutALSA::~AudioStreamOutALSA()
 {
+    if (mParent->mRouteAudioToA2dp) {
+         status_t err = mParent->stopA2dpPlayback(mUseCase);
+         if (err) {
+             ALOGE("stopA2dpPlayback return err  %d", err);
+         }
+    }
     close();
 }
 
@@ -84,21 +91,7 @@ status_t AudioStreamOutALSA::setVolume(float left, float right)
     }
     vol = lrint((volume * 0x2000)+0.5);
 
-    if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER) ||
-       !strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA)) {
-        ALOGV("setLpaVolume(%f)\n", volume);
-        ALOGV("Setting LPA volume to %d (available range is 0 to 100)\n", vol);
-        mHandle->module->setLpaVolume(vol);
-        return status;
-    }
-    else if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
-            !strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)) {
-        ALOGV("setCompressedVolume(%f)\n", volume);
-        ALOGV("Setting Compressed volume to %d (available range is 0 to 100)\n", vol);
-        mHandle->module->setCompressedVolume(vol);
-        return status;
-    }
-    else if(!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+    if(!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
             sizeof(mHandle->useCase)) || !strncmp(mHandle->useCase,
             SND_USE_CASE_MOD_PLAY_VOIP, sizeof(mHandle->useCase))) {
         ALOGV("Avoid Software volume by returning success\n");
@@ -120,98 +113,103 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
 
     int write_pending = bytes;
 
-    if((mHandle->handle == NULL) && (mHandle->rxHandle == NULL) &&
-         (strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) &&
-         (strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+    if((strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) &&
+       (strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
         mParent->mLock.lock();
-
-        ALOGD("mHandle->useCase: %s", mHandle->useCase);
-        snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
-            if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP)){
-                strlcpy(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
-                        sizeof(SND_USE_CASE_VERB_IP_VOICECALL));
-            } else if(!strcmp(mHandle->useCase,SND_USE_CASE_MOD_PLAY_MUSIC2)) {
-                strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI2,
-                        sizeof(SND_USE_CASE_MOD_PLAY_MUSIC2));
-            } else if (!strcmp(mHandle->useCase,SND_USE_CASE_MOD_PLAY_MUSIC)){
-                strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI,
-                        sizeof(SND_USE_CASE_MOD_PLAY_MUSIC));
-            } else if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC)) {
-                strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC,
-                        sizeof(SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC));
+        /* PCM handle might be closed and reopened immediately to flush
+         * the buffers, recheck and break if PCM handle is valid */
+        if (mHandle->handle == NULL && mHandle->rxHandle == NULL) {
+            ALOGV("mDevices =0x%x", mDevices);
+            if(mDevices &  AudioSystem::DEVICE_OUT_ALL_A2DP) {
+                ALOGV("StreamOut write - mRouteAudioToA2dp = %d ", mParent->mRouteAudioToA2dp);
+                mParent->mRouteAudioToA2dp = true;
             }
-        } else {
-            if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)){
-                strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
-                        sizeof(SND_USE_CASE_MOD_PLAY_VOIP));
-            } else if(!strcmp(mHandle->useCase,SND_USE_CASE_VERB_HIFI2)) {
-                strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
-                        sizeof(SND_USE_CASE_MOD_PLAY_MUSIC2));
-            } else if (!strcmp(mHandle->useCase,SND_USE_CASE_VERB_HIFI)){
-                strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
-                        sizeof(SND_USE_CASE_MOD_PLAY_MUSIC));
-            } else if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) {
-                strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC,
-                        sizeof(SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC));
+            ALOGV("write: mHandle->useCase: %s", mHandle->useCase);
+            snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
+            if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+                if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)){
+                     strlcpy(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,sizeof(mHandle->useCase));
+                } else if (mHandle->isFastOutput){
+                           strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC, sizeof(mHandle->useCase));
+                } else {
+                           strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI, sizeof(mHandle->useCase));
+                }
+            } else {
+                if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP)) {
+                    strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,sizeof(mHandle->useCase));
+                } else if (mHandle->isFastOutput){
+                           strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC, sizeof(mHandle->useCase));
+                } else {
+                           strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC, sizeof(mHandle->useCase));
+                }
             }
-        }
-        free(use_case);
-        if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-           (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-#ifdef QCOM_USBAUDIO_ENABLED
-            if((mDevices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
-                  (mDevices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)||
-                  (mDevices & AudioSystem::DEVICE_OUT_PROXY)) {
-                mDevices |= AudioSystem::DEVICE_OUT_PROXY;
-                mHandle->module->route(mHandle, mDevices , mParent->mode());
-            }else
-#endif
-            {
-              mHandle->module->route(mHandle, mDevices , AudioSystem::MODE_IN_COMMUNICATION);
-            }
-#ifdef QCOM_USBAUDIO_ENABLED
-        } else if((mDevices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
-                  (mDevices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)||
-                  (mDevices & AudioSystem::DEVICE_OUT_PROXY)) {
-            mDevices |= AudioSystem::DEVICE_OUT_PROXY;
-            mHandle->module->route(mHandle, mDevices , mParent->mode());
-#endif
-        } else {
-            mHandle->module->route(mHandle, mDevices , mParent->mode());
-        }
-        if (!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI) ||
-            !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI2) ||
-            !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC) ||
-            !strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) {
-            snd_use_case_set(mHandle->ucMgr, "_verb", mHandle->useCase);
-        } else {
-            snd_use_case_set(mHandle->ucMgr, "_enamod", mHandle->useCase);
-        }
-        if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-          (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-             err = mHandle->module->startVoipCall(mHandle);
-        }
-        else
-             mHandle->module->open(mHandle);
-        if(mHandle->handle == NULL) {
-            ALOGE("write:: device open failed");
-            mParent->mLock.unlock();
-            return bytes;
-        }
-#ifdef QCOM_USBAUDIO_ENABLED
-        if((mHandle->devices == AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET)||
-               (mHandle->devices == AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)){
+            free(use_case);
             if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
                (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-                mParent->musbPlaybackState |= USBPLAYBACKBIT_VOIPCALL;
+#ifdef QCOM_USBAUDIO_ENABLED
+                if((mDevices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
+                      (mDevices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)||
+                      (mDevices & AudioSystem::DEVICE_OUT_PROXY)) {
+                    mHandle->module->route(mHandle, mDevices , mParent->mode());
+                }else
+#endif
+                {
+                  mHandle->module->route(mHandle, mDevices , AUDIO_MODE_IN_COMMUNICATION);
+                }
+#ifdef QCOM_USBAUDIO_ENABLED
+            } else if((mDevices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
+                      (mDevices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)||
+                      (mDevices & AudioSystem::DEVICE_OUT_PROXY)) {
+                mHandle->module->route(mHandle, mDevices , mParent->mode());
+#endif
             } else {
-                mParent->startUsbPlaybackIfNotStarted();
-                mParent->musbPlaybackState |= USBPLAYBACKBIT_MUSIC;
+                  mHandle->module->route(mHandle, mDevices , mParent->mode());
+            }
+            if (!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI) ||
+                !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI2) ||
+                !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC) ||
+                !strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) {
+                snd_use_case_set(mHandle->ucMgr, "_verb", mHandle->useCase);
+            } else {
+                snd_use_case_set(mHandle->ucMgr, "_enamod", mHandle->useCase);
+            }
+            if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
+              (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+                 err = mHandle->module->startVoipCall(mHandle);
+            }
+            else
+                 mHandle->module->open(mHandle);
+            if(mHandle->handle == NULL) {
+                ALOGE("write:: device open failed");
+                mParent->mLock.unlock();
+                return bytes;
+            }
+#ifdef QCOM_USBAUDIO_ENABLED
+            if((mHandle->devices == AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET)||
+                   (mHandle->devices == AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)){
+                if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
+                   (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+                    mParent->musbPlaybackState |= USBPLAYBACKBIT_VOIPCALL;
+                } else {
+                    mParent->startUsbPlaybackIfNotStarted();
+                    mParent->musbPlaybackState |= USBPLAYBACKBIT_MUSIC;
+                }
+            }
+#endif
+        }
+        if (mParent->mRouteAudioToA2dp) {
+            mUseCase = mParent->useCaseStringToEnum(mHandle->useCase);
+            if (! (mParent->getA2DPActiveUseCases_l() & mUseCase )){
+                ALOGD("startA2dpPlayback_l from write :: useCase = %s", mHandle->useCase);
+                status_t err = NO_ERROR;
+                err = mParent->startA2dpPlayback_l(mUseCase);
+                if(err) {
+                    ALOGE("startA2dpPlayback_l from write return err = %d", err);
+                    mParent->mLock.unlock();
+                    return err;
+                }
             }
         }
-#endif
-
         mParent->mLock.unlock();
     }
 
@@ -224,7 +222,7 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
         ALOGV("Starting playback on USB");
         if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL) ||
            !strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP)) {
-            ALOGD("Setting VOIPCALL bit here, musbPlaybackState %d", mParent->musbPlaybackState);
+            ALOGV("Setting VOIPCALL bit here, musbPlaybackState %d", mParent->musbPlaybackState);
             mParent->musbPlaybackState |= USBPLAYBACKBIT_VOIPCALL;
         }else{
             ALOGV("enabling music, musbPlaybackState: %d ", mParent->musbPlaybackState);
@@ -310,16 +308,24 @@ status_t AudioStreamOutALSA::close()
                  mParent->musbRecordingState &= ~USBRECBIT_VOIPCALL;
                  mParent->closeUsbPlaybackIfNothingActive();
                  mParent->closeUsbRecordingIfNothingActive();
+
+                 if (mParent->mRouteAudioToA2dp) {
+                     //TODO: HANDLE VOIP A2DP
+                 }
              }
 #endif
                 return NO_ERROR;
          }
          mParent->mVoipStreamCount = 0;
+         mParent->mVoipMicMute = 0;
     }
 #ifdef QCOM_USBAUDIO_ENABLED
       else if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
               (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
         mParent->musbPlaybackState &= ~USBPLAYBACKBIT_LPA;
+    } else if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+              (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+        mParent->musbPlaybackState &= ~USBPLAYBACKBIT_TUNNEL;
     } else {
         mParent->musbPlaybackState &= ~USBPLAYBACKBIT_MUSIC;
     }
@@ -327,6 +333,14 @@ status_t AudioStreamOutALSA::close()
     mParent->closeUsbPlaybackIfNothingActive();
 #endif
 
+    if (mParent->mRouteAudioToA2dp) {
+         ALOGD("close-suspendA2dpPlayback_l::mUseCase = %d",mUseCase);
+         status_t err = mParent->suspendA2dpPlayback_l(mUseCase);
+         if(err) {
+             ALOGE("suspendA2dpPlayback from hardware output close return err = %d", err);
+             return err;
+         }
+    }
     ALSAStreamOps::close();
 
     return NO_ERROR;
@@ -348,6 +362,10 @@ status_t AudioStreamOutALSA::standby()
         (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
         ALOGV("Deregistering LPA bit");
         mParent->musbPlaybackState &= ~USBPLAYBACKBIT_LPA;
+    } else if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+             (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+        ALOGD("Deregistering Tunnel Player bit");
+        mParent->musbPlaybackState &= ~USBPLAYBACKBIT_TUNNEL;
     } else {
         ALOGV("Deregistering MUSIC bit, musbPlaybackState: %d", mParent->musbPlaybackState);
         mParent->musbPlaybackState &= ~USBPLAYBACKBIT_MUSIC;
@@ -355,6 +373,12 @@ status_t AudioStreamOutALSA::standby()
 #endif
 
     mHandle->module->standby(mHandle);
+    if (mParent->mRouteAudioToA2dp) {
+        status_t err = mParent->stopA2dpPlayback_l(mUseCase);
+        if(err) {
+            ALOGE("stopA2dpPlayback return err  %d", err);
+        }
+    }
 
 #ifdef QCOM_USBAUDIO_ENABLED
     mParent->closeUsbPlaybackIfNothingActive();

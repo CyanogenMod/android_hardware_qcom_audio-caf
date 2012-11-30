@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,45 +125,6 @@ static int ap_init_check(const struct audio_policy *pol)
     return qap->apm->initCheck();
 }
 
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-static audio_io_handle_t ap_get_session(struct audio_policy *pol,
-                                       audio_stream_type_t stream,
-                                       audio_format_t format,
-                                       audio_policy_output_flags_t flags,
-                                       int sessionId,
-                                       uint32_t samplingRate,
-                                       uint32_t channels)
-{
-    struct qcom_audio_policy *qap = to_qap(pol);
-
-    ALOGV("%s: tid %d", __func__, gettid());
-    return qap->apm->getSession((AudioSystem::stream_type)stream,
-                               format, (AudioSystem::output_flags)flags,
-                               sessionId,
-                               samplingRate,
-                               channels);
-}
-
-static void ap_pause_session(struct audio_policy *pol, audio_io_handle_t output,
-                          audio_stream_type_t stream)
-{
-    struct qcom_audio_policy *qap = to_qap(pol);
-    qap->apm->pauseSession(output, (AudioSystem::stream_type)stream);
-}
-
-static void ap_resume_session(struct audio_policy *pol, audio_io_handle_t output,
-                          audio_stream_type_t stream)
-{
-    struct qcom_audio_policy *qap = to_qap(pol);
-    qap->apm->resumeSession(output, (AudioSystem::stream_type)stream);
-}
-
-static void ap_release_session(struct audio_policy *pol, audio_io_handle_t output)
-{
-    struct qcom_audio_policy *qap = to_qap(pol);
-    qap->apm->releaseSession(output);
-}
-#endif
 
 static audio_io_handle_t ap_get_output(struct audio_policy *pol,
                                        audio_stream_type_t stream,
@@ -248,7 +209,7 @@ static int ap_set_stream_volume_index(struct audio_policy *pol,
     struct qcom_audio_policy *qap = to_qap(pol);
     return qap->apm->setStreamVolumeIndex((AudioSystem::stream_type)stream,
                                           index,
-                                          AUDIO_DEVICE_OUT_DEFAULT); 
+                                          AUDIO_DEVICE_OUT_DEFAULT);
 }
 
 static int ap_get_stream_volume_index(const struct audio_policy *pol,
@@ -298,14 +259,14 @@ static audio_devices_t ap_get_devices_for_stream(const struct audio_policy *pol,
 }
 
 static audio_io_handle_t ap_get_output_for_effect(struct audio_policy *pol,
-                                            struct effect_descriptor_s *desc)
+                                            const struct effect_descriptor_s *desc)
 {
     struct qcom_audio_policy *qap = to_qap(pol);
     return qap->apm->getOutputForEffect(desc);
 }
 
 static int ap_register_effect(struct audio_policy *pol,
-                              struct effect_descriptor_s *desc,
+                              const struct effect_descriptor_s *desc,
                               audio_io_handle_t io,
                               uint32_t strategy,
                               int session,
@@ -327,7 +288,7 @@ static int ap_set_effect_enabled(struct audio_policy *pol, int id, bool enabled)
     return qap->apm->setEffectEnabled(id, enabled);
 }
 
-static bool ap_is_stream_active(const struct audio_policy *pol, 
+static bool ap_is_stream_active(const struct audio_policy *pol,
                                 audio_stream_type_t stream,
                                 uint32_t in_past_ms)
 {
@@ -365,12 +326,6 @@ static int create_qcom_ap(const struct audio_policy_device *device,
         ap_set_can_mute_enforced_audible;
     qap->policy.init_check = ap_init_check;
     qap->policy.get_output = ap_get_output;
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-    qap->policy.get_session = ap_get_session;
-    qap->policy.pause_session = ap_pause_session;
-    qap->policy.resume_session = ap_resume_session;
-    qap->policy.release_session = ap_release_session;
-#endif
     qap->policy.start_output = ap_start_output;
     qap->policy.stop_output = ap_stop_output;
     qap->policy.release_output = ap_release_output;
