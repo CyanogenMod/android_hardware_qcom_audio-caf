@@ -44,6 +44,7 @@ extern "C" {
 #define CAP_VOICE 0x4
 #define DEVICE_HANDSET_RX_ACDB_ID                       7 // HANDSET_SPKR
 #define DEVICE_HANDSET_TX_ACDB_ID                       4 // HANDSET_MIC
+#define DEVICE_SPEAKER_RX_ACDB_ID                       15// SPKR_PHONE_SPKR_STEREO
 #define DEVICE_SPEAKER_MONO_RX_ACDB_ID                  14// SPKR_PHONE_SPKR_MONO
 #define DEVICE_SPEAKER_STEREO_RX_ACDB_ID                15// SPKR_PHONE_SPKR_STEREO
 #define DEVICE_SPEAKER_TX_ACDB_ID                       11// SPKR_PHONE_MIC
@@ -53,6 +54,8 @@ extern "C" {
 #define DEVICE_DUALMIC_HANDSET_TX_ENDFIRE_ACDB_ID       6 // HANDSET_MIC_ENDFIRE
 #define DEVICE_DUALMIC_SPEAKER_TX_BROADSIDE_ACDB_ID     12// SPKR_PHONE_MIC_BROADSIDE
 #define DEVICE_DUALMIC_SPEAKER_TX_ENDFIRE_ACDB_ID       13// SPKR_PHONE_MIC_ENDFIRE
+#define DEVICE_DUALMIC_HANDSET_STEREO_ACDB_ID           34
+#define DEVICE_DUALMIC_SPEAKER_PHONE_STEREO_ACDB_ID     35
 #define DEVICE_TTY_HEADSET_MONO_RX_ACDB_ID              17// TTY_HEADSET_SPKR
 #define DEVICE_TTY_HEADSET_MONO_TX_ACDB_ID              16// TTY_HEADSET_MIC
 #define DEVICE_BT_SCO_RX_ACDB_ID                        22// BT_SCO_SPKR
@@ -66,10 +69,10 @@ extern "C" {
 #define DEVICE_PROXY_RX_ACDB_ID                         DEVICE_HDMI_STEREO_RX_ACDB_ID
 #define DEVICE_TTY_VCO_HANDSET_TX_ACDB_ID               36// TTY_VCO_HANDSET_MIC
 #define DEVICE_TTY_HCO_HANDSET_RX_ACDB_ID               37// TTY_HCO_HANDSET_SPRK
-#define DEVICE_HANDSET_TX_FV5_ACDB_ID                   50
-#define DEVICE_DUALMIC_HANDSET_TX_ENDFIRE_FV5_ACDB_ID   51
-#define DEVICE_SPEAKER_TX_FV5_ACDB_ID                   52
-#define DEVICE_DUALMIC_SPEAKER_TX_ENDFIRE_FV5_ACDB_ID   53
+#define DEVICE_HANDSET_TX_FV5_ACDB_ID                   40
+#define DEVICE_DUALMIC_HANDSET_TX_ENDFIRE_FV5_ACDB_ID   41
+#define DEVICE_SPEAKER_TX_FV5_ACDB_ID                   42
+#define DEVICE_DUALMIC_SPEAKER_TX_ENDFIRE_FV5_ACDB_ID   43
 #define DEVICE_INCALL_VOICE_RECORD_STEREO_ACDB_ID       45
 #define DEVICE_INCALL_MUSIC_DELIVERY_MONO_ACDB_ID       46
 #define DEVICE_INCALL_VOICE_RECORD_MONO_ACDB_ID         47
@@ -117,6 +120,7 @@ typedef struct card_mctrl {
     int acdb_id;
     int capability;
     char *effects_mixer_ctl;
+    char *ec_ref_rx_mixer_ctl;
 }card_mctrl_t;
 
 /* identifier node structure for identifier list*/
@@ -168,7 +172,6 @@ struct snd_use_case_mgr {
     int current_rx_device;
     card_ctxt_t *card_ctxt_ptr;
     pthread_t thr;
-    void *acdb_handle;
 };
 
 #define MAX_NUM_CARDS (sizeof(card_list)/sizeof(char *))
@@ -177,8 +180,16 @@ struct snd_use_case_mgr {
 static const char *card_list[] = {
     "snd_soc_msm",
     "snd_soc_msm_2x",
+    "snd_soc_msm_2x_mpq",
     "snd_soc_msm_2x_Fusion3",
     "snd_soc_msm_Sitar",
+    "snd_soc_msm_I2S",
+    "snd_soc_msm_Taiko",
+    "snd_soc_msm_Taiko_CDP",
+    "snd_soc_msm_Taiko_Fluid",
+    "snd_soc_msm_Taiko_liquid",
+    "snd_soc_msm_I2SFusion",
+    "us_soc_msm",
 };
 
 typedef struct card_mapping {
@@ -190,8 +201,16 @@ typedef struct card_mapping {
 static card_mapping_t card_mapping_list[] = {
     {"snd_soc_msm", 0},
     {"snd_soc_msm_2x", 0},
+    {"snd_soc_msm_2x_mpq", 0},
     {"snd_soc_msm_2x_Fusion3", 0},
     {"snd_soc_msm_Sitar", 0},
+    {"snd_soc_msm_I2S", 0},
+    {"snd_soc_msm_Taiko", 0},
+    {"snd_soc_msm_Taiko_CDP", 0},
+    {"snd_soc_msm_Taiko_Fluid", 0},
+    {"snd_soc_msm_Taiko_liquid", 0},
+    {"snd_soc_msm_I2SFusion", 0},
+    {"us_soc_msm", 0},
 };
 
 /* New use cases, devices and modifiers added
@@ -203,6 +222,8 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC       "HiFi Lowlatency Rec"
 #define SND_USE_CASE_VERB_DL_REC	 "DL REC"
 #define SND_USE_CASE_VERB_UL_DL_REC      "UL DL REC"
+#define SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_DL	 "Compressed DL REC"
+#define SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_UL_DL      "Compressed UL DL REC"
 #define SND_USE_CASE_VERB_HIFI_TUNNEL    "HiFi Tunnel"
 #define SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC    "HiFi Lowlatency"
 #define SND_USE_CASE_VERB_HIFI2       "HiFi2"
@@ -210,6 +231,11 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_VERB_MI2S        "MI2S"
 #define SND_USE_CASE_VERB_VOLTE    "VoLTE"
 #define SND_USE_CASE_VERB_ADSP_TESTFWK "ADSP testfwk"
+#define SND_USE_CASE_VERB_HIFI_REC2       "HiFi Rec2"
+#define SND_USE_CASE_VERB_HIFI_REC_COMPRESSED    "HiFi Rec Compressed"
+#define SND_USE_CASE_VERB_HIFI3       "HiFi3"
+#define SND_USE_CASE_VERB_HIFI_TUNNEL2    "HiFi Tunnel2"
+#define SND_USE_CASE_VERB_HIFI_PSEUDO_TUNNEL    "HiFi Pseudo Tunnel"
 
 #define SND_USE_CASE_DEV_FM_TX           "FM Tx"
 #define SND_USE_CASE_DEV_ANC_HEADSET     "ANC Headset"
@@ -229,16 +255,25 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_DEV_TTY_HANDSET_ANALOG_TX  "TTY Handset Analog Tx"
 #define SND_USE_CASE_DEV_DUAL_MIC_BROADSIDE "DMIC Broadside"
 #define SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE "DMIC Endfire"
+#define SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE_SGLTE "DMIC Endfire SGLTE"
+#define SND_USE_CASE_DEV_DUAL_MIC_HANDSET_STEREO "Handset DMIC Stereo"
+#define SND_USE_CASE_DEV_DUAL_MIC_HANDSET_STEREO_SGLTE "Handset DMIC Stereo SGLTE"
 #define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_BROADSIDE "Speaker DMIC Broadside"
 #define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE "Speaker DMIC Endfire"
+#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE_SGLTE "Speaker DMIC Endfire SGLTE"
+#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_STEREO "Speaker DMIC Stereo"
+#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_STEREO_SGLTE "Speaker DMIC Stereo SGLTE"
 #define SND_USE_CASE_DEV_HDMI_TX             "HDMI Tx"
 #define SND_USE_CASE_DEV_HDMI_SPDIF          "HDMI SPDIF"
+#define SND_USE_CASE_DEV_HDMI_SPDIF_SPEAKER   "HDMI SPDIF Speaker"
 #define SND_USE_CASE_DEV_QUAD_MIC "QMIC"
 #define SND_USE_CASE_DEV_SSR_QUAD_MIC "SSR QMIC"
 #define SND_USE_CASE_DEV_PROXY_RX     "PROXY Rx"
 #define SND_USE_CASE_DEV_PROXY_TX     "PROXY Tx"
-#define SND_USE_CASE_DEV_HDMI_SPEAKER     "HDMI Speaker"
+#define SND_USE_CASE_DEV_USB_PROXY_RX     "USB PROXY Rx"
+#define SND_USE_CASE_DEV_USB_PROXY_TX     "USB PROXY Tx"
 #define SND_USE_CASE_DEV_SPDIF_SPEAKER     "SPDIF Speaker"
+#define SND_USE_CASE_DEV_HDMI_SPEAKER      "HDMI Speaker"
 #define SND_USE_CASE_DEV_SPDIF_HANDSET     "SPDIF Earpiece"
 #define SND_USE_CASE_DEV_SPDIF_HEADSET     "SPDIF Headphones"
 #define SND_USE_CASE_DEV_SPDIF_ANC_HEADSET     "SPDIF ANC Headset"
@@ -269,11 +304,20 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_MOD_CAPTURE_VOIP    "Capture VOIP"
 #define SND_USE_CASE_MOD_CAPTURE_VOICE_DL       "Capture Voice Downlink"
 #define SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL    "Capture Voice Uplink Downlink"
+#define SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_DL       "Capture Compressed Voice DL"
+#define SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_UL_DL    "Capture Compressed Voice UL DL"
 #define SND_USE_CASE_MOD_PLAY_TUNNEL     "Play Tunnel"
 #define SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC     "Play Lowlatency Music"
 #define SND_USE_CASE_MOD_PLAY_MUSIC2       "Play Music2"
 #define SND_USE_CASE_MOD_PLAY_MI2S       "Play MI2S"
 #define SND_USE_CASE_MOD_PLAY_VOLTE   "Play VoLTE"
+#define SND_USE_CASE_MOD_CAPTURE_MUSIC2       "Capture Music2"
+#define SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED    "Capture Music Compressed"
+#define SND_USE_CASE_MOD_PLAY_MUSIC3       "Play Music3"
+#define SND_USE_CASE_MOD_PLAY_TUNNEL1     "Play Tunnel1"
+#define SND_USE_CASE_MOD_PLAY_TUNNEL2     "Play Tunnel2"
+#define SND_USE_CASE_MOD_PSEUDO_TUNNEL     "Pseudo Tunnel"
+
 
 /* List utility functions for maintaining enabled devices and modifiers */
 static int snd_ucm_add_ident_to_list(struct snd_ucm_ident_node **head, const char *value);
@@ -302,6 +346,7 @@ static int snd_ucm_parse_section(snd_use_case_mgr_t **uc_mgr, char **cur_str, ch
 static int snd_ucm_extract_name(char *buf, char **case_name);
 static int snd_ucm_extract_acdb(char *buf, int *id, int *cap);
 static int snd_ucm_extract_effects_mixer_ctl(char *buf, char **mixer_name);
+static int snd_ucm_extract_ec_ref_rx_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_extract_dev_name(char *buf, char **dev_name);
 static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int count);
 static int snd_ucm_print(snd_use_case_mgr_t *uc_mgr);

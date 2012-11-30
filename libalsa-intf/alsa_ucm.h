@@ -102,6 +102,7 @@ extern "C" {
 #define SND_USE_CASE_VERB_VOICE			"Voice"
 #define SND_USE_CASE_VERB_VOICE_LOW_POWER	"Voice Low Power"
 #define SND_USE_CASE_VERB_VOICECALL		"Voice Call"
+#define SND_USE_CASE_VERB_SGLTECALL             "SGLTE"
 #define SND_USE_CASE_VERB_IP_VOICECALL		"Voice Call IP"
 #define SND_USE_CASE_VERB_ANALOG_RADIO		"FM Analog Radio"
 #define SND_USE_CASE_VERB_DIGITAL_RADIO		"FM Digital Radio"
@@ -149,6 +150,7 @@ extern "C" {
 #define SND_USE_CASE_MOD_CAPTURE_MUSIC		"Capture Music"
 #define SND_USE_CASE_MOD_PLAY_MUSIC		"Play Music"
 #define SND_USE_CASE_MOD_PLAY_VOICE		"Play Voice"
+#define SND_USE_CASE_MOD_PLAY_SGLTE             "Play SGLTE"
 #define SND_USE_CASE_MOD_PLAY_TONE		"Play Tone"
 #define SND_USE_CASE_MOD_ECHO_REF		"Echo Reference"
 /* add new modifiers to end of list */
