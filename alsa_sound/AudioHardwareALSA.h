@@ -745,12 +745,22 @@ public:
     // parameters is not supported
     virtual size_t    getInputBufferSize(uint32_t sampleRate, int format, int channels);
 
+#ifdef QCOM_TUNNEL_LPA_ENABLED
+    /** This method creates and opens the audio hardware output
+      *  session for LPA */
+    virtual AudioStreamOut* openOutputSession(
+            uint32_t devices,
+            int *format,
+            status_t *status,
+            int sessionId,
+            uint32_t samplingRate=0,
+            uint32_t channels=0);
+    virtual void closeOutputSession(AudioStreamOut* out);
+#endif
+
     /** This method creates and opens the audio hardware output stream */
     virtual AudioStreamOut* openOutputStream(
             uint32_t devices,
-#ifdef QCOM_OUTPUT_FLAGS_ENABLED
-            audio_output_flags_t flags,
-#endif
             int *format=0,
             uint32_t *channels=0,
             uint32_t *sampleRate=0,

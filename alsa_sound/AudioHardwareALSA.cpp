@@ -980,9 +980,6 @@ uint32_t AudioHardwareALSA::getVoipMode(int format)
 
 AudioStreamOut *
 AudioHardwareALSA::openOutputStream(uint32_t devices,
-#ifdef QCOM_OUTPUT_FLAGS_ENABLED
-                                    audio_output_flags_t flags,
-#endif
                                     int *format,
                                     uint32_t *channels,
                                     uint32_t *sampleRate,
@@ -992,7 +989,7 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
     ALOGV("openOutputStream: devices 0x%x channels %d sampleRate %d",
          devices, *channels, *sampleRate);
 
-    audio_output_flags_t flag = static_cast<audio_output_flags_t> (*status);
+    audio_output_flags_t flags = static_cast<audio_output_flags_t> (*status);
 
     status_t err = BAD_VALUE;
 #ifdef QCOM_OUTPUT_FLAGS_ENABLED
@@ -1126,8 +1123,8 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
       return out;
     } else
 #endif
-    if ((flag & AUDIO_OUTPUT_FLAG_DIRECT) &&
-        (devices == AudioSystem::DEVICE_OUT_AUX_DIGITAL)) {
+    if ((flags & AUDIO_OUTPUT_FLAG_DIRECT) &&
+        (devices == AUDIO_DEVICE_OUT_AUX_DIGITAL)) {
         ALOGD("Multi channel PCM");
         alsa_handle_t alsa_handle;
         EDID_AUDIO_INFO info = { 0 };
@@ -1278,6 +1275,99 @@ AudioHardwareALSA::closeOutputStream(AudioStreamOut* out)
     delete out;
 }
 
+#ifdef QCOM_TUNNEL_LPA_ENABLED
+AudioStreamOut *
+AudioHardwareALSA::openOutputSession(uint32_t devices,
+                                     int *format,
+                                     status_t *status,
+                                     int sessionId,
+                                     uint32_t samplingRate,
+                                     uint32_t channels)
+{
+    Mutex::Autolock autoLock(mLock);
+    ALOGD("openOutputSession = %d" ,sessionId);
+    AudioStreamOutALSA *out = 0;
+    status_t err = BAD_VALUE;
+
+    alsa_handle_t alsa_handle;
+    unsigned long bufferSize = DEFAULT_BUFFER_SIZE;
+
+    for (size_t b = 1; (bufferSize & ~b) != 0; b <<= 1)
+        bufferSize &= ~b;
+
+    alsa_handle.module = mALSADevice;
+    alsa_handle.bufferSize = bufferSize;
+    alsa_handle.devices = devices;
+    alsa_handle.handle = 0;
+    alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
+    alsa_handle.channels = DEFAULT_CHANNEL_MODE;
+    alsa_handle.sampleRate = DEFAULT_SAMPLING_RATE;
+    alsa_handle.latency = VOICE_LATENCY;
+    alsa_handle.rxHandle = 0;
+    alsa_handle.ucMgr = mUcMgr;
+
+    char *use_case;
+    if(sessionId == TUNNEL_SESSION_ID) {
+        snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+            strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI_TUNNEL, sizeof(alsa_handle.useCase));
+        } else {
+            strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_TUNNEL, sizeof(alsa_handle.useCase));
+        }
+    } else {
+        snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+            strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER, sizeof(alsa_handle.useCase));
+        } else {
+            strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_LPA, sizeof(alsa_handle.useCase));
+        }
+    }
+    free(use_case);
+    mDeviceList.push_back(alsa_handle);
+    ALSAHandleList::iterator it = mDeviceList.end();
+    it--;
+    ALOGD("useCase %s", it->useCase);
+#ifdef QCOM_USBAUDIO_ENABLED
+    if((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
+       (devices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)){
+        ALOGE("Routing to proxy for LPA in openOutputSession");
+        mALSADevice->route(&(*it), devices, mode());
+        devices = AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET;
+        ALOGD("Starting USBPlayback for LPA");
+        startUsbPlaybackIfNotStarted();
+        musbPlaybackState |= USBPLAYBACKBIT_LPA;
+    } else
+#endif
+    {
+        mALSADevice->route(&(*it), devices, mode());
+    }
+    if(sessionId == TUNNEL_SESSION_ID) {
+        if(!strcmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) {
+            snd_use_case_set(mUcMgr, "_verb", SND_USE_CASE_VERB_HIFI_TUNNEL);
+        } else {
+            snd_use_case_set(mUcMgr, "_enamod", SND_USE_CASE_MOD_PLAY_TUNNEL);
+        }
+    }
+    else {
+        if(!strcmp(it->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) {
+            snd_use_case_set(mUcMgr, "_verb", SND_USE_CASE_VERB_HIFI_LOW_POWER);
+        } else {
+            snd_use_case_set(mUcMgr, "_enamod", SND_USE_CASE_MOD_PLAY_LPA);
+        }
+    }
+    err = mALSADevice->open(&(*it));
+    out = new AudioStreamOutALSA(this, &(*it));
+
+    if (status) *status = err;
+       return out;
+}
+
+void
+AudioHardwareALSA::closeOutputSession(AudioStreamOut* out)
+{
+    delete out;
+}
+#endif
 
 AudioStreamIn *
 AudioHardwareALSA::openInputStream(uint32_t devices,
