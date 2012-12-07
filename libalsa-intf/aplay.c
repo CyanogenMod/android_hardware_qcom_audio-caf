@@ -27,8 +27,6 @@
 #include <getopt.h>
 
 #include <sound/asound.h>
-#include <sound/compress_params.h>
-#include <sound/compress_offload.h>
 #include "alsa_audio.h"
 
 #ifndef ANDROID
@@ -43,28 +41,14 @@
 
 #define FORMAT_PCM 1
 #define LOG_NDEBUG 1
-
-struct output_metadata_handle_t {
-    uint32_t            metadataLength;
-    uint32_t            bufferLength;
-    uint64_t            timestamp;
-    uint32_t            reserved[12];
-};
-
-static struct output_metadata_handle_t outputMetadataTunnel;
-
 static pcm_flag = 1;
 static debug = 0;
 static uint32_t play_max_sz = 2147483648LL;
 static int format = SNDRV_PCM_FORMAT_S16_LE;
 static int period = 0;
 static int compressed = 0;
-static int set_channel_map = 0;
-static char channel_map[8];
 static char *compr_codec;
 static int piped = 0;
-static int outputMetadataLength = 0;
-static int eosSet = 0;
 
 static struct option long_options[] =
 {
@@ -77,7 +61,6 @@ static struct option long_options[] =
     {"format", 1, 0, 'F'},
     {"period", 1, 0, 'B'},
     {"compressed", 0, 0, 'T'},
-    {"channelMap", 0, 0, 'X'},
     {0, 0, 0, 0}
 };
 
@@ -97,13 +80,6 @@ struct wav_header {
     uint32_t data_sz;
 };
 
-
-void updateMetaData(size_t bytes) {
-   outputMetadataTunnel.metadataLength = sizeof(outputMetadataTunnel);
-   outputMetadataTunnel.timestamp = 0;
-   outputMetadataTunnel.bufferLength =  bytes;
-   fprintf(stderr, "bytes = %d\n", bytes);
-}
 static int set_params(struct pcm *pcm)
 {
      struct snd_pcm_hw_params *params;
@@ -112,17 +88,7 @@ static int set_params(struct pcm *pcm)
      unsigned long periodSize, bufferSize, reqBuffSize;
      unsigned int periodTime, bufferTime;
      unsigned int requestedRate = pcm->rate;
-     int channels;
-     if(pcm->flags & PCM_MONO)
-         channels = 1;
-     else if(pcm->flags & PCM_QUAD)
-         channels = 4;
-     else if(pcm->flags & PCM_5POINT1)
-         channels = 6;
-     else if(pcm->flags & PCM_7POINT1)
-         channels = 8;
-     else
-         channels = 2;
+     int channels = (pcm->flags & PCM_MONO) ? 1 : ((pcm->flags & PCM_5POINT1)? 6 : 2 );
 
      params = (struct snd_pcm_hw_params*) calloc(1, sizeof(struct snd_pcm_hw_params));
      if (!params) {
@@ -195,25 +161,6 @@ static int set_params(struct pcm *pcm)
     return 0;
 }
 
-void send_channel_map_driver(struct pcm *pcm)
-{
-    int i, ret;
-    struct mixer *mixer;
-    const char* device = "/dev/snd/controlC0";
-
-    mixer = mixer_open(device);
-    if (!mixer) {
-        fprintf(stderr,"oops: %s: %d\n", strerror(errno), __LINE__);
-        return;
-    }
-    ret = pcm_set_channel_map(pcm, mixer, 8, channel_map);
-    if (ret < 0)
-        fprintf(stderr, "could not set channel mask\n");
-    mixer_close(mixer);
-
-    return;
-}
-
 static int play_file(unsigned rate, unsigned channels, int fd,
               unsigned flags, const char *device, unsigned data_sz)
 {
@@ -236,12 +183,8 @@ static int play_file(unsigned rate, unsigned channels, int fd,
 
     if (channels == 1)
         flags |= PCM_MONO;
-    else if (channels == 4)
-	flags |= PCM_QUAD;
     else if (channels == 6)
 	flags |= PCM_5POINT1;
-    else if (channels == 8)
-	flags |= PCM_7POINT1;
     else
         flags |= PCM_STEREO;
 
@@ -259,6 +202,7 @@ static int play_file(unsigned rate, unsigned channels, int fd,
         return -EBADFD;
     }
 
+#ifdef QCOM_COMPRESSED_AUDIO_ENABLED
     if (compressed) {
        struct snd_compr_caps compr_cap;
        struct snd_compr_params compr_params;
@@ -270,16 +214,12 @@ static int play_file(unsigned rate, unsigned channels, int fd,
        if (!period)
            period = compr_cap.min_fragment_size;
            switch (get_compressed_format(compr_codec)) {
-           case SND_AUDIOCODEC_MP3:
-               compr_params.codec.id = SND_AUDIOCODEC_MP3;
+           case FORMAT_MP3:
+               compr_params.codec.id = compr_cap.codecs[FORMAT_MP3];
                break;
-           case SND_AUDIOCODEC_AC3_PASS_THROUGH:
-               compr_params.codec.id = SND_AUDIOCODEC_AC3_PASS_THROUGH;
-               printf("codec -d = %x\n", SND_AUDIOCODEC_AC3_PASS_THROUGH);
-               break;
-           case SND_AUDIOCODEC_AAC:
-               compr_params.codec.id = SND_AUDIOCODEC_AAC;
-               printf("codec -d = %x\n", SND_AUDIOCODEC_AAC);
+           case FORMAT_AC3_PASS_THROUGH:
+               compr_params.codec.id = compr_cap.codecs[FORMAT_AC3_PASS_THROUGH];
+               printf("codec -d = %x\n", compr_params.codec.id);
                break;
            default:
                break;
@@ -289,12 +229,8 @@ static int play_file(unsigned rate, unsigned channels, int fd,
           pcm_close(pcm);
           return -errno;
        }
-       outputMetadataLength = sizeof(struct output_metadata_handle_t);
-    } else if (channels > 2) {
-        if(set_channel_map) {
-            send_channel_map_driver(pcm);
-        }
     }
+#endif
     pcm->channels = channels;
     pcm->rate = rate;
     pcm->flags = flags;
@@ -342,7 +278,7 @@ static int play_file(unsigned rate, unsigned channels, int fd,
         pfd[0].fd = pcm->timer_fd;
         pfd[0].events = POLLIN;
 
-        frames = bufsize / (2*channels);
+        frames = (pcm->flags & PCM_MONO) ? (bufsize / 2) : (bufsize / 4);
         for (;;) {
              if (!pcm->running) {
                   if (pcm_prepare(pcm)) {
@@ -402,23 +338,16 @@ static int play_file(unsigned rate, unsigned channels, int fd,
              if (data_sz && !piped) {
                  if (remainingData < bufsize) {
                      bufsize = remainingData;
-                     frames = remainingData / (2*channels);
+                     frames = (pcm->flags & PCM_MONO) ? (remainingData / 2) : (remainingData / 4);
                  }
              }
-             fprintf(stderr, "addr = %d, size = %d \n", (dst_addr + outputMetadataLength),(bufsize - outputMetadataLength));
-             err = read(fd, (dst_addr + outputMetadataLength) , (bufsize - outputMetadataLength));
-             if(compressed) {
-                 updateMetaData(err);
-                 memcpy(dst_addr, &outputMetadataTunnel, outputMetadataLength);
-             }
 
+             err = read(fd, dst_addr , bufsize);
              if (debug)
                  fprintf(stderr, "read %d bytes from file\n", err);
-             if (err <= 0 ) {
-                 fprintf(stderr," EOS set\n ");
-                 eosSet = 1;
+             if (err <= 0)
                  break;
-             }
+
              if (data_sz && !piped) {
                  remainingData -= bufsize;
                  if (remainingData <= 0)
@@ -445,13 +374,15 @@ static int play_file(unsigned rate, unsigned channels, int fd,
                  fprintf(stderr, "Aplay:sync_ptr->s.status.hw_ptr %ld  sync_ptr->c.control.appl_ptr %ld\n",
                             pcm->sync_ptr->s.status.hw_ptr,
                             pcm->sync_ptr->c.control.appl_ptr);
+#ifdef QCOM_COMPRESSED_AUDIO_ENABLED
                  if (compressed && start) {
                     struct snd_compr_tstamp tstamp;
-        if (ioctl(pcm->fd, SNDRV_COMPRESS_TSTAMP, &tstamp))
-      fprintf(stderr, "Aplay: failed SNDRV_COMPRESS_TSTAMP\n");
+		    if (ioctl(pcm->fd, SNDRV_COMPRESS_TSTAMP, &tstamp))
+			fprintf(stderr, "Aplay: failed SNDRV_COMPRESS_TSTAMP\n");
                     else
-                  fprintf(stderr, "timestamp = %lld\n", tstamp.timestamp);
-    }
+	                fprintf(stderr, "timestamp = %lld\n", tstamp.timestamp);
+		}
+#endif
              }
              /*
               * If we have reached start threshold of buffer prefill,
@@ -478,7 +409,6 @@ static int play_file(unsigned rate, unsigned channels, int fd,
 start_done:
                 offset += frames;
         }
-
         while(1) {
             pcm->sync_ptr->flags = SNDRV_PCM_SYNC_PTR_APPL | SNDRV_PCM_SYNC_PTR_AVAIL_MIN;//SNDRV_PCM_SYNC_PTR_HWSYNC;
             sync_ptr(pcm);
@@ -490,14 +420,6 @@ start_done:
                 fprintf(stderr, "Aplay:sync_ptr->s.status.hw_ptr %ld  sync_ptr->c.control.appl_ptr %ld\n",
                            pcm->sync_ptr->s.status.hw_ptr,
                            pcm->sync_ptr->c.control.appl_ptr);
-
-                if(compressed && eosSet) {
-                    fprintf(stderr,"Audio Drain DONE ++\n");
-                    if ( ioctl(pcm->fd, SNDRV_COMPRESS_DRAIN) < 0 ) {
-                        fprintf(stderr,"Audio Drain failed\n");
-                    }
-                    fprintf(stderr,"Audio Drain DONE --\n");
-                }
                 break;
             } else
                 poll(pfd, nfds, TIMEOUT_INFINITE);
@@ -569,7 +491,7 @@ int play_raw(const char *fg, int rate, int ch, const char *device, const char *f
         flag = PCM_NMMAP;
 
     fprintf(stderr, "aplay: Playing '%s': format %s ch = %d\n",
-        fn, get_format_desc(format), ch );
+		    fn, get_format_desc(format), ch );
     return play_file(rate, ch, fd, flag, device, 0);
 }
 
@@ -634,45 +556,6 @@ ignore_header:
     return play_file(hdr.sample_rate, hdr.num_channels, fd, flag, device, hdr.data_sz);
 }
 
-char get_channel_map_val(char *string)
-{
-    char retval = 0;
-    if( !strncmp(string, "RRC", sizeof(string)) )
-        retval = 16;
-    else if( !strncmp(string, "RLC", sizeof(string)) )
-        retval = 15;
-    else if( !strncmp(string, "FRC", sizeof(string)) )
-        retval = 14;
-    else if( !strncmp(string, "FLC", sizeof(string)) )
-        retval = 13;
-    else if( !strncmp(string, "MS", sizeof(string)) )
-        retval = 12;
-    else if( !strncmp(string, "CVH", sizeof(string)) )
-        retval = 11;
-    else if( !strncmp(string, "TS", sizeof(string)) )
-        retval = 10;
-    else if( !strncmp(string, "RB", sizeof(string)) )
-        retval = 9;
-    else if( !strncmp(string, "LB", sizeof(string)) )
-        retval = 8;
-    else if( !strncmp(string, "CS", sizeof(string)) )
-        retval = 7;
-    else if( !strncmp(string, "LFE", sizeof(string)) )
-        retval = 6;
-    else if( !strncmp(string, "RS", sizeof(string)) )
-        retval = 5;
-    else if( !strncmp(string, "LS", sizeof(string)) )
-        retval = 4;
-    else if( !strncmp(string, "FC", sizeof(string)) )
-        retval = 3;
-    else if( !strncmp(string, "FR", sizeof(string)) )
-        retval = 2;
-    else if( !strncmp(string, "FL", sizeof(string)) )
-        retval = 1;
-
-    return retval;
-}
-
 int main(int argc, char **argv)
 {
     int option_index = 0;
@@ -682,25 +565,20 @@ int main(int argc, char **argv)
     char *mmap = "N";
     char *device = "hw:0,0";
     char *filename;
-    char *ptr;
     int rc = 0;
 
     if (argc <2) {
           printf("\nUsage: aplay [options] <file>\n"
                 "options:\n"
-                "-D <hw:C,D>  -- Alsa PCM by name\n"
-                "-M   -- Mmap stream\n"
-                "-P   -- Hostless steam[No PCM]\n"
-    "-C             -- Channels\n"
-    "-R             -- Rate\n"
-                "-V   -- verbose\n"
-    "-F             -- Format\n"
+                "-D <hw:C,D>	-- Alsa PCM by name\n"
+                "-M		-- Mmap stream\n"
+                "-P		-- Hostless steam[No PCM]\n"
+		"-C             -- Channels\n"
+		"-R             -- Rate\n"
+                "-V		-- verbose\n"
+		"-F             -- Format\n"
                 "-B             -- Period\n"
                 "-T <MP3, AAC, AC3_PASS_THROUGH>  -- Compressed\n"
-                "-X <\"FL,FR,FC,Ls,Rs,LFE\" for 5.1 configuration\n"
-                "     supported channels: \n"
-                "     FL, FR, FC, LS, RS, LFE, CS, TS \n"
-                "     LB, RB, FLC, FRC, RLC, RRC, CVH, MS\n"
                 "<file> \n");
            fprintf(stderr, "Formats Supported:\n");
            for (i = 0; i <= SNDRV_PCM_FORMAT_LAST; ++i)
@@ -709,7 +587,7 @@ int main(int argc, char **argv)
            fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
            return 0;
      }
-     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:B:T:X:", long_options, &option_index)) != -1) {
+     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:B:T:", long_options, &option_index)) != -1) {
        switch (c) {
        case 'P':
           pcm_flag = 0;
@@ -741,35 +619,18 @@ int main(int argc, char **argv)
           printf("compressed codec type requested = %s\n", optarg);
           compr_codec = optarg;
           break;
-       case 'X':
-          set_channel_map = 1; i = 0;
-          memset(channel_map, 0, sizeof(channel_map));
-          ptr = strtok(optarg, ",");
-          while((ptr != NULL) && (i < sizeof(channel_map))) {
-              channel_map[i] = get_channel_map_val(ptr);
-              if (channel_map[i] < 0 || channel_map[i] > 16) {
-                  set_channel_map = 0;
-                  break;
-              }
-              ptr = strtok(NULL,","); i++;
-          }
-          break;
        default:
           printf("\nUsage: aplay [options] <file>\n"
                 "options:\n"
-                "-D <hw:C,D>  -- Alsa PCM by name\n"
-                "-M   -- Mmap stream\n"
-                "-P   -- Hostless steam[No PCM]\n"
-                "-V   -- verbose\n"
-                "-C   -- Channels\n"
-    "-R             -- Rate\n"
-    "-F             -- Format\n"
+                "-D <hw:C,D>	-- Alsa PCM by name\n"
+                "-M		-- Mmap stream\n"
+                "-P		-- Hostless steam[No PCM]\n"
+                "-V		-- verbose\n"
+                "-C		-- Channels\n"
+		"-R             -- Rate\n"
+		"-F             -- Format\n"
                 "-B             -- Period\n"
                 "-T             -- Compressed\n"
-                "-X <\"FL,FR,FC,Ls,Rs,LFE\" for 5.1 configuration\n"
-                "     supported channels: \n"
-                "     FL, FR, FC, LS, RS, LFE, CS, TS \n"
-                "     LB, RB, FLC, FRC, RLC, RRC, CVH, MS\n"
                 "<file> \n");
            fprintf(stderr, "Formats Supported:\n");
            for (i = 0; i < SNDRV_PCM_FORMAT_LAST; ++i)
@@ -793,7 +654,7 @@ int main(int argc, char **argv)
     }
 
     if (pcm_flag) {
-   if (format == SNDRV_PCM_FORMAT_S16_LE)
+	 if (format == SNDRV_PCM_FORMAT_S16_LE) 
              rc = play_wav(mmap, rate, ch, device, filename);
          else
              rc = play_raw(mmap, rate, ch, device, filename);

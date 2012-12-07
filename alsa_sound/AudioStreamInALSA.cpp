@@ -1,7 +1,7 @@
 /* AudioStreamInALSA.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ extern "C" {
 static int (*csd_start_record)(int);
 static int (*csd_stop_record)(void);
 #endif
+
 #ifdef QCOM_SSR_ENABLED
 #include "surround_filters_interface.h"
 #endif
@@ -68,8 +69,8 @@ AudioStreamInALSA::AudioStreamInALSA(AudioHardwareALSA *parent,
         AudioSystem::audio_in_acoustics audio_acoustics) :
     ALSAStreamOps(parent, handle),
     mFramesLost(0),
-    mParent(parent),
-    mAcoustics(audio_acoustics)
+    mAcoustics(audio_acoustics),
+    mParent(parent)
 #ifdef QCOM_SSR_ENABLED
     , mFp_4ch(NULL),
     mFp_6ch(NULL),
@@ -89,9 +90,7 @@ AudioStreamInALSA::AudioStreamInALSA(AudioHardwareALSA *parent,
     // Call surround sound library init if device is Surround Sound
     if ( handle->channels == 6) {
         if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
-            || !strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, strlen(SND_USE_CASE_VERB_HIFI_REC_COMPRESSED))
-            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))
-            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED))) {
+            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
 
             err = initSurroundSoundLibrary(handle->bufferSize);
             if ( NO_ERROR != err) {
@@ -126,13 +125,13 @@ status_t AudioStreamInALSA::setGain(float gain)
 
 ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
 {
-    unsigned int period_size;
+    int period_size;
 
     ALOGV("read:: buffer %p, bytes %d", buffer, bytes);
 
     int n;
     status_t          err;
-    size_t            read = 0;
+    ssize_t            read = 0;
     char *use_case;
     int newMode = mParent->mode();
 
@@ -143,10 +142,10 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
         snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
         if ((use_case != NULL) && (strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
             if ((mHandle->devices == AudioSystem::DEVICE_IN_VOICE_CALL) &&
-                (newMode == AUDIO_MODE_IN_CALL)) {
+                (newMode == AudioSystem::MODE_IN_CALL)) {
                 ALOGD("read:: mParent->mIncallMode=%d", mParent->mIncallMode);
-                if ((mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_UPLINK) &&
-                    (mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_DNLINK)) {
+                if ((mParent->mIncallMode & AudioSystem::CHANNEL_IN_VOICE_UPLINK) &&
+                    (mParent->mIncallMode & AudioSystem::CHANNEL_IN_VOICE_DNLINK)) {
 #ifdef QCOM_CSDCLIENT_ENABLED
                     if (mParent->mFusion3Platform) {
                         mParent->mALSADevice->setVocRecMode(INCALL_REC_STEREO);
@@ -156,15 +155,10 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                     } else
 #endif
                     {
-                        if (mHandle->format == AUDIO_FORMAT_AMR_WB) {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_UL_DL,
-                                    sizeof(mHandle->useCase));
-                        } else {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL,
-                                    sizeof(mHandle->useCase));
-                        }
+                        strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL,
+                                sizeof(mHandle->useCase));
                     }
-                } else if (mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_DNLINK) {
+                } else if (mParent->mIncallMode & AudioSystem::CHANNEL_IN_VOICE_DNLINK) {
 #ifdef QCOM_CSDCLIENT_ENABLED
                     if (mParent->mFusion3Platform) {
                         mParent->mALSADevice->setVocRecMode(INCALL_REC_MONO);
@@ -174,13 +168,8 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                     } else
 #endif
                     {
-                        if (mHandle->format == AUDIO_FORMAT_AMR_WB) {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_DL,
-                                    sizeof(mHandle->useCase));
-                        } else {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_DL,
-                                    sizeof(mHandle->useCase));
-                        }
+                        strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_DL,
+                                sizeof(mHandle->useCase));
                     }
                 }
 #ifdef QCOM_FM_ENABLED
@@ -192,22 +181,20 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
             } else if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP)) {
                 strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, sizeof(mHandle->useCase));
             } else {
-                char value[128];
-                property_get("persist.audio.lowlatency.rec",value,"0");
-                if (!strcmp("true", value)) {
-                    strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC, sizeof(mHandle->useCase));
-                } else if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED)) {
-                    strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED, sizeof(mHandle->useCase));
-                } else {
-                    strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, sizeof(mHandle->useCase));
-                }
+                    char value[128];
+                    property_get("persist.audio.lowlatency.rec",value,"0");
+                    if (!strcmp("true", value)) {
+                        strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC, sizeof(mHandle->useCase));
+                    } else {
+                        strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, sizeof(mHandle->useCase));
+                    }
             }
         } else {
             if ((mHandle->devices == AudioSystem::DEVICE_IN_VOICE_CALL) &&
-                (newMode == AUDIO_MODE_IN_CALL)) {
+                (newMode == AudioSystem::MODE_IN_CALL)) {
                 ALOGD("read:: ---- mParent->mIncallMode=%d", mParent->mIncallMode);
-                if ((mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_UPLINK) &&
-                    (mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_DNLINK)) {
+                if ((mParent->mIncallMode & AudioSystem::CHANNEL_IN_VOICE_UPLINK) &&
+                    (mParent->mIncallMode & AudioSystem::CHANNEL_IN_VOICE_DNLINK)) {
 #ifdef QCOM_CSDCLIENT_ENABLED
                     if (mParent->mFusion3Platform) {
                         mParent->mALSADevice->setVocRecMode(INCALL_REC_STEREO);
@@ -217,15 +204,10 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                     } else
 #endif
                     {
-                        if (mHandle->format == AUDIO_FORMAT_AMR_WB) {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_UL_DL,
-                                    sizeof(mHandle->useCase));
-                        } else {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_VERB_UL_DL_REC,
-                                    sizeof(mHandle->useCase));
-                        }
+                        strlcpy(mHandle->useCase, SND_USE_CASE_VERB_UL_DL_REC,
+                                sizeof(mHandle->useCase));
                     }
-                } else if (mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_DNLINK) {
+                } else if (mParent->mIncallMode & AudioSystem::CHANNEL_IN_VOICE_DNLINK) {
 #ifdef QCOM_CSDCLIENT_ENABLED
                    if (mParent->mFusion3Platform) {
                        mParent->mALSADevice->setVocRecMode(INCALL_REC_MONO);
@@ -235,14 +217,8 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                    } else
 #endif
                    {
-                        if (mHandle->format == AUDIO_FORMAT_AMR_WB) {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_DL,
-                                    sizeof(mHandle->useCase));
-                        }
-                        else {
-                            strlcpy(mHandle->useCase, SND_USE_CASE_VERB_DL_REC,
-                                    sizeof(mHandle->useCase));
-                        }
+                       strlcpy(mHandle->useCase, SND_USE_CASE_VERB_DL_REC,
+                               sizeof(mHandle->useCase));
                    }
                 }
 #ifdef QCOM_FM_ENABLED
@@ -253,16 +229,14 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
 #endif
             } else if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)){
                     strlcpy(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, sizeof(mHandle->useCase));
-            } else if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED)){
-                strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, sizeof(mHandle->useCase));
             } else {
-                char value[128];
-                property_get("persist.audio.lowlatency.rec",value,"0");
-                if (!strcmp("true", value)) {
-                    strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC, sizeof(mHandle->useCase));
-                } else {
-                    strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_REC, sizeof(mHandle->useCase));
-                }
+                    char value[128];
+                    property_get("persist.audio.lowlatency.rec",value,"0");
+                    if (!strcmp("true", value)) {
+                        strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC, sizeof(mHandle->useCase));
+                    } else {
+                        strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI_REC, sizeof(mHandle->useCase));
+                    }
             }
         }
         free(use_case);
@@ -271,11 +245,11 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
 #ifdef QCOM_USBAUDIO_ENABLED
             if((mDevices & AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET) ||
                (mDevices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)) {
-                mHandle->module->route(mHandle, (mDevices | AudioSystem::DEVICE_IN_PROXY) , AUDIO_MODE_IN_COMMUNICATION);
+                mHandle->module->route(mHandle, (mDevices | AudioSystem::DEVICE_IN_PROXY) , AudioSystem::MODE_IN_COMMUNICATION);
             }else
 #endif
             {
-                mHandle->module->route(mHandle, mDevices , AUDIO_MODE_IN_COMMUNICATION);
+                mHandle->module->route(mHandle, mDevices , AudioSystem::MODE_IN_COMMUNICATION);
             }
         } else {
 #ifdef QCOM_USBAUDIO_ENABLED
@@ -291,7 +265,6 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
         }
         if (!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_REC) ||
             !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC) ||
-            !strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED) ||
             !strcmp(mHandle->useCase, SND_USE_CASE_VERB_FM_REC) ||
             !strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL) ||
             !strcmp(mHandle->useCase, SND_USE_CASE_VERB_FM_A2DP_REC) ||
@@ -439,39 +412,6 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
         buffer = buffer_start;
     } else
 #endif
-    if (mHandle->format == AUDIO_FORMAT_AMR_WB &&
-        (strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) &&
-        (strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
-        ALOGV("AUDIO_FORMAT_AMR_WB");
-        do {
-            if (read_pending < 61) {
-                read_pending = 61;
-            }
-            //We should pcm_read period_size to get complete data from driver
-            n = pcm_read(mHandle->handle, buffer, period_size);
-            if (n < 0) {
-                ALOGE("pcm_read() returned failure: %d", n);
-                return 0;
-            } else {
-                struct snd_compr_audio_info *header = (struct snd_compr_audio_info *) buffer;
-                if (header->frame_size > 0) {
-                    if (sizeof(*header) + header->reserved[0] + header->frame_size > period_size) {
-                        ALOGE("AMR WB read buffer overflow. Assign bigger buffer size");
-                        header->frame_size = period_size - sizeof(*header) - header->reserved[0];
-                    }
-                    read += header->frame_size;
-                    read_pending -= header->frame_size;
-                    ALOGV("buffer: %p, data offset: %p, header size: %u, reserved[0]: %u",
-                            buffer, ((uint8_t*)buffer) + sizeof(*header) + header->reserved[0],
-                            sizeof(*header), header->reserved[0]);
-                    memmove(buffer, ((uint8_t*)buffer) + sizeof(*header) + header->reserved[0], header->frame_size);
-                    buffer += header->frame_size;
-                } else {
-                    ALOGW("pcm_read() with zero frame size");
-                }
-            }
-        } while (mHandle->handle && read < bytes);
-    } else
     {
 
         do {
@@ -484,24 +424,24 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
             ALOGV("pcm_read() returned n = %d", n);
             if (n && (n == -EIO || n == -EAGAIN || n == -EPIPE || n == -EBADFD)) {
                 mParent->mLock.lock();
-                if (mHandle->handle != NULL) {
-                    ALOGW("pcm_read() returned error n %d, Recovering from error\n", n);
-                    pcm_close(mHandle->handle);
-                    mHandle->handle = NULL;
-                    if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
-                    (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
-                        pcm_close(mHandle->rxHandle);
-                        mHandle->rxHandle = NULL;
-                        mHandle->module->startVoipCall(mHandle);
-                    }
-                    else
-                        mHandle->module->open(mHandle);
-                    if(mHandle->handle == NULL) {
-                       ALOGE("read:: PCM device re-open failed");
-                       mParent->mLock.unlock();
-                       return 0;
-                    }
+                ALOGW("pcm_read() returned error n %d, Recovering from error\n", n);
+                pcm_close(mHandle->handle);
+                mHandle->handle = NULL;
+                if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
+                (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
+                    pcm_close(mHandle->rxHandle);
+                    mHandle->rxHandle = NULL;
+                    mHandle->module->startVoipCall(mHandle);
                 }
+                else
+                    mHandle->module->open(mHandle);
+
+                if(mHandle->handle == NULL) {
+                   ALOGE("read:: PCM device re-open failed");
+                   mParent->mLock.unlock();
+                   return 0;
+                }
+
                 mParent->mLock.unlock();
                 continue;
             }
@@ -512,7 +452,11 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
             else {
                 read += static_cast<ssize_t>((period_size));
                 read_pending -= period_size;
-                buffer += period_size;
+                //Set mute by cleanning buffers read
+                if (mParent->mMicMute) {
+                    memset(buffer, 0, period_size);
+                }
+                buffer = ((uint8_t *)buffer) + period_size;
             }
 
         } while (mHandle->handle && read < bytes);
@@ -544,10 +488,10 @@ status_t AudioStreamInALSA::close()
         (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
         if((mParent->mVoipStreamCount)) {
 #ifdef QCOM_USBAUDIO_ENABLED
-            ALOGV("musbRecordingState: %d, mVoipStreamCount:%d",mParent->musbRecordingState,
+            ALOGD("musbRecordingState: %d, mVoipStreamCount:%d",mParent->musbRecordingState,
                   mParent->mVoipStreamCount );
             if(mParent->mVoipStreamCount == 1) {
-                ALOGV("Deregistering VOIP Call bit, musbPlaybackState:%d,"
+                ALOGD("Deregistering VOIP Call bit, musbPlaybackState:%d,"
                        "musbRecordingState:%d", mParent->musbPlaybackState, mParent->musbRecordingState);
                 mParent->musbPlaybackState &= ~USBPLAYBACKBIT_VOIPCALL;
                 mParent->musbRecordingState &= ~USBRECBIT_VOIPCALL;
@@ -558,7 +502,6 @@ status_t AudioStreamInALSA::close()
                return NO_ERROR;
         }
         mParent->mVoipStreamCount = 0;
-        mParent->mVoipMicMute = 0;
 #ifdef QCOM_USBAUDIO_ENABLED
     } else {
         ALOGD("Deregistering REC bit, musbRecordingState:%d", mParent->musbRecordingState);

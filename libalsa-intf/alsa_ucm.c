@@ -58,15 +58,13 @@
 #include <sys/time.h>
 #include <sys/poll.h>
 #include <stdint.h>
+#include <dlfcn.h>
 
 #include <linux/ioctl.h>
 #include "msm8960_use_cases.h"
 #if defined(QC_PROP)
-    #include "acdb-loader.h"
-#else
-    #define acdb_loader_send_voice_cal(rxacdb_id, txacdb_id) (-EPERM)
-    #define acdb_loader_send_audio_cal(acdb_id, capability) (-EPERM)
-    #define acdb_loader_send_anc_cal(acdb_id) (-EPERM)
+    static void (*acdb_send_audio_cal)(int,int);
+    static void (*acdb_send_voice_cal)(int,int);
 #endif
 #define PARSE_DEBUG 0
 
@@ -444,42 +442,6 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
                     ret = -ENODEV;
                 }
             }
-        } else if (!strncmp(ident1, "EC_REF_RXMixerCTL", 17)) {
-            ident2 = strtok_r(NULL, "/", &temp_ptr);
-            index = 0; verb_index = 0;
-            verb_list = uc_mgr->card_ctxt_ptr->use_case_verb_list;
-            if((verb_index < 0) ||
-               (!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
-                SND_UCM_END_OF_LIST, 3)) ||
-                (verb_list[verb_index].verb_ctrls == NULL)) {
-                ALOGE("Invalid current verb value: %s - %d",
-                     uc_mgr->card_ctxt_ptr->current_verb, verb_index);
-                pthread_mutex_unlock(&uc_mgr->card_ctxt_ptr->card_lock);
-                return -EINVAL;
-            }
-            ctrl_list = verb_list[verb_index].device_ctrls;
-            if (ident2 != NULL) {
-                while(strncmp(ctrl_list[index].case_name, ident2, strlen(ident2)+1)) {
-                    if (!strncmp(ctrl_list[index].case_name, SND_UCM_END_OF_LIST,
-                        strlen(SND_UCM_END_OF_LIST))){
-                        ret = -EINVAL;
-                        break;
-                    } else {
-                        index++;
-                    }
-                }
-            }
-            if (ret < 0) {
-                ALOGE("No valid device/modifier found with given identifier: %s",
-                      ident2);
-            } else {
-                if (verb_list[verb_index].device_ctrls[index].ec_ref_rx_mixer_ctl) {
-                    *value = strdup(verb_list[verb_index].device_ctrls[index].ec_ref_rx_mixer_ctl);
-                } else {
-                    *value = NULL;
-                    ret = -ENODEV;
-                }
-            }
         } else {
             ALOGE("Unsupported identifier value: %s", ident1);
             *value = NULL;
@@ -581,18 +543,10 @@ const char *use_case)
 
     if ((!strncmp(use_case, SND_USE_CASE_VERB_VOICECALL,
         strlen(SND_USE_CASE_VERB_VOICECALL))) ||
-        (!strncmp(use_case, SND_USE_CASE_VERB_SGLTECALL,
-        strlen(SND_USE_CASE_VERB_SGLTECALL))) ||
-        (!strncmp(use_case, SND_USE_CASE_VERB_VOLTE,
-        strlen(SND_USE_CASE_VERB_VOLTE))) ||
         (!strncmp(use_case, SND_USE_CASE_VERB_IP_VOICECALL,
         strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
         (!strncmp(use_case, SND_USE_CASE_MOD_PLAY_VOICE,
         strlen(SND_USE_CASE_MOD_PLAY_VOICE))) ||
-        (!strncmp(use_case, SND_USE_CASE_MOD_PLAY_SGLTE,
-        strlen(SND_USE_CASE_MOD_PLAY_SGLTE))) ||
-        (!strncmp(use_case, SND_USE_CASE_MOD_PLAY_VOLTE,
-        strlen(SND_USE_CASE_MOD_PLAY_VOLTE))) ||
         (!strncmp(use_case, SND_USE_CASE_MOD_PLAY_VOIP,
         strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
         ALOGV("check_devices_for_voice_call(): voice cap detected\n");
@@ -630,11 +584,7 @@ int use_case_index)
 
     /* Check if voice call use case/modifier exists */
     if ((!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
-        SND_USE_CASE_VERB_VOLTE, strlen(SND_USE_CASE_VERB_VOLTE))) ||
-	(!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
         SND_USE_CASE_VERB_VOICECALL, strlen(SND_USE_CASE_VERB_VOICECALL))) ||
-        (!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
-        SND_USE_CASE_VERB_SGLTECALL, strlen(SND_USE_CASE_VERB_SGLTECALL))) ||
         (!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
         SND_USE_CASE_VERB_IP_VOICECALL,
         strlen(SND_USE_CASE_VERB_IP_VOICECALL)))) {
@@ -647,12 +597,8 @@ int use_case_index)
             if ((ident_value =
                 snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->mod_list_head,
                 index))) {
-                if ((!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOLTE,
-                    strlen(SND_USE_CASE_MOD_PLAY_VOLTE))) ||
-		    (!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOICE,
+                if ((!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOICE,
                     strlen(SND_USE_CASE_MOD_PLAY_VOICE))) ||
-                    (!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_SGLTE,
-                    strlen(SND_USE_CASE_MOD_PLAY_SGLTE))) ||
                     (!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOIP,
                     strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
                     voice_acdb = 1;
@@ -727,8 +673,15 @@ int use_case_index)
                     ALOGD("Voice acdb: rx id %d tx id %d",
                           uc_mgr->current_rx_device,
                           uc_mgr->current_tx_device);
-                    acdb_loader_send_voice_cal(uc_mgr->current_rx_device,
-                        uc_mgr->current_tx_device);
+                    if (uc_mgr->acdb_handle) {
+                        acdb_send_voice_cal = dlsym(uc_mgr->acdb_handle,"acdb_loader_send_voice_cal");
+                        if (acdb_send_voice_cal == NULL) {
+                            ALOGE("ucm: dlsym: Error:%s Loading acdb_loader_send_voice_cal", dlerror());
+                        }else {
+                            acdb_send_voice_cal(uc_mgr->current_rx_device,
+                                       uc_mgr->current_tx_device);
+                        }
+                   }
                 } else {
                     ALOGV("Voice acdb: Required acdb already pushed \
                          rx id %d tx id %d", uc_mgr->current_rx_device,
@@ -839,15 +792,22 @@ const char *use_case, int enable, int ctrl_list_type, int uc_index)
                 (check_devices_for_voice_call(uc_mgr, use_case) != NULL))
                 return ret;
             ALOGD("Set mixer controls for %s enable %d", use_case, enable);
-            if ((ctrl_list[uc_index].acdb_id >= 0) && ctrl_list[uc_index].capability) {
+            if (ctrl_list[uc_index].acdb_id && ctrl_list[uc_index].capability) {
                 if (enable) {
-                    snd_use_case_apply_voice_acdb(uc_mgr, uc_index);
-                    ALOGD("acdb_id %d cap %d enable %d",
-                                        ctrl_list[uc_index].acdb_id,
-                            ctrl_list[uc_index].capability, enable);
-                    acdb_loader_send_audio_cal(
+                    if (snd_use_case_apply_voice_acdb(uc_mgr, uc_index)) {
+                        ALOGV("acdb_id %d cap %d enable %d",
                             ctrl_list[uc_index].acdb_id,
-                            ctrl_list[uc_index].capability);
+                            ctrl_list[uc_index].capability, enable);
+                        if (uc_mgr->acdb_handle) {
+                            acdb_send_audio_cal = dlsym(uc_mgr->acdb_handle,"acdb_loader_send_audio_cal");
+                            if (acdb_send_audio_cal == NULL) {
+                                ALOGE("ucm:dlsym:Error:%s Loading acdb_loader_send_audio_cal", dlerror());
+                            } else {
+                                acdb_send_audio_cal(ctrl_list[uc_index].acdb_id,
+                                                     ctrl_list[uc_index].capability);
+                            }
+                        }
+                    }
                 }
             }
             if (enable) {
@@ -866,7 +826,7 @@ const char *use_case, int enable, int ctrl_list_type, int uc_index)
                           mixer_list[index].control_name, 0);
                 if (ctl) {
                     if (mixer_list[index].type == TYPE_INT) {
-                        ALOGD("Setting mixer control: %s, value: %d",
+                        ALOGV("Setting mixer control: %s, value: %d",
                              mixer_list[index].control_name,
                              mixer_list[index].value);
                         ret = mixer_ctl_set(ctl, mixer_list[index].value);
@@ -879,7 +839,7 @@ const char *use_case, int enable, int ctrl_list_type, int uc_index)
                             ALOGE("Failed to set multi value control %s\n",
                                 mixer_list[index].control_name);
                     } else {
-                        ALOGD("Setting mixer control: %s, value: %s",
+                        ALOGV("Setting mixer control: %s, value: %s",
                             mixer_list[index].control_name,
                             mixer_list[index].string);
                         ret = mixer_ctl_select(ctl, mixer_list[index].string);
@@ -925,12 +885,8 @@ int getUseCaseType(const char *useCase)
            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
             MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_TUNNEL2)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI2,
             MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI2)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_HIFI3,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI3)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_DIGITAL_RADIO,
             MAX_LEN(useCase,SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
@@ -939,41 +895,25 @@ int getUseCaseType(const char *useCase)
             MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_LOWLATENCY_MUSIC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
             MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC3,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_MUSIC3)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_LPA,
             MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_LPA)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
             MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_TUNNEL)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_TUNNEL2)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_FM,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_FM))||
-        !strncmp(useCase, SND_USE_CASE_MOD_PSEUDO_TUNNEL,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_PSEUDO_TUNNEL))||
-        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_PSEUDO_TUNNEL,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_PSEUDO_TUNNEL))) {
+            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_FM))) {
         return CAP_RX;
     } else if (!strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_REC)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC2,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_REC2)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_REC_COMPRESSED)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_FM_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_FM_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_FM_A2DP_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_FM_A2DP_REC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC,
             MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_MUSIC)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC2,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_MUSIC2)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_HIFI_LOWLATENCY_REC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC,
             MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_LOWLATENCY_MUSIC)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_FM,
             MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_FM)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_A2DP_FM,
@@ -981,34 +921,22 @@ int getUseCaseType(const char *useCase)
         return CAP_TX;
     } else if (!strncmp(useCase, SND_USE_CASE_VERB_VOICECALL,
             MAX_LEN(useCase,SND_USE_CASE_VERB_VOICECALL)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_SGLTECALL,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_SGLTECALL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_IP_VOICECALL,
             MAX_LEN(useCase,SND_USE_CASE_VERB_IP_VOICECALL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_DL_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_DL_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_UL_DL_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_UL_DL_REC)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_DL,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_DL)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_UL_DL,
-            MAX_LEN(useCase,SND_USE_CASE_VERB_CAPTURE_COMPRESSED_VOICE_UL_DL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_INCALL_REC,
             MAX_LEN(useCase,SND_USE_CASE_VERB_INCALL_REC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOICE,
             MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_VOICE)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_SGLTE,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_SGLTE)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOIP,
             MAX_LEN(useCase,SND_USE_CASE_MOD_PLAY_VOIP)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_DL,
             MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_VOICE_DL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL,
             MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_DL,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_DL)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_UL_DL,
-            MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_COMPRESSED_VOICE_UL_DL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_VOLTE,
             MAX_LEN(useCase,SND_USE_CASE_VERB_VOLTE)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOLTE,
@@ -1032,7 +960,7 @@ const char *ident, int enable, int ctrl_list_type)
     card_mctrl_t *dev_list, *uc_list;
     char *current_device, use_case[MAX_UC_LEN];
     int list_size, index, uc_index, ret = 0, intdev_flag = 0;
-    int verb_index, capability = 0, ident_cap = 0, dev_cap = 0;
+    int verb_index, capability = 0, ident_cap = 0, dev_cap =0;
 
     ALOGV("set_use_case_ident_for_all_devices(): %s", ident);
     if ((verb_index = uc_mgr->card_ctxt_ptr->current_verb_index) < 0)
@@ -1054,50 +982,49 @@ const char *ident, int enable, int ctrl_list_type)
         current_device =
         snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->dev_list_head, index);
         if (current_device != NULL) {
-            if ((uc_index = get_use_case_index(uc_mgr, current_device,
-                       CTRL_LIST_DEVICE)) < 0) {
-                ALOGE("No valid device found: %s", current_device);
-                continue;
-            }
+            uc_index = get_use_case_index(uc_mgr, current_device,
+                       CTRL_LIST_DEVICE);
             dev_cap = dev_list[uc_index].capability;
             if (!capability) {
                 capability = dev_list[uc_index].capability;
             } else if (capability != dev_list[uc_index].capability) {
                 capability = CAP_VOICE;
             }
-            if (ident_cap == CAP_VOICE || dev_cap == ident_cap) {
+            if (ident_cap == CAP_VOICE  || ident_cap == dev_cap) {
                 if (enable) {
                     if (!snd_ucm_get_status_at_index(
                         uc_mgr->card_ctxt_ptr->dev_list_head, current_device)) {
                         if (uc_index >= 0) {
                             ALOGV("Applying mixer controls for device: %s",
-                                current_device);
+                                  current_device);
                             ret = snd_use_case_apply_mixer_controls(uc_mgr,
-                                  current_device, enable, CTRL_LIST_DEVICE,
-                                  uc_index);
+                                  current_device, enable, CTRL_LIST_DEVICE, uc_index);
                             if (!ret)
                                 snd_ucm_set_status_at_index(
                                   uc_mgr->card_ctxt_ptr->dev_list_head,
                                   current_device, enable, dev_cap);
                         }
-                    } else if (ident_cap == CAP_VOICE) {
+                     } else if (ident_cap == CAP_VOICE) {
                         snd_use_case_apply_voice_acdb(uc_mgr, uc_index);
-                    }
-                }
-                strlcpy(use_case, ident, sizeof(use_case));
-                strlcat(use_case, current_device, sizeof(use_case));
-                ALOGV("Applying mixer controls for use case: %s", use_case);
-                if ((uc_index =
-                    get_use_case_index(uc_mgr, use_case, ctrl_list_type)) < 0) {
-                    ALOGV("No valid use case found: %s", use_case);
-                    intdev_flag++;
-                } else {
-                    ret = snd_use_case_apply_mixer_controls(uc_mgr, use_case,
-                          enable, ctrl_list_type, uc_index);
-                }
-                use_case[0] = 0;
-                free(current_device);
-            }
+                     }
+                 }
+                 strlcpy(use_case, ident, sizeof(use_case));
+                 strlcat(use_case, current_device, sizeof(use_case));
+                 ALOGV("Applying mixer controls for use case: %s", use_case);
+                 if ((uc_index =
+                      get_use_case_index(uc_mgr, use_case, ctrl_list_type)) < 0) {
+                      ALOGV("No valid use case found: %s", use_case);
+                      intdev_flag++;
+                 } else {
+                      if (capability == CAP_VOICE || ident_cap == CAP_VOICE ||
+                          capability == ident_cap) {
+                          ret = snd_use_case_apply_mixer_controls(uc_mgr, use_case,
+                                enable, ctrl_list_type, uc_index);
+                      }
+                 }
+                 use_case[0] = 0;
+                 free(current_device);
+             }
         }
     }
     if (intdev_flag) {
@@ -1137,11 +1064,7 @@ const char *ident, const char *device, int enable, int ctrl_list_type)
         uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].device_ctrls;
     if (device != NULL) {
         if (enable) {
-            if ((dev_index =
-                get_use_case_index(uc_mgr, device, CTRL_LIST_DEVICE)) < 0) {
-                ALOGE("No valid device found: %s", device);
-                return dev_index;
-            }
+            dev_index = get_use_case_index(uc_mgr, device, CTRL_LIST_DEVICE);
             capability = dev_list[dev_index].capability;
             if (!snd_ucm_get_status_at_index(
                 uc_mgr->card_ctxt_ptr->dev_list_head, device)) {
@@ -1155,14 +1078,10 @@ const char *ident, const char *device, int enable, int ctrl_list_type)
         }
         strlcpy(use_case, ident, sizeof(use_case));
         strlcat(use_case, device, sizeof(use_case));
-	ALOGV("Applying mixer controls for use case: %s", use_case);
+    ALOGV("Applying mixer controls for use case: %s", use_case);
         if ((uc_index = get_use_case_index(uc_mgr, use_case, ctrl_list_type)) < 0) {
             ALOGV("No valid use case found: %s", use_case );
-            if ((uc_index =
-                get_use_case_index(uc_mgr, ident, ctrl_list_type)) < 0) {
-                    ALOGE("No valid use case found: %s", ident);
-                    return uc_index;
-            }
+            uc_index = get_use_case_index(uc_mgr, ident, ctrl_list_type);
             if (snd_use_case_apply_mixer_controls(uc_mgr, ident, enable,
                 ctrl_list_type, uc_index) < 0) {
                  ALOGV("use case %s not valid without device combination also",
@@ -1173,11 +1092,7 @@ const char *ident, const char *device, int enable, int ctrl_list_type)
                       ctrl_list_type, uc_index);
         }
     } else {
-        if ((uc_index =
-            get_use_case_index(uc_mgr, ident, ctrl_list_type)) < 0) {
-            ALOGE("No valid use case found: %s", ident);
-            return uc_index;
-        }
+        uc_index = get_use_case_index(uc_mgr, ident, ctrl_list_type);
         if (snd_use_case_apply_mixer_controls(uc_mgr, ident, enable,
             ctrl_list_type, uc_index) < 0) {
              ALOGV("use case %s not valid without device combination also",
@@ -1206,11 +1121,7 @@ const char *device, int enable)
         verb_index = 0;
     dev_list =
          uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].device_ctrls;
-    if ((dev_index =
-        get_use_case_index(uc_mgr, device, CTRL_LIST_DEVICE)) < 0) {
-        ALOGE("No valid device %s found", device);
-        return dev_index;
-    }
+    dev_index = get_use_case_index(uc_mgr, device, CTRL_LIST_DEVICE);
     if (dev_index >= 0)
         capability = dev_list[dev_index].capability;
     if (strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_INACTIVE,
@@ -1264,10 +1175,8 @@ const char *device, int enable)
             use_case[0] = 0;
             strlcpy(use_case, uc_mgr->card_ctxt_ptr->current_verb,
                 sizeof(use_case));
-            if ((uc_index =
-                get_use_case_index(uc_mgr, use_case, CTRL_LIST_VERB)) < 0) {
-                ALOGE("No valid use case %s found", use_case);
-            } else if (capability == CAP_VOICE ||
+            uc_index = get_use_case_index(uc_mgr, use_case, CTRL_LIST_VERB);
+            if (capability == CAP_VOICE ||
                 capability ==
                 getUseCaseType(uc_mgr->card_ctxt_ptr->current_verb) ||
                 getUseCaseType(uc_mgr->card_ctxt_ptr->current_verb) ==
@@ -1337,11 +1246,9 @@ const char *device, int enable)
                 }
                 use_case[0] = 0;
                 strlcpy(use_case, ident_value, sizeof(use_case));
-                if ((uc_index =
-                    get_use_case_index(uc_mgr, ident_value,
-                    CTRL_LIST_MODIFIER)) < 0) {
-                    ALOGE("No valid use case %s found", ident_value);
-                } else if (capability == CAP_VOICE ||
+                uc_index =
+                    get_use_case_index(uc_mgr, ident_value, CTRL_LIST_MODIFIER);
+                if (capability == CAP_VOICE ||
                     capability == getUseCaseType(ident_value) ||
                     getUseCaseType(ident_value) == CAP_VOICE) {
                     ALOGV("set %d for use case value: %s", enable, use_case);
@@ -1411,29 +1318,14 @@ static int set_controls_of_device_for_usecase(snd_use_case_mgr_t *uc_mgr,
         verb_index = 0;
     dev_list =
          uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].device_ctrls;
-    if ((dev_index =
-        get_use_case_index(uc_mgr, device, CTRL_LIST_DEVICE)) < 0) {
-        ALOGE("No valid device %s found", device);
-        return dev_index;
-    }
+    dev_index = get_use_case_index(uc_mgr, device, CTRL_LIST_DEVICE);
     capability = dev_list[dev_index].capability;
     if (usecase != NULL) {
         strlcpy(use_case, usecase, sizeof(use_case));
         strlcat(use_case, device, sizeof(use_case));
         if ((uc_index = get_use_case_index(uc_mgr, use_case,
             get_usecase_type(uc_mgr, usecase))) < 0) {
-            ALOGV("No valid use case found: %s,\
-                   set %d for use case value: %s",use_case, enable, usecase);
-            if ((uc_index =
-                get_use_case_index(uc_mgr, usecase, get_usecase_type(uc_mgr, usecase))) < 0) {
-                    ALOGE("No valid use case found: %s", usecase);
-            } else {
-                ret = snd_use_case_apply_mixer_controls(uc_mgr, usecase, enable,
-                          get_usecase_type(uc_mgr, usecase), uc_index);
-                if (ret != 0)
-                    ALOGE("No valid controls exists for usecase %s and device %s, \
-                         enable: %d", usecase, device, enable);
-            }
+            ALOGV("No valid use case found: %s", use_case);
         } else {
             if (enable) {
                 if (!snd_ucm_get_status_at_index(
@@ -1647,15 +1539,10 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
                 ALOGE("Invalid device: Device not part of enabled device list");
             } else {
                 ALOGV("disdev: device value to be disabled: %s", value);
-                if ((index =
-                    get_use_case_index(uc_mgr, value, CTRL_LIST_DEVICE)) < 0) {
-                    ALOGE("Device %s not found", value);
-                    ret = -EINVAL;
-                } else {
-                    /* Apply Mixer controls for device and modifier */
-                    ret = snd_use_case_apply_mixer_controls(uc_mgr, value, 0,
+                index = get_use_case_index(uc_mgr, value, CTRL_LIST_DEVICE);
+                /* Apply Mixer controls for corresponding device and modifier */
+                ret = snd_use_case_apply_mixer_controls(uc_mgr, value, 0,
                           CTRL_LIST_DEVICE, index);
-                }
             }
         }
     } else if (!strncmp(identifier, "_enamod", 7)) {
@@ -2410,14 +2297,13 @@ static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr)
         close(fd);
         return -EINVAL;
     }
-    read_buf = (char *) mmap(0, st.st_size+1, PROT_READ | PROT_WRITE,
+    read_buf = (char *) mmap(0, st.st_size, PROT_READ | PROT_WRITE,
                MAP_PRIVATE, fd, 0);
     if (read_buf == MAP_FAILED) {
         ALOGE("failed to mmap file error %d\n", errno);
         close(fd);
         return -EINVAL;
     }
-    read_buf[st.st_size] = '\0';
     current_str = read_buf;
     verb_count = get_verb_count(current_str);
     (*uc_mgr)->card_ctxt_ptr->use_case_verb_list =
@@ -3357,7 +3243,6 @@ char **nxt_str, int verb_index, int ctrl_list_type)
     list->acdb_id = 0;
     list->capability = 0;
     list->effects_mixer_ctl = NULL;
-    list->ec_ref_rx_mixer_ctl = NULL;
     current_str = *cur_str; next_str = *nxt_str;
     while(strncasecmp(current_str, "EndSection", 10)) {
         current_str = next_str;
@@ -3415,14 +3300,7 @@ char **nxt_str, int verb_index, int ctrl_list_type)
                       &list->effects_mixer_ctl);
             if (ret < 0)
                 break;
-            ALOGV("Effects mixer ctl: %s:\n", list->effects_mixer_ctl);
-        } else if (strcasestr(current_str, "EC_REF_RXMixerCTL") != NULL) {
-            ret = snd_ucm_extract_ec_ref_rx_mixer_ctl(current_str,
-                      &list->ec_ref_rx_mixer_ctl);
-            ALOGV("EC_REF_RX mixer ctl: ret:%d\n", ret);
-            if (ret < 0)
-                break;
-            ALOGE("EC_REF_RX mixer ctl: %s\n", list->ec_ref_rx_mixer_ctl);
+            ALOGV("Effects mixer ctl: %s: %d\n", list->effects_mixer_ctl);
         }
         if (strcasestr(current_str, "EnableSequence") != NULL) {
             controls_count = get_controls_count(next_str);
@@ -3521,32 +3399,6 @@ static int snd_ucm_extract_acdb(char *buf, int *id, int *cap)
  * Returns 0 on sucess, negative error code otherwise
  */
 static int snd_ucm_extract_effects_mixer_ctl(char *buf, char **mixer_name)
-{
-    int ret = 0;
-    char *p, *name = *mixer_name, *temp_ptr;
-
-    p = strtok_r(buf, "\"", &temp_ptr);
-    while (p != NULL) {
-        p = strtok_r(NULL, "\"", &temp_ptr);
-        if (p == NULL)
-            break;
-        name = (char *)malloc((strlen(p)+1)*sizeof(char));
-        if(name == NULL) {
-            ret = -ENOMEM;
-            break;
-        }
-        strlcpy(name, p, (strlen(p)+1)*sizeof(char));
-        *mixer_name = name;
-        break;
-    }
-    return ret;
-}
-
-
-/* Extract Effects Mixer ID of device from config file
- * Returns 0 on sucess, negative error code otherwise
- */
-static int snd_ucm_extract_ec_ref_rx_mixer_ctl(char *buf, char **mixer_name)
 {
     int ret = 0;
     char *p, *name = *mixer_name, *temp_ptr;
@@ -3786,9 +3638,6 @@ void free_list(card_mctrl_t *list, int verb_index, int count)
         }
         if(list[case_index].effects_mixer_ctl) {
             list[case_index].effects_mixer_ctl = NULL;
-        }
-        if(list[case_index].ec_ref_rx_mixer_ctl) {
-            list[case_index].ec_ref_rx_mixer_ctl = NULL;
         }
     }
 }

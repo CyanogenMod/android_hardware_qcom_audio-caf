@@ -1,7 +1,7 @@
 /* ALSAStreamOps.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -65,7 +65,6 @@ ALSAStreamOps::~ALSAStreamOps()
             }
        }
        mParent->mVoipStreamCount = 0;
-       mParent->mVoipMicMute = 0;
        mParent->mVoipBitRate = 0;
     }
     close();
@@ -111,15 +110,15 @@ status_t ALSAStreamOps::set(int      *format,
                     break;
                     // Do not fall through
                 case 4:
-                    *channels |= AUDIO_CHANNEL_OUT_BACK_LEFT;
-                    *channels |= AUDIO_CHANNEL_OUT_BACK_RIGHT;
+                    *channels |= AudioSystem::CHANNEL_OUT_BACK_LEFT;
+                    *channels |= AudioSystem::CHANNEL_OUT_BACK_RIGHT;
                     // Fall through...
                 default:
                 case 2:
-                    *channels |= AUDIO_CHANNEL_OUT_FRONT_RIGHT;
+                    *channels |= AudioSystem::CHANNEL_OUT_FRONT_RIGHT;
                     // Fall through...
                 case 1:
-                    *channels |= AUDIO_CHANNEL_OUT_FRONT_LEFT;
+                    *channels |= AudioSystem::CHANNEL_OUT_FRONT_LEFT;
                     break;
             }
         } else {
@@ -127,16 +126,16 @@ status_t ALSAStreamOps::set(int      *format,
 #ifdef QCOM_SSR_ENABLED
                 // For 5.1 recording
                 case 6 :
-                    *channels |= AUDIO_CHANNEL_IN_5POINT1;
+                    *channels |= AudioSystem::CHANNEL_IN_5POINT1;
                     break;
 #endif
                     // Do not fall through...
                 default:
                 case 2:
-                    *channels |= AUDIO_CHANNEL_IN_RIGHT;
+                    *channels |= AudioSystem::CHANNEL_IN_RIGHT;
                     // Fall through...
                 case 1:
-                    *channels |= AUDIO_CHANNEL_IN_LEFT;
+                    *channels |= AudioSystem::CHANNEL_IN_LEFT;
                     break;
             }
         }
@@ -153,23 +152,23 @@ status_t ALSAStreamOps::set(int      *format,
 
     if (format) {
         switch(*format) {
-            case AUDIO_FORMAT_DEFAULT:
+            case AudioSystem::FORMAT_DEFAULT:
                 break;
 
-            case AUDIO_FORMAT_PCM_16_BIT:
+            case AudioSystem::PCM_16_BIT:
                 iformat = SNDRV_PCM_FORMAT_S16_LE;
                 break;
-            case AUDIO_FORMAT_AMR_NB:
-            case AUDIO_FORMAT_AMR_WB:
-#ifdef QCOM_AUDIO_FORMAT_ENABLED
-            case AUDIO_FORMAT_EVRC:
-            case AUDIO_FORMAT_EVRCB:
-            case AUDIO_FORMAT_EVRCWB:
+            case AudioSystem::AMR_NB:
+            case AudioSystem::AMR_WB:
+#ifdef QCOM_QCHAT_ENABLED
+            case AudioSystem::EVRC:
+            case AudioSystem::EVRCB:
+            case AudioSystem::EVRCWB:
 #endif
                 iformat = *format;
                 break;
 
-            case AUDIO_FORMAT_PCM_8_BIT:
+            case AudioSystem::PCM_8_BIT:
                 iformat = SNDRV_PCM_FORMAT_S8;
                 break;
 
@@ -183,10 +182,10 @@ status_t ALSAStreamOps::set(int      *format,
 
         switch(iformat) {
             case SNDRV_PCM_FORMAT_S16_LE:
-                *format = AUDIO_FORMAT_PCM_16_BIT;
+                *format = AudioSystem::PCM_16_BIT;
                 break;
             case SNDRV_PCM_FORMAT_S8:
-                *format = AUDIO_FORMAT_PCM_8_BIT;
+                *format = AudioSystem::PCM_8_BIT;
                 break;
             default:
                 break;
@@ -199,9 +198,8 @@ status_t ALSAStreamOps::set(int      *format,
 status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
-    String8 key = String8(AudioParameter::keyRouting),value;
+    String8 key = String8(AudioParameter::keyRouting);
     int device;
-    status_t err = NO_ERROR;
 
 #ifdef SEPERATED_AUDIO_INPUT
     String8 key_input = String8(AudioParameter::keyInputSource);
@@ -221,21 +219,13 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
         if ((device == 0) && (mDevices == AudioSystem::DEVICE_OUT_AUX_DIGITAL)) {
             device = AudioSystem::DEVICE_OUT_SPEAKER;
         }
+        if (device)
+            mDevices = device;
+        else
+            ALOGV("must not change mDevices to 0");
+
         if(device) {
-            ALOGD("setParameters(): keyRouting with device %#x", device);
-            if(device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
-                mParent->mRouteAudioToA2dp = true;
-                ALOGD("setParameters(): A2DP device %#x", device);
-            }
-            err = mParent->doRouting(device);
-            if(err) {
-                ALOGE("doRouting failed = %d",err);
-            }
-            else {
-                mDevices = device;
-            }
-        } else {
-            ALOGE("must not change mDevices to 0");
+            mParent->doRouting(device);
         }
         param.remove(key);
     }
@@ -243,9 +233,9 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
     else {
         key = String8(AudioParameter::keyHandleFm);
         if (param.getInt(key, device) == NO_ERROR) {
-            ALOGD("setParameters(): handleFm with device %d", device);
+        ALOGD("setParameters(): handleFm with device %d", device);
+        mDevices = device;
             if(device) {
-                mDevices = device;
                 mParent->handleFm(device);
             }
             param.remove(key);
@@ -253,7 +243,7 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
     }
 #endif
 
-    return err;
+    return NO_ERROR;
 }
 
 String8 ALSAStreamOps::getParameters(const String8& keys)
@@ -267,7 +257,7 @@ String8 ALSAStreamOps::getParameters(const String8& keys)
     }
     else {
 #ifdef QCOM_VOIP_ENABLED
-        key = String8(VOIPCHECK_KEY);
+        key = String8(AudioParameter::keyVoipCheck);
         if (param.get(key, value) == NO_ERROR) {
             if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
                (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP))))
@@ -334,25 +324,25 @@ int ALSAStreamOps::format() const
 
     switch(ALSAFormat) {
         case SNDRV_PCM_FORMAT_S8:
-             audioSystemFormat = AUDIO_FORMAT_PCM_8_BIT;
+             audioSystemFormat = AudioSystem::PCM_8_BIT;
              break;
 
-        case AUDIO_FORMAT_AMR_NB:
-        case AUDIO_FORMAT_AMR_WB:
-#ifdef QCOM_AUDIO_FORMAT_ENABLED
-        case AUDIO_FORMAT_EVRC:
-        case AUDIO_FORMAT_EVRCB:
-        case AUDIO_FORMAT_EVRCWB:
+        case AudioSystem::AMR_NB:
+        case AudioSystem::AMR_WB:
+#ifdef QCOM_QCHAT_ENABLED
+        case AudioSystem::EVRC:
+        case AudioSystem::EVRCB:
+        case AudioSystem::EVRCWB:
 #endif
             audioSystemFormat = mHandle->format;
             break;
         case SNDRV_PCM_FORMAT_S16_LE:
-            audioSystemFormat = AUDIO_FORMAT_PCM_16_BIT;
+            audioSystemFormat = AudioSystem::PCM_16_BIT;
             break;
 
         default:
             LOG_FATAL("Unknown AudioSystem bit width %d!", audioSystemFormat);
-            audioSystemFormat = AUDIO_FORMAT_PCM_16_BIT;
+            audioSystemFormat = AudioSystem::PCM_16_BIT;
             break;
     }
 
@@ -373,15 +363,15 @@ uint32_t ALSAStreamOps::channels() const
                 break;
                 // Do not fall through
             case 4:
-                channels |= AUDIO_CHANNEL_OUT_BACK_LEFT;
-                channels |= AUDIO_CHANNEL_OUT_BACK_RIGHT;
+                channels |= AudioSystem::CHANNEL_OUT_BACK_LEFT;
+                channels |= AudioSystem::CHANNEL_OUT_BACK_RIGHT;
                 // Fall through...
             default:
             case 2:
-                channels |= AUDIO_CHANNEL_OUT_FRONT_RIGHT;
+                channels |= AudioSystem::CHANNEL_OUT_FRONT_RIGHT;
                 // Fall through...
             case 1:
-                channels |= AUDIO_CHANNEL_OUT_FRONT_LEFT;
+                channels |= AudioSystem::CHANNEL_OUT_FRONT_LEFT;
                 break;
         }
     else
@@ -389,16 +379,16 @@ uint32_t ALSAStreamOps::channels() const
 #ifdef QCOM_SSR_ENABLED
             // For 5.1 recording
             case 6 :
-                channels |= AUDIO_CHANNEL_IN_5POINT1;
+                channels |= AudioSystem::CHANNEL_IN_5POINT1;
                 break;
                 // Do not fall through...
 #endif
             default:
             case 2:
-                channels |= AUDIO_CHANNEL_IN_RIGHT;
+                channels |= AudioSystem::CHANNEL_IN_RIGHT;
                 // Fall through...
             case 1:
-                channels |= AUDIO_CHANNEL_IN_LEFT;
+                channels |= AudioSystem::CHANNEL_IN_LEFT;
                 break;
         }
 
@@ -410,7 +400,6 @@ void ALSAStreamOps::close()
     ALOGD("close");
     if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
-       mParent->mVoipMicMute = false;
        mParent->mVoipBitRate = 0;
        mParent->mVoipStreamCount = 0;
     }
