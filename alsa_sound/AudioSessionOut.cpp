@@ -887,11 +887,28 @@ void AudioSessionOutALSA::reset() {
     mParent->mLock.lock();
     requestAndWaitForEventThreadExit();
 
+#ifdef QCOM_USBAUDIO_ENABLED
+    if (mParent->musbPlaybackState) {
+        if((!strcmp(mAlsaHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+            (!strcmp(mAlsaHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
+            ALOGV("Deregistering LPA bit: musbPlaybackState =%d",mParent->musbPlaybackState);
+            mParent->musbPlaybackState &= ~USBPLAYBACKBIT_LPA;
+        } else if((!strcmp(mAlsaHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+                 (!strcmp(mAlsaHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+            ALOGV("Deregistering Tunnel Player bit: musbPlaybackState =%d",mParent->musbPlaybackState);
+            mParent->musbPlaybackState &= ~USBPLAYBACKBIT_TUNNEL;
+        }
+    }
+#endif
+
     if(mAlsaHandle) {
         ALOGV("closeDevice mAlsaHandle");
         closeDevice(mAlsaHandle);
         mAlsaHandle = NULL;
     }
+#ifdef QCOM_USBAUDIO_ENABLED
+    mParent->closeUsbPlaybackIfNothingActive();
+#endif
     ALOGV("Erase device list");
     for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
             it != mParent->mDeviceList.end(); ++it) {
