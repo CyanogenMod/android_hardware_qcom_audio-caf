@@ -197,13 +197,15 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
                 return bytes;
             }
 #ifdef QCOM_USBAUDIO_ENABLED
-            if((mHandle->devices == AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET)||
-                   (mHandle->devices == AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)){
+            if((mDevices == AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET)||
+                   (mDevices == AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)){
                 if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
                    (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+                    ALOGV("Setting VOIPCALL bit here, musbPlaybackState %d", mParent->musbPlaybackState);
                     mParent->musbPlaybackState |= USBPLAYBACKBIT_VOIPCALL;
                 } else {
                     mParent->startUsbPlaybackIfNotStarted();
+                    ALOGV("enabling music, musbPlaybackState: %d ", mParent->musbPlaybackState);
                     mParent->musbPlaybackState |= USBPLAYBACKBIT_MUSIC;
                 }
             }
@@ -332,13 +334,7 @@ status_t AudioStreamOutALSA::close()
          mParent->mVoipMicMute = 0;
     }
 #ifdef QCOM_USBAUDIO_ENABLED
-      else if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
-              (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
-        mParent->musbPlaybackState &= ~USBPLAYBACKBIT_LPA;
-    } else if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
-              (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
-        mParent->musbPlaybackState &= ~USBPLAYBACKBIT_TUNNEL;
-    } else {
+      else {
         mParent->musbPlaybackState &= ~USBPLAYBACKBIT_MUSIC;
     }
 
@@ -370,16 +366,8 @@ status_t AudioStreamOutALSA::standby()
     }
 
 #ifdef QCOM_USBAUDIO_ENABLED
-    if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
-        (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
-        ALOGV("Deregistering LPA bit");
-        mParent->musbPlaybackState &= ~USBPLAYBACKBIT_LPA;
-    } else if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
-             (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
-        ALOGD("Deregistering Tunnel Player bit");
-        mParent->musbPlaybackState &= ~USBPLAYBACKBIT_TUNNEL;
-    } else {
-        ALOGV("Deregistering MUSIC bit, musbPlaybackState: %d", mParent->musbPlaybackState);
+     if (mParent->musbPlaybackState) {
+        ALOGD("Deregistering MUSIC bit, musbPlaybackState: %d", mParent->musbPlaybackState);
         mParent->musbPlaybackState &= ~USBPLAYBACKBIT_MUSIC;
     }
 #endif
