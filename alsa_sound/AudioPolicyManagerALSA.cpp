@@ -1243,6 +1243,90 @@ void AudioPolicyManager::handleNotificationRoutingForStream(AudioSystem::stream_
 }
 
 
+AudioPolicyManagerBase::IOProfile *AudioPolicyManager::getProfileForDirectOutput(
+                                                               audio_devices_t device,
+                                                               uint32_t samplingRate,
+                                                               uint32_t format,
+                                                               uint32_t channelMask,
+                                                               audio_output_flags_t flags)
+{
+    if( !((flags & AUDIO_OUTPUT_FLAG_LPA)   ||
+          (flags & AUDIO_OUTPUT_FLAG_TUNNEL)||
+          (flags & AUDIO_OUTPUT_FLAG_VOIP_RX)) )
+        flags = AUDIO_OUTPUT_FLAG_DIRECT;
+
+    for (size_t i = 0; i < mHwModules.size(); i++) {
+        if (mHwModules[i]->mHandle == 0) {
+            continue;
+        }
+        for (size_t j = 0; j < mHwModules[i]->mOutputProfiles.size(); j++) {
+           AudioPolicyManagerBase::IOProfile *profile = mHwModules[i]->mOutputProfiles[j];
+           if (isCompatibleProfile(profile, device, samplingRate, format,
+                                           channelMask,
+                                           flags)) {
+               if (mAvailableOutputDevices & profile->mSupportedDevices) {
+                   return mHwModules[i]->mOutputProfiles[j];
+               }
+           }
+        }
+    }
+    return 0;
+}
+
+bool AudioPolicyManager::isCompatibleProfile(AudioPolicyManagerBase::IOProfile *profile,
+                                             audio_devices_t device,
+                                             uint32_t samplingRate,
+                                             uint32_t format,
+                                             uint32_t channelMask,
+                                            audio_output_flags_t flags)
+{
+    if ((profile->mSupportedDevices & device) != device) {
+        return false;
+    }
+    if (profile->mFlags != flags) {
+        return false;
+    }
+    if (samplingRate != 0) {
+        size_t i;
+        for (i = 0; i < profile->mSamplingRates.size(); i++)
+        {
+            if (profile->mSamplingRates[i] == samplingRate) {
+                break;
+            }
+        }
+        if (i == profile->mSamplingRates.size()) {
+            return false;
+        }
+    }
+    if (format != 0) {
+        size_t i;
+        for (i = 0; i < profile->mFormats.size(); i++)
+        {
+            if (profile->mFormats[i] == format) {
+                break;
+            }
+        }
+        if (i == profile->mFormats.size()) {
+            return false;
+        }
+    }
+    if (channelMask != 0) {
+        size_t i;
+       for (i = 0; i < profile->mChannelMasks.size(); i++)
+        {
+            if (profile->mChannelMasks[i] == channelMask) {
+                break;
+            }
+        }
+        if (i == profile->mChannelMasks.size()) {
+            return false;
+        }
+    }
+    ALOGD(" profile found: device %x, flags %x, samplingrate %d,\
+            format %x, channelMask %d",
+            device, flags, samplingRate, format, channelMask);
+    return true;
+}
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface)
 {
