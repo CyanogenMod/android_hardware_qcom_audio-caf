@@ -537,8 +537,9 @@ private:
     bool                mPaused;
     bool                mSeeking;
     bool                mReachedEOS;
-    bool                mSkipWrite;
+    int                 mSkipWrite;
     bool                mEosEventReceived;
+    bool                mIfWritten;
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mAlsaHandle;
     ALSADevice *     mAlsaDevice;

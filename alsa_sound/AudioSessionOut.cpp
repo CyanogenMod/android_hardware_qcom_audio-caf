@@ -94,7 +94,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mPaused             = false;
     mSeeking            = false;
     mReachedEOS         = false;
-    mSkipWrite          = false;
+    mSkipWrite          = 0;
 
     mAlsaHandle         = NULL;
     mUseCase            = AudioHardwareALSA::USECASE_NONE;
@@ -108,6 +108,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mKillEventThread    = false;
     mObserver           = NULL;
     mOutputMetadataLength = 0;
+    mIfWritten          = false;
 
     if(devices == 0) {
         ALOGE("No output device specified");
@@ -145,7 +146,7 @@ AudioSessionOutALSA::~AudioSessionOutALSA()
 {
     ALOGD("~AudioSessionOutALSA");
 
-    mSkipWrite = true;
+    mSkipWrite += 1;
     mWriteCv.signal();
     // trying to acquire mDecoderLock, make sure that, the waiting decoder thread
     // receives the signal before the conditional variable "mWriteCv" is
@@ -261,6 +262,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 {
     Mutex::Autolock autoLock(mLock);
     int err;
+    int *lbuffer = (int*) buffer;
     ALOGV("write Empty Queue size() = %d, Filled Queue size() = %d ",
          mEmptyQueue.size(),mFilledQueue.size());
 
@@ -275,6 +277,30 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     //    written into the buffer. Then Enqueue the buffer to the filled
     //    buffer queue
     mEmptyQueueMutex.lock();
+
+   if (mSkipWrite && (mEmptyQueue.size() == BUFFER_COUNT)) {
+       ALOGV("reducing mSkipWrite by 1 in write");
+       mSkipWrite -= 1;
+       if(mSkipWrite == 0){
+
+            ALOGV("mSkipWrite is 0 now write bytes %d", bytes);
+            if(lbuffer[(bytes/sizeof(int))] == 0){
+                 mEmptyQueueMutex.unlock();
+                 ALOGV("skipping buffer in write %d", lbuffer[(bytes/sizeof(int))]);
+                 return 0;
+            } else {
+
+            }
+        } else {
+            //we have not skipped as many buffers as seeks
+             mEmptyQueueMutex.unlock();
+             ALOGV("returning from write since we have not skipped enough mSkipWrite %d",
+                 mSkipWrite);
+             return 0;
+        }
+    }
+    ALOGV("not skipping buffer in write since mSkipWrite = %d, mEmptyQueuesize %d, flag %d", mSkipWrite, mEmptyQueue.size(), lbuffer[(bytes/sizeof(int))]);
+
     List<BuffersAllocated>::iterator it = mEmptyQueue.begin();
     BuffersAllocated buf = *it;
     if(bytes)
@@ -302,6 +328,10 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 
     //2.) Write the buffer to the Driver
     ALOGV("PCM write start");
+    if(mIfWritten != true) {
+        mIfWritten = true;
+        ALOGV("Set written flag to true the first time write is done");
+    }
     err = pcm_write(mAlsaHandle->handle, buf.memBuf, mAlsaHandle->handle->period_size);
     ALOGV("PCM write complete");
     if (bytes < (mAlsaHandle->handle->period_size - mOutputMetadataLength)) {
@@ -478,7 +508,12 @@ void  AudioSessionOutALSA::eventThreadEntry() {
 
             mEmptyQueueMutex.lock();
             mEmptyQueue.push_back(buf);
+            if (mSkipWrite) {
+                ALOGV("Reset mSkipwrite in eventthread entry");
+                mSkipWrite -= 1;
+            }
             mEmptyQueueMutex.unlock();
+            ALOGV("signalling from eventthread");
             mWriteCv.signal();
         }
     }
@@ -624,23 +659,27 @@ status_t AudioSessionOutALSA::flush()
     //    If its in paused state,
     //          Set the seek flag, Resume will take care of flushing the
     //          driver
-    if (!mPaused) {
-        if (!mEosEventReceived) {
-            if ((err = ioctl(mAlsaHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1)) < 0) {
-                ALOGE("Audio Pause failed");
-                return UNKNOWN_ERROR;
-            }
+    if (!mPaused && (mSkipWrite == 0) && (mIfWritten == true)) {
+         if (!mEosEventReceived) {
+             if ((err = ioctl(mAlsaHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1)) < 0) {
+                 ALOGE("Audio Pause failed - continuing");
+                 //return UNKNOWN_ERROR;
+             }
             //mReachedEOS = false;
-            if ((err = drain()) != OK)
-                return err;
-        }
+            if ((err = drain()) != OK) {
+                 ALOGE("pcm_prepare failed - continuing");
+                 //return err;
+            }
+         }
+         mIfWritten = false;
     } else {
-        mSeeking = true;
+         mSeeking = true;
     }
 
     //4.) Skip the current write from the decoder and signal to the Write get
     //   the next set of data from the decoder
-    mSkipWrite = true;
+    mSkipWrite += 1;
+    ALOGV("signalling from flush mSkipWrite %d", mSkipWrite);
     mWriteCv.signal();
 
     ALOGV("AudioSessionOutALSA::flush completed");
@@ -654,7 +693,7 @@ status_t AudioSessionOutALSA::stop()
     Mutex::Autolock autoLock(mLock);
     ALOGV("AudioSessionOutALSA- stop");
     // close all the existing PCM devices
-    mSkipWrite = true;
+    mSkipWrite += 1;
     mWriteCv.signal();
 
     if (mParent->mRouteAudioToExtOut) {
@@ -673,11 +712,10 @@ status_t AudioSessionOutALSA::stop()
 status_t AudioSessionOutALSA::standby()
 {
     Mutex::Autolock autoLock(mParent->mLock);
-    mAlsaHandle->module->standby(mAlsaHandle);
     status_t err = NO_ERROR;
+    mLock.lock();
     // At this point, all the buffers with the driver should be
     // flushed.
-    mLock.lock();
     if( !mAlsaHandle->handle->start) {
         ALOGV("drain from destructor which will flush the buffers");
         drain();
@@ -771,18 +809,17 @@ status_t AudioSessionOutALSA::isBufferAvailable(int *isAvail) {
           mEmptyQueue.size(),mFilledQueue.size());
     *isAvail = false;
     mEmptyQueueMutex.lock();
-    if (mSkipWrite && (mEmptyQueue.size() == BUFFER_COUNT)) {
-        mSkipWrite = false;
-    }
     // 1.) Wait till a empty buffer is available in the Empty buffer queue
     if (mEmptyQueue.empty()) {
         ALOGV("Write: waiting on mWriteCv");
         mLock.unlock();
         mWriteCv.wait(mEmptyQueueMutex);
+        ALOGV("received signal");
         mLock.lock();
+        ALOGV("mSkipWrite = %d", mSkipWrite);
         if (mSkipWrite) {
             ALOGV("Write: Flushing the previous write buffer");
-            mSkipWrite = false;
+            mSkipWrite -= 1;
             mEmptyQueueMutex.unlock();
             return NO_ERROR;
         }
