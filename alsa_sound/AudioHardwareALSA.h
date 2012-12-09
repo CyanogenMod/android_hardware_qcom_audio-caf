@@ -64,7 +64,11 @@ class AudioHardwareALSA;
 #define PLAYBACK_LATENCY      170000
 #define RECORD_LATENCY        96000
 #define VOICE_LATENCY         85333
+#ifdef TARGET_8974
+#define DEFAULT_BUFFER_SIZE   2048
+#else
 #define DEFAULT_BUFFER_SIZE   4096
+#endif
 //4032 = 336(kernel buffer size) * 2(bytes pcm_16) * 6(number of channels)
 #define DEFAULT_MULTI_CHANNEL_BUF_SIZE    4032
 #define DEFAULT_VOICE_BUFFER_SIZE   2048

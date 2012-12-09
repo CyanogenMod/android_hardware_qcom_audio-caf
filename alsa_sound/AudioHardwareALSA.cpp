@@ -1678,7 +1678,11 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
         if (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
             || !strncmp(it->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
             ALOGV("OpenInoutStream: getInputBufferSize sampleRate:%d format:%d, channels:%d", it->sampleRate,*format,it->channels);
+#ifdef TARGET_8974
+            it->bufferSize = DEFAULT_IN_BUFFER_SIZE;
+#else
             it->bufferSize = getInputBufferSize(it->sampleRate,*format,it->channels);
+#endif
         }
 
 #ifdef QCOM_SSR_ENABLED
