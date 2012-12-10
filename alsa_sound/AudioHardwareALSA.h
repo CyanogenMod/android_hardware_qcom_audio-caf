@@ -330,6 +330,7 @@ private:
         unsigned mAvail;
         struct pollfd mPfdProxy[NUM_FDS];
         long mFrames;
+        long mBufferTime;
     };
     struct proxy_params mProxyParams;
 
@@ -762,13 +763,14 @@ public:
             AudioSystem::audio_in_acoustics acoustics);
     virtual    void        closeInputStream(AudioStreamIn* in);
 
-    status_t    startA2dpPlayback(uint32_t activeUsecase);
-    status_t    stopA2dpPlayback(uint32_t activeUsecase);
-    bool        suspendA2dpPlayback(uint32_t activeUsecase);
+    status_t    startPlaybackOnExtOut(uint32_t activeUsecase);
+    status_t    stopPlaybackOnExtOut(uint32_t activeUsecase);
+    bool        suspendPlaybackOnExtOut(uint32_t activeUsecase);
 
-    status_t    startA2dpPlayback_l(uint32_t activeUsecase);
-    status_t    stopA2dpPlayback_l(uint32_t activeUsecase);
-    bool        suspendA2dpPlayback_l(uint32_t activeUsecase);
+    status_t    startPlaybackOnExtOut_l(uint32_t activeUsecase);
+    status_t    stopPlaybackOnExtOut_l(uint32_t activeUsecase);
+    bool        suspendPlaybackOnExtOut_l(uint32_t activeUsecase);
+    status_t    isExtOutDevice(int device);
 
     /**This method dumps the state of the audio hardware */
     //virtual status_t dumpState(int fd, const Vector<String16>& args);
@@ -784,15 +786,20 @@ public:
     void resumeIfUseCaseTunnelOrLPA();
 
 private:
+    status_t     openExtOutput(int device);
+    status_t     closeExtOutput(int device);
     status_t     openA2dpOutput();
     status_t     closeA2dpOutput();
-    status_t     stopA2dpThread();
-    void       a2dpThreadFunc();
-    static void*        a2dpThreadWrapper(void *context);
-    void        setA2DPActiveUseCases_l(uint32_t activeUsecase);
-    uint32_t    getA2DPActiveUseCases_l();
-    void        clearA2DPActiveUseCases_l(uint32_t activeUsecase);
-    uint32_t    useCaseStringToEnum(const char *usecase);
+    status_t     openUsbOutput();
+    status_t     closeUsbOutput();
+    status_t     stopExtOutThread();
+    void         extOutThreadFunc();
+    static void* extOutThreadWrapper(void *context);
+    void         setExtOutActiveUseCases_l(uint32_t activeUsecase);
+    uint32_t     getExtOutActiveUseCases_l();
+    void         clearExtOutActiveUseCases_l(uint32_t activeUsecase);
+    uint32_t     useCaseStringToEnum(const char *usecase);
+    void         switchExtOut(int device);
 
 protected:
     virtual status_t    dump(int fd, const Vector<String16>& args);
@@ -862,12 +869,16 @@ protected:
     audio_stream_out   *mA2dpStream;
     audio_hw_device_t  *mA2dpDevice;
 
-    bool                mKillA2DPThread;
-    bool                mA2dpThreadAlive;
-    pthread_t           mA2dpThread;
-    Mutex               mA2dpMutex;
-    Condition           mA2dpCv;
-    volatile bool       mIsA2DPEnabled;
+    audio_stream_out   *mUsbStream;
+    audio_hw_device_t  *mUsbDevice;
+    audio_stream_out   *mExtOutStream;
+
+    bool                mKillExtOutThread;
+    bool                mExtOutThreadAlive;
+    pthread_t           mExtOutThread;
+    Mutex               mExtOutMutex;
+    Condition           mExtOutCv;
+    volatile bool       mIsExtOutEnabled;
 
     enum {
       USECASE_NONE = 0x0,
@@ -877,10 +888,16 @@ protected:
       USECASE_HIFI_TUNNEL = 0x8,
       USECASE_FM = 0x10,
     };
-    uint32_t mA2DPActiveUseCases;
+    uint32_t mExtOutActiveUseCases;
+
+    enum {
+      A2DP_STREAM = 0x1,
+      USB_STREAM  = 0x10,
+    };
+    uint32_t mActiveExtOut;
 
 public:
-    bool mRouteAudioToA2dp;
+    bool mRouteAudioToExtOut;
 };
 
 // ----------------------------------------------------------------------------

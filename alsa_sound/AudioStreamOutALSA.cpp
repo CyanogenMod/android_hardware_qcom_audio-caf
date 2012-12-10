@@ -60,10 +60,10 @@ AudioStreamOutALSA::AudioStreamOutALSA(AudioHardwareALSA *parent, alsa_handle_t 
 
 AudioStreamOutALSA::~AudioStreamOutALSA()
 {
-    if (mParent->mRouteAudioToA2dp) {
-         status_t err = mParent->stopA2dpPlayback(mUseCase);
+    if (mParent->mRouteAudioToExtOut) {
+         status_t err = mParent->stopPlaybackOnExtOut_l(mUseCase);
          if (err) {
-             ALOGE("stopA2dpPlayback return err  %d", err);
+             ALOGE("stopPlaybackOnExtOut_l return err  %d", err);
          }
     }
     close();
@@ -120,9 +120,9 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
          * the buffers, recheck and break if PCM handle is valid */
         if (mHandle->handle == NULL && mHandle->rxHandle == NULL) {
             ALOGV("mDevices =0x%x", mDevices);
-            if(mDevices &  AudioSystem::DEVICE_OUT_ALL_A2DP) {
-                ALOGV("StreamOut write - mRouteAudioToA2dp = %d ", mParent->mRouteAudioToA2dp);
-                mParent->mRouteAudioToA2dp = true;
+            if(mParent->isExtOutDevice(mDevices)) {
+                ALOGV("StreamOut write - mRouteAudioToExtOut = %d ", mParent->mRouteAudioToExtOut);
+                mParent->mRouteAudioToExtOut = true;
             }
             ALOGV("write: mHandle->useCase: %s", mHandle->useCase);
             snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
@@ -197,14 +197,14 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
             }
 #endif
         }
-        if (mParent->mRouteAudioToA2dp) {
+        if (mParent->mRouteAudioToExtOut) {
             mUseCase = mParent->useCaseStringToEnum(mHandle->useCase);
-            if (! (mParent->getA2DPActiveUseCases_l() & mUseCase )){
-                ALOGD("startA2dpPlayback_l from write :: useCase = %s", mHandle->useCase);
+            if (! (mParent->getExtOutActiveUseCases_l() & mUseCase )){
+                ALOGD("startPlaybackOnExtOut_l from write :: useCase = %s", mHandle->useCase);
                 status_t err = NO_ERROR;
-                err = mParent->startA2dpPlayback_l(mUseCase);
+                err = mParent->startPlaybackOnExtOut_l(mUseCase);
                 if(err) {
-                    ALOGE("startA2dpPlayback_l from write return err = %d", err);
+                    ALOGE("startPlaybackOnExtOut_l from write return err = %d", err);
                     mParent->mLock.unlock();
                     return err;
                 }
@@ -309,7 +309,7 @@ status_t AudioStreamOutALSA::close()
                  mParent->closeUsbPlaybackIfNothingActive();
                  mParent->closeUsbRecordingIfNothingActive();
 
-                 if (mParent->mRouteAudioToA2dp) {
+                 if (mParent->mRouteAudioToExtOut) {
                      //TODO: HANDLE VOIP A2DP
                  }
              }
@@ -333,11 +333,11 @@ status_t AudioStreamOutALSA::close()
     mParent->closeUsbPlaybackIfNothingActive();
 #endif
 
-    if (mParent->mRouteAudioToA2dp) {
-         ALOGD("close-suspendA2dpPlayback_l::mUseCase = %d",mUseCase);
-         status_t err = mParent->suspendA2dpPlayback_l(mUseCase);
+    if (mParent->mRouteAudioToExtOut) {
+         ALOGD("close-suspendPlaybackOnExtOut_l::mUseCase = %d",mUseCase);
+         status_t err = mParent->suspendPlaybackOnExtOut_l(mUseCase);
          if(err) {
-             ALOGE("suspendA2dpPlayback from hardware output close return err = %d", err);
+             ALOGE("suspendExtOutPlayback from hardware output close return err = %d", err);
              return err;
          }
     }
@@ -373,10 +373,10 @@ status_t AudioStreamOutALSA::standby()
 #endif
 
     mHandle->module->standby(mHandle);
-    if (mParent->mRouteAudioToA2dp) {
-        status_t err = mParent->stopA2dpPlayback_l(mUseCase);
+    if (mParent->mRouteAudioToExtOut) {
+        status_t err = mParent->stopPlaybackOnExtOut_l(mUseCase);
         if(err) {
-            ALOGE("stopA2dpPlayback return err  %d", err);
+            ALOGE("stopPlaybackOnExtOut_l return err  %d", err);
         }
     }
 
