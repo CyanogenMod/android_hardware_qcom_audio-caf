@@ -45,15 +45,33 @@ public:
                                                                               const char *device_address);
         virtual void setPhoneState(int state);
         virtual void setForceUse(AudioSystem::force_use usage, AudioSystem::forced_config config);
+        virtual audio_io_handle_t getOutput(AudioSystem::stream_type stream,
+                                            uint32_t samplingRate = 0,
+                                            uint32_t format = AudioSystem::FORMAT_DEFAULT,
+                                            uint32_t channels = 0,
+                                            AudioSystem::output_flags flags =
+                                                    AudioSystem::OUTPUT_FLAG_INDIRECT);
         virtual status_t startOutput(audio_io_handle_t output,
                                      AudioSystem::stream_type stream,
                                      int session = 0);
         virtual status_t stopOutput(audio_io_handle_t output,
                                     AudioSystem::stream_type stream,
                                     int session = 0);
+        virtual audio_io_handle_t getInput(int inputSource,
+                                            uint32_t samplingRate,
+                                            uint32_t format,
+                                            uint32_t channels,
+                                            AudioSystem::audio_in_acoustics acoustics);
 
         // indicates to the audio policy manager that the input starts being used.
         virtual status_t startInput(audio_io_handle_t input);
+
+        // indicates to the audio policy manager that the input stops being used.
+        virtual status_t stopInput(audio_io_handle_t input);
+        virtual status_t setStreamVolumeIndex(AudioSystem::stream_type stream,
+                                              int index,
+                                              audio_devices_t device);
+protected:
         // return appropriate device for streams handled by the specified strategy according to current
         // phone state, connected devices...
         // if fromCache is true, the device is returned from mDeviceForStrategy[],
@@ -81,6 +99,16 @@ public:
         // check that volume change is permitted, compute and send new volume to audio hardware
         status_t checkAndSetVolume(int stream, int index, audio_io_handle_t output, audio_devices_t device, int delayMs = 0, bool force = false);
 
+
+        // when a device is connected, checks if an open output can be routed
+        // to this device. If none is open, tries to open one of the available outputs.
+        // Returns an output suitable to this device or 0.
+        // when a device is disconnected, checks if an output is not used any more and
+        // returns its handle if any.
+        // transfers the audio tracks and effects from one output thread to another accordingly.
+        status_t checkOutputsForDevice(audio_devices_t device,
+                                       AudioSystem::device_connection_state state,
+                                       SortedVector<audio_io_handle_t>& outputs);
         // manages A2DP output suspend/restore according to phone state and BT SCO usage
         void checkA2dpSuspend();
 
@@ -99,8 +127,19 @@ public:
                                     uint32_t format,
                                     uint32_t channelMask,
                                     audio_output_flags_t flags);
-protected:
+        // selects the most appropriate device on output for current state
+        // must be called every time a condition that affects the device choice for a given output is
+        // changed: connected device, phone state, force use, output start, output stop..
+        // see getDeviceForStrategy() for the use of fromCache parameter
 
+        audio_devices_t getNewDevice(audio_io_handle_t output, bool fromCache);
+
+
+        // returns the category the device belongs to with regard to volume curve management
+        static device_category getDeviceCategory(audio_devices_t device);
+
+        // extract one device relevant for volume control from multiple device selection
+        static audio_devices_t getDeviceForVolume(audio_devices_t device);
         // true is current platform implements a back microphone
         virtual bool hasBackMicrophone() const { return false; }
         // true is current platform supports suplication of notifications and ringtones over A2DP output
