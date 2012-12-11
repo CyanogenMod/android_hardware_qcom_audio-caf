@@ -87,6 +87,18 @@ public:
         // returns the A2DP output handle if it is open or 0 otherwise
         audio_io_handle_t getA2dpOutput();
 
+        virtual AudioPolicyManagerBase::IOProfile* getProfileForDirectOutput(
+                                                     audio_devices_t device,
+                                                     uint32_t samplingRate,
+                                                     uint32_t format,
+                                                     uint32_t channelMask,
+                                                     audio_output_flags_t flags);
+        bool    isCompatibleProfile(AudioPolicyManagerBase::IOProfile *profile,
+                                    audio_devices_t device,
+                                    uint32_t samplingRate,
+                                    uint32_t format,
+                                    uint32_t channelMask,
+                                    audio_output_flags_t flags);
 protected:
 
         // true is current platform implements a back microphone
