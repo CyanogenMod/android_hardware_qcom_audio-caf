@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 The Android Open Source Project
- * Copyright (C) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,5 +37,65 @@ public:
 
         virtual ~AudioPolicyManager() {}
 
+        // AudioPolicyInterface
+        virtual status_t setDeviceConnectionState(audio_devices_t device,
+                                                          AudioSystem::device_connection_state state,
+                                                          const char *device_address);
+        virtual AudioSystem::device_connection_state getDeviceConnectionState(audio_devices_t device,
+                                                                              const char *device_address);
+        virtual void setPhoneState(int state);
+        virtual void setForceUse(AudioSystem::force_use usage, AudioSystem::forced_config config);
+        virtual status_t startOutput(audio_io_handle_t output,
+                                     AudioSystem::stream_type stream,
+                                     int session = 0);
+        virtual status_t stopOutput(audio_io_handle_t output,
+                                    AudioSystem::stream_type stream,
+                                    int session = 0);
+
+        // indicates to the audio policy manager that the input starts being used.
+        virtual status_t startInput(audio_io_handle_t input);
+        // return appropriate device for streams handled by the specified strategy according to current
+        // phone state, connected devices...
+        // if fromCache is true, the device is returned from mDeviceForStrategy[],
+        // otherwise it is determine by current state
+        // (device connected,phone state, force use, a2dp output...)
+        // This allows to:
+        //  1 speed up process when the state is stable (when starting or stopping an output)
+        //  2 access to either current device selection (fromCache == true) or
+        // "future" device selection (fromCache == false) when called from a context
+        //  where conditions are changing (setDeviceConnectionState(), setPhoneState()...) AND
+        //  before updateDevicesAndOutputs() is called.
+        virtual audio_devices_t getDeviceForStrategy(routing_strategy strategy,
+                                                     bool fromCache = true);
+
+        // change the route of the specified output. Returns the number of ms we have slept to
+        // allow new routing to take effect in certain cases.
+        uint32_t setOutputDevice(audio_io_handle_t output,
+                             audio_devices_t device,
+                             bool force = false,
+                             int delayMs = 0);
+
+        // select input device corresponding to requested audio source
+        virtual audio_devices_t getDeviceForInputSource(int inputSource);
+
+        // check that volume change is permitted, compute and send new volume to audio hardware
+        status_t checkAndSetVolume(int stream, int index, audio_io_handle_t output, audio_devices_t device, int delayMs = 0, bool force = false);
+
+        // manages A2DP output suspend/restore according to phone state and BT SCO usage
+        void checkA2dpSuspend();
+
+        // returns the A2DP output handle if it is open or 0 otherwise
+        audio_io_handle_t getA2dpOutput();
+
+protected:
+
+        // true is current platform implements a back microphone
+        virtual bool hasBackMicrophone() const { return false; }
+        // true is current platform supports suplication of notifications and ringtones over A2DP output
+        virtual bool a2dpUsedForSonification() const { return true; }
+
+private:
+
+        void handleNotificationRoutingForStream(AudioSystem::stream_type stream);
 };
 };
