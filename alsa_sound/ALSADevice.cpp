@@ -102,6 +102,7 @@ ALSADevice::ALSADevice() {
     mMixer = mixer_open("/dev/snd/controlC0");
 
     mProxyParams.mExitRead = false;
+    mProxyParams.mPfdProxy[1].fd = -1;
     resetProxyVariables();
     mProxyParams.mCaptureBufferSize = AFE_PROXY_PERIOD_SIZE;
     mProxyParams.mCaptureBuffer = NULL;
