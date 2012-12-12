@@ -684,19 +684,17 @@ struct snd_compr_audio_info {
  * SNDRV_COMPRESS_DRAIN: Play till end of buffers and stop after that
  * SNDRV_COMPRESS_IOCTL_VERSION: Query the API version
  */
-#define SNDRV_COMPRESS_IOCTL_VERSION	_IOR('C', 0x00, int)
-#define SNDRV_COMPRESS_GET_CAPS		_IOWR('C', 0x10, struct snd_compr_caps)
-#define SNDRV_COMPRESS_GET_CODEC_CAPS	_IOWR('C', 0x11,\
-						struct snd_compr_codec_caps)
-#define SNDRV_COMPRESS_SET_PARAMS	_IOW('C', 0x12, struct snd_compr_params)
-#define SNDRV_COMPRESS_GET_PARAMS	_IOR('C', 0x13, struct snd_codec)
-#define SNDRV_COMPRESS_TSTAMP		_IOR('C', 0x20, struct snd_compr_tstamp)
-#define SNDRV_COMPRESS_AVAIL		_IOR('C', 0x21, struct snd_compr_avail)
-#define SNDRV_COMPRESS_PAUSE		_IO('C', 0x30)
-#define SNDRV_COMPRESS_RESUME		_IO('C', 0x31)
-#define SNDRV_COMPRESS_START		_IO('C', 0x32)
-#define SNDRV_COMPRESS_STOP		_IO('C', 0x33)
-#define SNDRV_COMPRESS_DRAIN		_IO('C', 0x34)
+#define SNDRV_COMPRESS_GET_CAPS         _IOWR('C', 0x00, struct snd_compr_caps *)
+#define SNDRV_COMPRESS_GET_CODEC_CAPS   _IOWR('C', 0x01, struct snd_compr_codec_caps *)
+#define SNDRV_COMPRESS_SET_PARAMS       _IOW('C', 0x02, struct snd_compr_params *)
+#define SNDRV_COMPRESS_GET_PARAMS       _IOR('C', 0x03, struct snd_compr_params *)
+#define SNDRV_COMPRESS_TSTAMP           _IOR('C', 0x10, struct snd_compr_tstamp *)
+#define SNDRV_COMPRESS_AVAIL            _IOR('C', 0x11, struct snd_compr_avail *)
+#define SNDRV_COMPRESS_PAUSE            _IO('C', 0x20)
+#define SNDRV_COMPRESS_RESUME           _IO('C', 0x21)
+#define SNDRV_COMPRESS_START            _IO('C', 0x22)
+#define SNDRV_COMPRESS_STOP             _IO('C', 0x23)
+#define SNDRV_COMPRESS_DRAIN            _IO('C', 0x24)
 /*
  * TODO
  * 1. add mmap support
