@@ -1,6 +1,9 @@
-ifneq ($(filter msm8960,$(TARGET_BOARD_PLATFORM)),)
+AUDIO_HW_ROOT := $(call my-dir)
 
-AUDIO_ROOT := $(call my-dir)
-include $(call all-subdir-makefiles)
+ifeq ($(strip $(BOARD_USES_ALSA_AUDIO)),true)
+    include $(AUDIO_HW_ROOT)/alsa_sound/Android.mk
+endif
 
+ifeq ($(strip $(BOARD_USES_ALSA_AUDIO)),true)
+    include $(AUDIO_HW_ROOT)/libalsa-intf/Android.mk
 endif
