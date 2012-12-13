@@ -211,26 +211,6 @@ struct output_metadata_handle_t {
     uint64_t            timestamp;
     uint32_t            reserved[12];
 };
-typedef struct buf_info;
-
-/** Structure to save buffer information for applying effects for
- *  LPA buffers */
-struct buf_info {
-    int bufsize;
-    int nBufs;
-    int **buffers;
-};
-
-#ifdef __cplusplus
-/**
- *Observer class to post the Events from HAL to Flinger
-*/
-class AudioEventObserver {
-public:
-    virtual ~AudioEventObserver() {}
-    virtual void postEOS(int64_t delayUs) = 0;
-};
-#endif
 
 typedef List < alsa_handle_t > ALSAHandleList;
 
@@ -588,6 +568,9 @@ private:
     //Declare the condition Variables and Mutex
     Mutex mEmptyQueueMutex;
     Mutex mFilledQueueMutex;
+
+    //Mutex for sync between decoderthread and control thread
+    Mutex mDecoderLock;
 
     Condition mWriteCv;
     Condition mEventCv;
