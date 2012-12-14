@@ -61,7 +61,7 @@ namespace android_audio_legacy
 #define KILL_EVENT_THREAD 1
 #define BUFFER_COUNT 4
 #define LPA_BUFFER_SIZE 256*1024
-#define TUNNEL_BUFFER_SIZE 600*1024
+#define TUNNEL_BUFFER_SIZE 256*1024
 #define MONO_CHANNEL_MODE 1
 // ----------------------------------------------------------------------------
 
