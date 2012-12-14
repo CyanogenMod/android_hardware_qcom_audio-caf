@@ -368,8 +368,9 @@ status_t AudioUsbALSA::setHardwareParams(pcm *txHandle, uint32_t sampleRate, uin
     ALOGD("setHardwareParams: buffer_size %d, period_size %d, period_cnt %d",
          txHandle->buffer_size, txHandle->period_size,
          txHandle->period_cnt);
-
-    free(params);
+ 
+    //Do not free params here, params is used after setting hw/sw params
+    //params will be free-ed in pcm_close
     return NO_ERROR;
 }
 
@@ -408,7 +409,9 @@ status_t AudioUsbALSA::setSoftwareParams(pcm *pcm, bool playback)
         free(params);
         return NO_INIT;
     }
-    free(params);
+
+    //Do not free params here, params is used after setting hw/sw params
+    //params will be free-ed in pcm_close
     return NO_ERROR;
 }
 
