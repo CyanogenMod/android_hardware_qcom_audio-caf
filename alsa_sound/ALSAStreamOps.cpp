@@ -223,9 +223,9 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
         }
         if(device) {
             ALOGD("setParameters(): keyRouting with device %#x", device);
-            if(device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
-                mParent->mRouteAudioToA2dp = true;
-                ALOGD("setParameters(): A2DP device %#x", device);
+            if (mParent->isExtOutDevice(device)) {
+                mParent->mRouteAudioToExtOut = true;
+                ALOGD("setParameters(): device %#x", device);
             }
             err = mParent->doRouting(device);
             if(err) {
@@ -249,6 +249,8 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
                 mParent->handleFm(device);
             }
             param.remove(key);
+        } else {
+            mParent->setParameters(keyValuePairs);
         }
     }
 #endif
