@@ -1532,6 +1532,10 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
         ALOGV("setOutputDevice() setting same device %04x or null device for output %d", device, output);
         return muteWaitMs;
     }
+    if (device == prevDevice) {
+        ALOGV("setOutputDevice() Call routing with same device with zero delay ");
+        delayMs = 0;
+    }
 
     ALOGV("setOutputDevice() changing device:%x",device);
     // do the routing
