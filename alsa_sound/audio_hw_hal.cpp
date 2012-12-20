@@ -99,6 +99,7 @@ static uint32_t audio_device_conv_table[][HAL_API_REV_NUM] =
 #ifdef QCOM_PROXY_DEVICE_ENABLED
     { AudioSystem::DEVICE_IN_PROXY, AUDIO_DEVICE_IN_PROXY },
 #endif
+    { AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET, AUDIO_DEVICE_IN_ANLG_DOCK_HEADSET },
     { AudioSystem::DEVICE_IN_DEFAULT, AUDIO_DEVICE_IN_DEFAULT },
 };
 
