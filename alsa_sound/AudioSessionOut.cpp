@@ -808,6 +808,7 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
         alsa_handle.channels = MONO_CHANNEL_MODE;
     else
         alsa_handle.channels = DEFAULT_CHANNEL_MODE;
+    alsa_handle.channels =  AudioSystem::popCount(mChannels);
     alsa_handle.sampleRate  = mSampleRate;
     alsa_handle.latency     = PLAYBACK_LATENCY;
     alsa_handle.rxHandle    = 0;

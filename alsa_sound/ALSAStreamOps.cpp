@@ -105,6 +105,8 @@ status_t ALSAStreamOps::set(int      *format,
         *channels = 0;
         if (mHandle->devices & AudioSystem::DEVICE_OUT_ALL) {
             switch(mHandle->channels) {
+                case 8:
+                case 7:
                 case 6:
                 case 5:
                     *channels |= audio_channel_out_mask_from_count(mHandle->channels);
@@ -369,6 +371,8 @@ uint32_t ALSAStreamOps::channels() const
 
     if (mDevices & AudioSystem::DEVICE_OUT_ALL)
         switch(count) {
+            case 8:
+            case 7:
             case 6:
             case 5:
                 channels |=audio_channel_out_mask_from_count(count);
