@@ -48,7 +48,7 @@ static int (*csd_client_mic_mute)(int);
 #define BTSCO_RATE_16KHZ 16000
 #define USECASE_TYPE_RX 1
 #define USECASE_TYPE_TX 2
-#define MAX_HDMI_CHANNEL_CNT 6
+#define MAX_HDMI_CHANNEL_CNT 8
 
 #define AFE_PROXY_PERIOD_SIZE 3072
 #define KILL_A2DP_THREAD 1
@@ -161,6 +161,8 @@ status_t ALSADevice::setHDMIChannelCount()
     }
 
     switch (channel_count) {
+    case 8: channel_cnt_str = "Eight"; break;
+    case 7: channel_cnt_str = "Seven"; break;
     case 6: channel_cnt_str = "Six"; break;
     case 5: channel_cnt_str = "Five"; break;
     case 4: channel_cnt_str = "Four"; break;
@@ -700,18 +702,20 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     if (handle->channels == 1) {
         flags |= PCM_MONO;
     }
-#ifdef QCOM_SSR_ENABLED
     else if (handle->channels == 4 ) {
         flags |= PCM_QUAD;
     } else if (handle->channels == 6 ) {
-        if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
-            || !strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, strlen(SND_USE_CASE_VERB_HIFI_REC_COMPRESSED))
-            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))
-            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED))) {
+#ifdef QCOM_SSR_ENABLED
+        if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC)
+            || !strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED)
+            || !strcmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC)
+            || !strcmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED)) {
             flags |= PCM_QUAD;
         } else {
             flags |= PCM_5POINT1;
         }
+#else
+        flags |= PCM_5POINT1;
     }
 #endif
     else {
