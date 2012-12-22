@@ -1305,13 +1305,17 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
 
         default:    // FORCE_NONE
             // when not in a phone call, phone strategy should route STREAM_VOICE_CALL to A2DP
-            if (!isInCall() &&
-                    (mForceUse[AudioSystem::FOR_MEDIA] != AudioSystem::FORCE_NO_BT_A2DP) &&
-                    !mA2dpSuspended) {
-                device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP;
-                if (device) break;
-                device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES;
-                if (device) break;
+            if (!isInCall())
+            {
+                if ((mForceUse[AudioSystem::FOR_MEDIA] != AudioSystem::FORCE_NO_BT_A2DP) &&
+                        !mA2dpSuspended) {
+                    device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP;
+                    if (device) break;
+                    device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES;
+                    if (device) break;
+                }
+                device = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_SPEAKER;
+			    if (device) break;
             }
             device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_WIRED_HEADPHONE;
             if (device) break;
@@ -1554,7 +1558,6 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
         ALOGV("setOutputDevice() Call routing with same device with zero delay ");
         delayMs = 0;
     }
-
     ALOGV("setOutputDevice() changing device:%x",device);
     // do the routing
     param.addInt(String8(AudioParameter::keyRouting), (int)device);

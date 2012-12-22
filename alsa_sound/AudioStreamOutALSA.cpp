@@ -123,6 +123,9 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
             if(mParent->isExtOutDevice(mDevices)) {
                 ALOGV("StreamOut write - mRouteAudioToExtOut = %d ", mParent->mRouteAudioToExtOut);
                 mParent->mRouteAudioToExtOut = true;
+                if(mParent->mExtOutStream == NULL) {
+                    mParent->switchExtOut(mDevices);
+                }
             }
             ALOGV("write: mHandle->useCase: %s", mHandle->useCase);
             snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);

@@ -854,6 +854,7 @@ protected:
 
     snd_use_case_mgr_t *mUcMgr;
 
+    int32_t            mCurRxDevice;
     int32_t            mCurDevice;
     /* The flag holds all the audio related device settings from
      * Settings and Qualcomm Settings applications */
@@ -888,8 +889,8 @@ protected:
     struct resampler_itfe *mResampler;
 
 
-    bool                mKillExtOutThread;
-    bool                mExtOutThreadAlive;
+    volatile bool       mKillExtOutThread;
+    volatile bool       mExtOutThreadAlive;
     pthread_t           mExtOutThread;
     Mutex               mExtOutMutex;
     Condition           mExtOutCv;
