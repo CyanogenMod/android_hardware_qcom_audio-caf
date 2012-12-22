@@ -124,6 +124,9 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     if(mParent->isExtOutDevice(devices)) {
         ALOGE("Set Capture from proxy true");
         mParent->mRouteAudioToExtOut = true;
+        if(mParent->mExtOutStream == NULL) {
+            mParent->switchExtOut(devices);
+        }
     }
 
     //open device based on the type (LPA or Tunnel) and devices
