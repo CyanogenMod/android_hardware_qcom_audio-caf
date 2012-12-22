@@ -673,7 +673,14 @@ status_t AudioSessionOutALSA::stop()
 status_t AudioSessionOutALSA::standby()
 {
     Mutex::Autolock autoLock(mParent->mLock);
-    mAlsaHandle->module->standby(mAlsaHandle);
+    // At this point, all the buffers with the driver should be
+    // flushed.
+    mLock.lock();
+    if( !mAlsaHandle->handle->start) {
+        ALOGV("drain from destructor which will flush the buffers");
+        drain();
+    }
+    mLock.unlock();
     status_t err = NO_ERROR;
     mAlsaHandle->module->standby(mAlsaHandle);
     if (mParent->mRouteAudioToExtOut) {
