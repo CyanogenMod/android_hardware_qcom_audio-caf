@@ -26,7 +26,7 @@
 #include <math.h>
 
 #define LOG_TAG "AudioHardwareALSA"
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include <utils/String8.h>
@@ -2554,19 +2554,19 @@ void AudioHardwareALSA::extOutThreadFunc() {
 void AudioHardwareALSA::setExtOutActiveUseCases_l(uint32_t activeUsecase)
 {
    mExtOutActiveUseCases |= activeUsecase;
-   ALOGD("mExtOutActiveUseCases = %u, activeUsecase = %u", mExtOutActiveUseCases, activeUsecase);
+   ALOGV("mExtOutActiveUseCases = %u, activeUsecase = %u", mExtOutActiveUseCases, activeUsecase);
 }
 
 uint32_t AudioHardwareALSA::getExtOutActiveUseCases_l()
 {
-   ALOGD("getExtOutActiveUseCases_l: mExtOutActiveUseCases = %u", mExtOutActiveUseCases);
+   ALOGV("getExtOutActiveUseCases_l: mExtOutActiveUseCases = %u", mExtOutActiveUseCases);
    return mExtOutActiveUseCases;
 }
 
 void AudioHardwareALSA::clearExtOutActiveUseCases_l(uint32_t activeUsecase) {
 
    mExtOutActiveUseCases &= ~activeUsecase;
-   ALOGD("clear - mExtOutActiveUseCases = %u, activeUsecase = %u", mExtOutActiveUseCases, activeUsecase);
+   ALOGV("clear - mExtOutActiveUseCases = %u, activeUsecase = %u", mExtOutActiveUseCases, activeUsecase);
 
 }
 
@@ -2618,7 +2618,7 @@ bool  AudioHardwareALSA::suspendPlaybackOnExtOut(uint32_t activeUsecase) {
 bool  AudioHardwareALSA::suspendPlaybackOnExtOut_l(uint32_t activeUsecase) {
 
     Mutex::Autolock autolock1(mExtOutMutex);
-    ALOGD("suspendPlaybackOnExtOut_l activeUsecase = %d, mRouteAudioToExtOut = %d",\
+    ALOGV("suspendPlaybackOnExtOut_l activeUsecase = %d, mRouteAudioToExtOut = %d",\
             activeUsecase, mRouteAudioToExtOut);
     clearExtOutActiveUseCases_l(activeUsecase);
     if((!getExtOutActiveUseCases_l()) && mIsExtOutEnabled )
