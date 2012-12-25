@@ -36,22 +36,20 @@ ifeq ($(strip $(BOARD_HAVE_LOW_LATENCY_AUDIO)),true)
   LOCAL_CFLAGS += -DQCOM_LOW_LATENCY_AUDIO_ENABLED
 endif
 
-#Do not use Dual MIC scenario in call feature
 #Dual MIC solution(Fluence) feature in Built-in MIC used scenarioes.
 # 1. Handset
 # 2. 3-Pole Headphones
-#ifeq ($(strip $(BOARD_USES_FLUENCE_INCALL)),true)
-#LOCAL_CFLAGS += -DUSES_FLUENCE_INCALL
-#endif
+ifeq ($(strip $(BOARD_USES_FLUENCE_INCALL)),true)
+LOCAL_CFLAGS += -DUSES_FLUENCE_INCALL
+endif
 
-#Do not use separate audio Input path feature
 #Separate audio input path can be set using input source of audio parameter
 # 1. Voice Recognition
 # 2. Camcording
 # 3. etc.
-#ifeq ($(strip $(BOARD_USES_SEPERATED_AUDIO_INPUT)),true)
-#LOCAL_CFLAGS += -DSEPERATED_AUDIO_INPUT
-#endif
+ifeq ($(strip $(BOARD_USES_SEPERATED_AUDIO_INPUT)),true)
+LOCAL_CFLAGS += -DSEPERATED_AUDIO_INPUT
+endif
 
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
