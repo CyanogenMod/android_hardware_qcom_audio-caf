@@ -1219,7 +1219,7 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
       char *use_case;
       snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
 
-#ifdef QCOM_OUTPUT_FLAGS_ENABLED
+#ifdef QCOM_LOW_LATENCY_AUDIO_ENABLED
       if (flags & AUDIO_OUTPUT_FLAG_FAST) {
           alsa_handle.bufferSize = PLAYBACK_LOW_LATENCY_BUFFER_SIZE;
           alsa_handle.latency = PLAYBACK_LOW_LATENCY;
@@ -1244,7 +1244,7 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
       it--;
       ALOGD("useCase %s", it->useCase);
       mALSADevice->route(&(*it), devices, mode());
-#ifdef QCOM_OUTPUT_FLAGS_ENABLED
+#ifdef QCOM_LOW_LATENCY_AUDIO_ENABLED
       if (flags & AUDIO_OUTPUT_FLAG_FAST) {
           if(!strcmp(it->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) {
              snd_use_case_set(mUcMgr, "_verb", SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC);

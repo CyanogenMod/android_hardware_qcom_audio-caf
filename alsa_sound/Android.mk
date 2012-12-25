@@ -32,6 +32,10 @@ ifneq ($(ALSA_DEFAULT_SAMPLE_RATE),)
     LOCAL_CFLAGS += -DALSA_DEFAULT_SAMPLE_RATE=$(ALSA_DEFAULT_SAMPLE_RATE)
 endif
 
+ifeq ($(strip $(BOARD_HAVE_LOW_LATENCY_AUDIO)),true)
+  LOCAL_CFLAGS += -DQCOM_LOW_LATENCY_AUDIO_ENABLED
+endif
+
 #Do not use Dual MIC scenario in call feature
 #Dual MIC solution(Fluence) feature in Built-in MIC used scenarioes.
 # 1. Handset
