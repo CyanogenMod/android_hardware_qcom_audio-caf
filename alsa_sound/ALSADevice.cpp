@@ -677,7 +677,8 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
     if (rxDevice != NULL && txDevice != NULL &&
             (!strcmp(txDevice, SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE) ||
             !strcmp(txDevice, SND_USE_CASE_DEV_DUAL_MIC_BROADSIDE)) &&
-            !strcmp(rxDevice, SND_USE_CASE_DEV_VOC_EARPIECE)) {
+            (!strcmp(rxDevice, SND_USE_CASE_DEV_VOC_EARPIECE) ||
+             !strcmp(rxDevice, SND_USE_CASE_DEV_VOC_EARPIECE_XGAIN))) {
         setA2220Mode(A2220_PATH_INCALL_RECEIVER_NSON);
     } else {
         setA2220Mode(A2220_PATH_INCALL_RECEIVER_NSOFF);
@@ -1437,6 +1438,8 @@ char *ALSADevice::getUCMDeviceFromAcdbId(int acdb_id)
 
 char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
 {
+    char value[PROPERTY_VALUE_MAX];
+
     if (!input) {
         ALOGV("getUCMDevice for output device: devices:%x is input device:%d",devices,input);
         if (!(mDevSettingsFlag & TTY_OFF) &&
@@ -1520,7 +1523,10 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
         } else if (devices & AudioSystem::DEVICE_OUT_EARPIECE) {
             if (mCallMode == AUDIO_MODE_IN_CALL ||
                 mCallMode == AUDIO_MODE_IN_COMMUNICATION) {
-                return strdup(SND_USE_CASE_DEV_VOC_EARPIECE); /* Voice HANDSET RX */
+                property_get("persist.audio.voc_ep.xgain", value, "");
+                return strdup(strcmp(value, "1") == 0 ?
+                                SND_USE_CASE_DEV_VOC_EARPIECE_XGAIN :
+                                SND_USE_CASE_DEV_VOC_EARPIECE); /* Voice HANDSET RX */
             } else {
                 return strdup(SND_USE_CASE_DEV_EARPIECE); /* HANDSET RX */
             }
