@@ -169,6 +169,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
         fclose(fp);
     }
 
+#if 0
     while (audio_init_done == false && sleep_retry < MAX_SLEEP_RETRY) {
         property_get("qcom.audio.init", audio_init, NULL);
         ALOGD("qcom.audio.init is set to %s\n",audio_init);
@@ -180,6 +181,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
             sleep_retry++;
         }
     }
+#endif
 
     if (codec_rev == 1) {
         ALOGV("Detected tabla 1.x sound card");
