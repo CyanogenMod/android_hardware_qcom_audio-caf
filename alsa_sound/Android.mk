@@ -51,6 +51,10 @@ ifeq ($(strip $(BOARD_USES_SEPERATED_AUDIO_INPUT)),true)
 LOCAL_CFLAGS += -DSEPERATED_AUDIO_INPUT
 endif
 
+ifeq ($(BOARD_HAVE_AUDIENCE_A2220),true)
+  LOCAL_CFLAGS += -DUSE_A2220
+endif
+
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
   AudioStreamOutALSA.cpp        \
