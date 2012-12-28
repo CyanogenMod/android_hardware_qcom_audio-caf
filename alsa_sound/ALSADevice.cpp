@@ -1,7 +1,7 @@
 /* ALSADevice.cpp
  **
  ** Copyright 2009 Wind River Systems
- ** Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -1528,7 +1528,7 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
         } else if (devices & AudioSystem::DEVICE_OUT_PROXY) {
             return strdup(SND_USE_CASE_DEV_PROXY_RX); /* PROXY RX */
 #endif
-#ifdef QCOM_FM_TX_ENABLED
+#ifdef QCOM_FM_ENABLED
         } else if (devices & AudioSystem::DEVICE_OUT_FM_TX) {
             return strdup(SND_USE_CASE_DEV_FM_TX); /* FM Tx */
 #endif

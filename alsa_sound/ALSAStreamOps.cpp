@@ -1,7 +1,7 @@
 /* ALSAStreamOps.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -270,7 +270,6 @@ String8 ALSAStreamOps::getParameters(const String8& keys)
         param.addInt(key, (int)mDevices);
     }
     else {
-#ifdef QCOM_VOIP_ENABLED
         key = String8(VOIPCHECK_KEY);
         if (param.get(key, value) == NO_ERROR) {
             if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
@@ -279,7 +278,6 @@ String8 ALSAStreamOps::getParameters(const String8& keys)
             else
                 param.addInt(key, false);
         }
-#endif
     }
     key = String8(AUDIO_PARAMETER_STREAM_SUP_CHANNELS);
     if (param.get(key, value) == NO_ERROR) {
