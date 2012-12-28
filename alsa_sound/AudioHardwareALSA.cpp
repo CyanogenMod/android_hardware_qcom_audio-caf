@@ -1817,7 +1817,7 @@ void AudioHardwareALSA::handleFm(int device)
     int newMode = mode();
     uint32_t activeUsecase = USECASE_NONE;
 
-    if(device & AudioSystem::DEVICE_OUT_FM && mIsFmActive == 0) {
+    if(device & AUDIO_DEVICE_OUT_FM && mIsFmActive == 0) {
         // Start FM Radio on current active device
         unsigned long bufferSize = FM_BUFFER_SIZE;
         alsa_handle_t alsa_handle;
@@ -1873,7 +1873,7 @@ void AudioHardwareALSA::handleFm(int device)
             }
         }
 
-    } else if (!(device & AudioSystem::DEVICE_OUT_FM) && mIsFmActive == 1) {
+    } else if (!(device & AUDIO_DEVICE_OUT_FM) && mIsFmActive == 1) {
         //i Stop FM Radio
         ALOGV("Stop FM");
         for(ALSAHandleList::iterator it = mDeviceList.begin();
