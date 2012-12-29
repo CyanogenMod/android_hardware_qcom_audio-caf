@@ -1,7 +1,7 @@
 /* AudioHardwareALSA.cpp
  **
  ** Copyright 2008-2010 Wind River Systems
- ** Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -447,6 +447,25 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     int btRate;
     int state;
     ALOGV("setParameters() %s", keyValuePairs.string());
+
+    key = String8(AudioParameter::keyADSPStatus);
+    if (param.get(key, value) == NO_ERROR) {
+       if (value == "ONLINE") {
+           ALOGV("ADSP online set SSRcomplete");
+           mALSADevice->mSSRComplete = true;
+           return status;
+       }
+       else if (value == "OFFLINE") {
+           ALOGV("ADSP online re-set SSRcomplete");
+           mALSADevice->mSSRComplete = false;
+           if ( mRouteAudioToExtOut==true) {
+               ALOGV("ADSP offline close EXT output");
+               uint32_t activeUsecase = getExtOutActiveUseCases_l();
+               stopPlaybackOnExtOut_l(activeUsecase);
+           }
+           return status;
+       }
+    }
 
     key = String8(TTY_MODE_KEY);
     if (param.get(key, value) == NO_ERROR) {

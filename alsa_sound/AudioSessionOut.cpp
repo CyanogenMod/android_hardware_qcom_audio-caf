@@ -1,7 +1,7 @@
 /* AudioSessionOutALSA.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  **
  ** Not a Contribution, Apache license notifications and license are
  ** retained for attribution purposes only.
@@ -64,7 +64,6 @@ namespace android_audio_legacy
 #define TUNNEL_BUFFER_SIZE 240*1024
 #define TUNNEL_METADATA_SIZE 64
 #define MONO_CHANNEL_MODE 1
-
 // ----------------------------------------------------------------------------
 
 AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
@@ -915,6 +914,8 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
     Mutex::Autolock autoLock(mLock);
     AudioParameter param = AudioParameter(keyValuePairs);
     String8 key = String8(AudioParameter::keyRouting);
+    String8 value;
+
     int device;
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
@@ -927,6 +928,20 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
             mParent->doRouting(device);
         }
         param.remove(key);
+    }
+    key = String8(AudioParameter::keyADSPStatus);
+    if (param.get(key, value) == NO_ERROR) {
+       if (value == "ONLINE"){
+           mReachedEOS = true;
+           mSkipWrite = true;
+           mWriteCv.signal();
+           mObserver->postEOS(1);
+       }
+       else if (value == "OFFLINE") {
+           mParent->mLock.lock();
+           requestAndWaitForEventThreadExit();
+           mParent->mLock.unlock();
+       }
     } else {
         mParent->setParameters(keyValuePairs);
     }

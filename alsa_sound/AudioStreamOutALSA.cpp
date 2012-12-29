@@ -1,7 +1,7 @@
 /* AudioStreamOutALSA.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -276,7 +276,19 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
                      mHandle->module->startVoipCall(mHandle);
                 }
                 else
+                {
+                    if (mParent->mALSADevice->mSSRComplete) {
+                        ALOGD("SSR Case: Call device switch to apply AMIX controls.");
+                        mHandle->module->route(mHandle, mDevices , mParent->mode());
+                        mParent->mALSADevice->mSSRComplete = false;
+
+                        if(mParent->isExtOutDevice(mDevices)) {
+                           ALOGV("StreamOut write - mRouteAudioToExtOut = %d ", mParent->mRouteAudioToExtOut);
+                           mParent->mRouteAudioToExtOut = true;
+                        }
+                    }
                     mHandle->module->open(mHandle);
+                }
                 if(mHandle->handle == NULL) {
                    ALOGE("write:: device re-open failed");
                    mParent->mLock.unlock();

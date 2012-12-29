@@ -1,7 +1,7 @@
 /* AudioHardwareALSA.h
  **
  ** Copyright 2008-2010, Wind River Systems
- ** Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -275,6 +275,7 @@ public:
     void     setACDBHandle(void*);
 #endif
 
+    bool mSSRComplete;
 protected:
     friend class AudioHardwareALSA;
 private:
