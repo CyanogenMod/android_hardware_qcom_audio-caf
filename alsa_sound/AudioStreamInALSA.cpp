@@ -1,7 +1,7 @@
 /* AudioStreamInALSA.cpp
  **
  ** Copyright 2008-2009 Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -495,7 +495,14 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                         mHandle->module->startVoipCall(mHandle);
                     }
                     else
+                    {
+                        if (mParent->mALSADevice->mSSRComplete) {
+                            ALOGD("SSR Case: Call device switch to apply AMIX controls.");
+                            mHandle->module->route(mHandle, mDevices , mParent->mode());
+                            mParent->mALSADevice->mSSRComplete = false;
+                        }
                         mHandle->module->open(mHandle);
+                    }
                     if(mHandle->handle == NULL) {
                        ALOGE("read:: PCM device re-open failed");
                        mParent->mLock.unlock();
