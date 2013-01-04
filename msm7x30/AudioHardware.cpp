@@ -19,10 +19,10 @@
 
 #include <math.h>
 
-#define LOG_TAG "AudioPolicyManager7x30"
-#define LOG_NDDEBUG 0
-#define ALOGI ALOGE
-#define ALOGD ALOGE
+#define LOG_TAG "AudioHardware7x30"
+//#define LOG_NDDEBUG 0
+//#define ALOGI ALOGE
+//#define ALOGD ALOGE
 #include <utils/Log.h>
 #include <utils/String8.h>
 #include <stdio.h>

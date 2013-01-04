@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "audio.primary.msm7630"
+#define LOG_TAG "audio.primary.msm7x30"
 //#define LOG_NDEBUG 0
 
 #include <stdint.h>
