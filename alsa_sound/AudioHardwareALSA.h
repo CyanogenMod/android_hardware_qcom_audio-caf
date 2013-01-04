@@ -299,6 +299,7 @@ private:
     char mMicType[25];
     char mCurRxUCMDevice[50];
     char mCurTxUCMDevice[50];
+    //fluence mode value: FLUENCE_MODE_BROADSIDE or FLUENCE_MODE_ENDFIRE
     uint32_t mFluenceMode;
     int mFmVolume;
     uint32_t mDevSettingsFlag;
@@ -867,6 +868,9 @@ protected:
 
     void *mAcdbHandle;
     void *mCsdHandle;
+
+    //fluence key value: fluencepro, fluence, or none
+    char mFluenceKey[20];
     //A2DP variables
     audio_stream_out   *mA2dpStream;
     audio_hw_device_t  *mA2dpDevice;

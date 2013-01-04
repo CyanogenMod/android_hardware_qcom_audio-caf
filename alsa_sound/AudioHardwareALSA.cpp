@@ -252,20 +252,19 @@ AudioHardwareALSA::AudioHardwareALSA() :
     String8 value;
 
     //Set default AudioParameter for fluencetype
-    key  = String8(FLUENCE_KEY);
-    char fluence_key[20] = "none";
-    property_get("ro.qc.sdk.audio.fluencetype",fluence_key,"0");
-    if (0 == strncmp("fluencepro", fluence_key, sizeof("fluencepro"))) {
+    key  = String8(AudioParameter::keyFluenceType);
+    property_get("ro.qc.sdk.audio.fluencetype",mFluenceKey,"0");
+    if (0 == strncmp("fluencepro", mFluenceKey, sizeof("fluencepro"))) {
         mDevSettingsFlag |= QMIC_FLAG;
         mDevSettingsFlag &= (~DMIC_FLAG);
         value = String8("fluencepro");
         ALOGD("FluencePro quadMic feature Enabled");
-    } else if (0 == strncmp("fluence", fluence_key, sizeof("fluence"))) {
+    } else if (0 == strncmp("fluence", mFluenceKey, sizeof("fluence"))) {
         mDevSettingsFlag |= DMIC_FLAG;
         mDevSettingsFlag &= (~QMIC_FLAG);
         value = String8("fluence");
         ALOGD("Fluence dualmic feature Enabled");
-    } else if (0 == strncmp("none", fluence_key, sizeof("none"))) {
+    } else if (0 == strncmp("none", mFluenceKey, sizeof("none"))) {
         mDevSettingsFlag &= (~DMIC_FLAG);
         mDevSettingsFlag &= (~QMIC_FLAG);
         value = String8("none");
@@ -453,16 +452,23 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         doRouting(0);
     }
 
-    key = String8(FLUENCE_KEY);
+    key = String8(AudioParameter::keyFluenceType);
     if (param.get(key, value) == NO_ERROR) {
         if (value == "quadmic") {
-            mDevSettingsFlag |= QMIC_FLAG;
-            mDevSettingsFlag &= (~DMIC_FLAG);
-            ALOGV("Fluence quadMic feature Enabled");
+            //Allow changing fluence type to "quadmic" only when fluence type is fluencepro
+            if (0 == strncmp("fluencepro", mFluenceKey, sizeof("fluencepro"))) {
+                mDevSettingsFlag |= QMIC_FLAG;
+                mDevSettingsFlag &= (~DMIC_FLAG);
+                ALOGV("Fluence quadMic feature Enabled");
+            }
         } else if (value == "dualmic") {
-            mDevSettingsFlag |= DMIC_FLAG;
-            mDevSettingsFlag &= (~QMIC_FLAG);
-            ALOGV("Fluence dualmic feature Enabled");
+            //Allow changing fluence type to "dualmic" only when fluence type is fluencepro or fluence
+            if (0 == strncmp("fluencepro", mFluenceKey, sizeof("fluencepro")) ||
+                0 == strncmp("fluencepro", mFluenceKey, sizeof("fluence"))) {
+                mDevSettingsFlag |= DMIC_FLAG;
+                mDevSettingsFlag &= (~QMIC_FLAG);
+                ALOGV("Fluence dualmic feature Enabled");
+            }
         } else if (value == "none") {
             mDevSettingsFlag &= (~DMIC_FLAG);
             mDevSettingsFlag &= (~QMIC_FLAG);
@@ -655,7 +661,7 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
         param.add(key, value);
     }
 
-    key = String8(FLUENCE_KEY);
+    key = String8(AudioParameter::keyFluenceType);
     if (param.get(key, value) == NO_ERROR) {
     if ((mDevSettingsFlag & QMIC_FLAG) &&
                                (mDevSettingsFlag & ~DMIC_FLAG))
