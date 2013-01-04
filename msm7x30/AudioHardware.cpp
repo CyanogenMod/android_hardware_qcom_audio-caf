@@ -34,35 +34,10 @@
 #include <fcntl.h>
 #include <media/AudioSystem.h>
 
-// ToDo: Remove this definition
-#define QC_PROP
-#if defined(QC_PROP)
 #include "control.h"
 extern "C" {
 #include "initialize_audcal7x30.h"
 }
-#else
-        #define msm_mixer_count() (-EPERM)
-        #define msm_mixer_open(name, card) (-EPERM)
-        #define msm_mixer_close() (-EPERM)
-        #define msm_get_device(name) (-EPERM)
-        #define msm_en_device(dev_id, set) (-EPERM)
-        #define msm_route_stream(dir, dec_id, dev_id, set) (-EPERM)
-        #define msm_route_voice(tx, rx, set) (-EPERM)
-        #define msm_set_volume(dec_id, vol) (-EPERM)
-        #define msm_get_device_class(device_id) (-EPERM)
-        #define msm_get_device_capability(device_id) (-EPERM)
-        #define msm_get_device_list() (-EPERM)
-        #define msm_get_device_count() (-EPERM)
-        #define msm_start_voice() (-EPERM)
-        #define msm_end_voice() (-EPERM)
-        #define msm_set_voice_tx_mute(mute) (-EPERM)
-        #define msm_set_voice_rx_vol(volume) (-EPERM)
-        #define msm_set_device_volume(dev_id,volume) (-EPERM)
-        #define msm_reset_all_device() (-EPERM)
-        #define audcal_initialize() (-EPERM)
-        #define audcal_deinitialize() (-EPERM)
-#endif
 // hardware specific functions
 
 #include "AudioHardware.h"
@@ -104,50 +79,49 @@ const uint32_t AudioHardware::inputSamplingRates[] = {
         8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
 };
 static uint32_t INVALID_DEVICE = 65535;
-static uint32_t SND_DEVICE_CURRENT=-1;
-static uint32_t SND_DEVICE_HANDSET= 0;
-static uint32_t SND_DEVICE_SPEAKER= 1;
-static uint32_t SND_DEVICE_HEADSET= 2;
+static uint32_t SND_DEVICE_CURRENT = -1;
+static uint32_t SND_DEVICE_HANDSET = 0;
+static uint32_t SND_DEVICE_SPEAKER = 1;
+static uint32_t SND_DEVICE_HEADSET = 2;
 static uint32_t SND_DEVICE_FM_HANDSET = 3;
-static uint32_t SND_DEVICE_FM_SPEAKER= 4;
-static uint32_t SND_DEVICE_FM_HEADSET= 5;
-static uint32_t SND_DEVICE_BT= 6;
-static uint32_t SND_DEVICE_BT_EC_OFF=-1;
-static uint32_t SND_DEVICE_HEADSET_AND_SPEAKER=7;
-static uint32_t SND_DEVICE_NO_MIC_HEADSET= 8;
-static uint32_t SND_DEVICE_IN_S_SADC_OUT_HANDSET=9;
-static uint32_t SND_DEVICE_IN_S_SADC_OUT_SPEAKER_PHONE=10;
-static uint32_t SND_DEVICE_TTY_HEADSET=11;
-static uint32_t SND_DEVICE_TTY_HCO=12;
-static uint32_t SND_DEVICE_TTY_VCO=13;
-static uint32_t SND_DEVICE_TTY_FULL=14;
-static uint32_t SND_DEVICE_CARKIT=-1;
-static uint32_t SND_DEVICE_HDMI=15;
-static uint32_t SND_DEVICE_FM_TX=16;
-static uint32_t SND_DEVICE_FM_TX_AND_SPEAKER=17;
-static uint32_t SND_DEVICE_HEADPHONE_AND_SPEAKER=18;
+static uint32_t SND_DEVICE_FM_SPEAKER = 4;
+static uint32_t SND_DEVICE_FM_HEADSET = 5;
+static uint32_t SND_DEVICE_BT = 6;
+static uint32_t SND_DEVICE_BT_EC_OFF = -1;
+static uint32_t SND_DEVICE_HEADSET_AND_SPEAKER = 7;
+static uint32_t SND_DEVICE_NO_MIC_HEADSET = 8;
+static uint32_t SND_DEVICE_IN_S_SADC_OUT_HANDSET = 9;
+static uint32_t SND_DEVICE_IN_S_SADC_OUT_SPEAKER_PHONE = 10;
+static uint32_t SND_DEVICE_TTY_HEADSET = 11;
+static uint32_t SND_DEVICE_TTY_HCO = 12;
+static uint32_t SND_DEVICE_TTY_VCO = 13;
+static uint32_t SND_DEVICE_TTY_FULL = 14;
+static uint32_t SND_DEVICE_CARKIT = -1;
+static uint32_t SND_DEVICE_HDMI = 15;
+static uint32_t SND_DEVICE_FM_TX = 16;
+static uint32_t SND_DEVICE_FM_TX_AND_SPEAKER = 17;
+static uint32_t SND_DEVICE_HEADPHONE_AND_SPEAKER = 18;
 
-static uint32_t DEVICE_HANDSET_RX = 0; // handset_rx
-static uint32_t DEVICE_HANDSET_TX = 1;//handset_tx
-static uint32_t DEVICE_SPEAKER_RX = 2; //speaker_stereo_rx
-static uint32_t DEVICE_SPEAKER_TX = 3;//speaker_mono_tx
-static uint32_t DEVICE_HEADSET_RX = 4; //headset_stereo_rx
-static uint32_t DEVICE_HEADSET_TX = 5; //headset_mono_tx
-static uint32_t DEVICE_FMRADIO_HANDSET_RX= 6; //fmradio_handset_rx
-static uint32_t DEVICE_FMRADIO_HEADSET_RX= 7; //fmradio_headset_rx
-static uint32_t DEVICE_FMRADIO_SPEAKER_RX= 8; //fmradio_speaker_rx
-static uint32_t DEVICE_DUALMIC_HANDSET_TX = 9; //handset_dual_mic_endfire_tx
-static uint32_t DEVICE_DUALMIC_SPEAKER_TX = 10; //speaker_dual_mic_endfire_tx
-static uint32_t DEVICE_TTY_HEADSET_MONO_RX = 11; //tty_headset_mono_rx
-static uint32_t DEVICE_TTY_HEADSET_MONO_TX = 12; //tty_headset_mono_tx
-static uint32_t DEVICE_BT_SCO_RX = 17; //bt_sco_rx
-static uint32_t DEVICE_BT_SCO_TX = 18; //bt_sco_tx
-static uint32_t DEVICE_SPEAKER_HEADSET_RX = 13; //headset_stereo_speaker_stereo_rx
+static uint32_t DEVICE_HANDSET_RX = 0;           /* handset_rx */
+static uint32_t DEVICE_HANDSET_TX = 1;           /* handset_tx */
+static uint32_t DEVICE_SPEAKER_RX = 2;           /* speaker_stereo_rx */
+static uint32_t DEVICE_SPEAKER_TX = 3;           /* speaker_mono_tx */
+static uint32_t DEVICE_HEADSET_RX = 4;           /* headset_stereo_rx */
+static uint32_t DEVICE_HEADSET_TX = 5;           /* headset_mono_tx */
+static uint32_t DEVICE_FMRADIO_HANDSET_RX = 6;   /* fmradio_handset_rx */
+static uint32_t DEVICE_FMRADIO_HEADSET_RX = 7;   /* fmradio_headset_rx */
+static uint32_t DEVICE_FMRADIO_SPEAKER_RX = 8;   /* fmradio_speaker_rx */
+static uint32_t DEVICE_DUALMIC_HANDSET_TX = 9;   /* handset_dual_mic_endfire_tx */
+static uint32_t DEVICE_DUALMIC_SPEAKER_TX = 10;  /* speaker_dual_mic_endfire_tx */
+static uint32_t DEVICE_TTY_HEADSET_MONO_RX = 11; /* tty_headset_mono_rx */
+static uint32_t DEVICE_TTY_HEADSET_MONO_TX = 12; /* tty_headset_mono_tx */
+static uint32_t DEVICE_BT_SCO_RX = 17;           /* bt_sco_rx */
+static uint32_t DEVICE_BT_SCO_TX = 18;           /* bt_sco_tx */
+static uint32_t DEVICE_SPEAKER_HEADSET_RX = 13;  /* headset_stereo_speaker_stereo_rx */
 static uint32_t DEVICE_FMRADIO_STEREO_TX = 14;
-static uint32_t DEVICE_HDMI_STERO_RX = 15; //hdmi_stereo_rx
+static uint32_t DEVICE_HDMI_STERO_RX = 15;       /* hdmi_stereo_rx */
 static uint32_t DEVICE_FMRADIO_STEREO_RX = 16;
 static uint32_t DEVICE_COUNT = DEVICE_BT_SCO_TX +1;
-
 
 int dev_cnt = 0;
 const char ** name = NULL;
@@ -588,7 +562,9 @@ AudioHardware::AudioHardware() :
             device_list[index].capability = msm_get_device_capability(device_list[index].dev_id);
             ALOGV("class ID = %d,capablity = %d for device %d",device_list[index].class_id,device_list[index].capability,device_list[index].dev_id);
         }
+#ifdef WITH_QCOM_CALIBRATION
         audcal_initialize();
+#endif
         mInit = true;
 
         CurrentComboDeviceData.DeviceId = INVALID_DEVICE;
@@ -607,7 +583,9 @@ AudioHardware::~AudioHardware()
         acoustic = 0;
     }
     msm_mixer_close();
+#ifdef WITH_QCOM_CALIBRATION
     audcal_deinitialize();
+#endif
     freeMemory();
     fclose(fp);
     mInit = false;
