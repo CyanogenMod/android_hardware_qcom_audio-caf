@@ -1,6 +1,6 @@
 /*
 ** Copyright 2010, The Android Open-Source Project
-** Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -443,6 +443,64 @@ void mixer_ctl_get(struct mixer_ctl *ctl, unsigned *value)
         }
         break;
     default:
+        ALOGV(" ???");
+    }
+    ALOGV("\n");
+}
+
+void mixer_ctl_get_mulvalues(struct mixer_ctl *ctl, unsigned **value, unsigned *count)
+{
+    struct snd_ctl_elem_value ev;
+    unsigned int n;
+
+    memset(&ev, 0, sizeof(ev));
+    ev.id.numid = ctl->info->id.numid;
+    if (ioctl(ctl->mixer->fd, SNDRV_CTL_IOCTL_ELEM_READ, &ev))
+        return;
+    ALOGV("%s:", ctl->info->id.name);
+
+    switch (ctl->info->type) {
+    case SNDRV_CTL_ELEM_TYPE_BYTES:
+        for (n = 0; n < ctl->info->count; n++)
+            ALOGV(" %ld", ev.value.bytes.data[n]);
+        for (n = 0; n < ctl->info->count; n++)
+            *(value[n]) = ev.value.bytes.data[n];
+        *count = ctl->info->count;
+        break;
+    case SNDRV_CTL_ELEM_TYPE_BOOLEAN:
+        for (n = 0; n < ctl->info->count; n++)
+            ALOGV(" %s", ev.value.integer.value[n] ? "on" : "off");
+        for (n=0; n < ctl->info->count; n++)
+            *(value[n]) = ev.value.integer.value[n];
+        *count = ctl->info->count;
+        break;
+    case SNDRV_CTL_ELEM_TYPE_INTEGER: {
+        for (n = 0; n < ctl->info->count; n++)
+            ALOGV(" %ld", ev.value.integer.value[n]);
+        for (n = 0; n < ctl->info->count; n++)
+            *(value[n]) = ev.value.integer.value[n];
+        *count = ctl->info->count;
+        break;
+    }
+    case SNDRV_CTL_ELEM_TYPE_INTEGER64:
+        for (n = 0; n < ctl->info->count; n++)
+            ALOGV(" %lld", ev.value.integer64.value[n]);
+        for (n = 0; n < ctl->info->count; n++)
+            *(value[n]) = ev.value.integer64.value[n];
+        *count = ctl->info->count;
+        break;
+    case SNDRV_CTL_ELEM_TYPE_ENUMERATED:
+        for (n = 0; n < ctl->info->count; n++) {
+            unsigned v = ev.value.enumerated.item[n];
+            ALOGV(" %d (%s)", v,
+                   (v < ctl->info->value.enumerated.items) ? ctl->ename[v] : "???");
+        }
+        for (n = 0; n < ctl->info->count; n++)
+            *(value[n]) = ev.value.enumerated.item[n];
+        *count = ctl->info->count;
+        break;
+    default:
+        *count = 0;
         ALOGV(" ???");
     }
     ALOGV("\n");

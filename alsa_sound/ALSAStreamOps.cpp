@@ -280,6 +280,35 @@ String8 ALSAStreamOps::getParameters(const String8& keys)
         EDID_AUDIO_INFO info = { 0 };
         bool first = true;
         value = String8();
+#ifdef TARGET_8974
+        char hdmiEDIDData[MAX_SHORT_AUDIO_DESC_CNT+1];
+        if(!mParent->mALSADevice->getEDIDData(hdmiEDIDData)) {
+            if (AudioUtil::getHDMIAudioSinkCaps(&info, hdmiEDIDData)) {
+                for (int i = 0; i < info.nAudioBlocks && i < MAX_EDID_BLOCKS; i++) {
+                    String8 append;
+                    switch (info.AudioBlocksArray[i].nChannels) {
+                    //Do not handle stereo output in Multi-channel cases
+                    //Stereo case is handled in normal playback path
+                    case 6:
+                        ENUM_TO_STRING(append, AUDIO_CHANNEL_OUT_5POINT1);
+                        break;
+                    case 8:
+                        ENUM_TO_STRING(append, AUDIO_CHANNEL_OUT_7POINT1);
+                        break;
+                    default:
+                        ALOGD("Unsupported number of channels %d", info.AudioBlocksArray[i].nChannels);
+                        break;
+                    }
+                    if (!append.isEmpty()) {
+                        value += (first ? append : String8("|") + append);
+                        first = false;
+                    }
+                }
+            } else {
+                ALOGE("Failed to get HDMI sink capabilities");
+            }
+        }
+#else
         if (AudioUtil::getHDMIAudioSinkCaps(&info)) {
             for (int i = 0; i < info.nAudioBlocks && i < MAX_EDID_BLOCKS; i++) {
                 String8 append;
@@ -304,6 +333,7 @@ String8 ALSAStreamOps::getParameters(const String8& keys)
         } else {
             ALOGE("Failed to get HDMI sink capabilities");
         }
+#endif
         param.add(key, value);
     }
     ALOGV("getParameters() %s", param.toString().string());
