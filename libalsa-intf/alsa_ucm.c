@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2013, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -730,7 +730,7 @@ int use_case_index)
                         acdb_send_voice_cal = dlsym(uc_mgr->acdb_handle,"acdb_loader_send_voice_cal");
                         if (acdb_send_voice_cal == NULL) {
                             ALOGE("ucm: dlsym: Error:%s Loading acdb_loader_send_voice_cal", dlerror());
-                        } else {
+                        } else if (!uc_mgr->isFusion3Platform) {
                             acdb_send_voice_cal(uc_mgr->current_rx_device,
                                 uc_mgr->current_tx_device);
                         }
