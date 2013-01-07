@@ -1,7 +1,7 @@
 /* AudioHardwareALSA.h
  **
  ** Copyright 2008-2010, Wind River Systems
- ** Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ ** Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -112,7 +112,6 @@ class AudioHardwareALSA;
 #define FENS_KEY            "fens_enable"
 #define ST_KEY              "st_enable"
 #define INCALLMUSIC_KEY     "incall_music_enabled"
-#define VOICE_PATH_ACTIVE   "voice_path_active"
 
 #define ANC_FLAG        0x00000001
 #define DMIC_FLAG       0x00000002
@@ -863,7 +862,6 @@ protected:
     int musbPlaybackState;
     int musbRecordingState;
 #endif
-    bool mIsVoicePathActive;
 
     void *mAcdbHandle;
     void *mCsdHandle;
