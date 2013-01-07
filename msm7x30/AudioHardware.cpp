@@ -101,13 +101,25 @@ static uint32_t SND_DEVICE_HDMI = 15;
 static uint32_t SND_DEVICE_FM_TX = 16;
 static uint32_t SND_DEVICE_FM_TX_AND_SPEAKER = 17;
 static uint32_t SND_DEVICE_HEADPHONE_AND_SPEAKER = 18;
+#ifdef SAMSUNG_AUDIO
+static uint32_t SND_DEVICE_VOIP_HANDSET = 50;
+static uint32_t SND_DEVICE_VOIP_SPEAKER = 51;
+static uint32_t SND_DEVICE_VOIP_HEADSET = 52;
+static uint32_t SND_DEVICE_CALL_HANDSET = 60;
+static uint32_t SND_DEVICE_CALL_SPEAKER = 61;
+static uint32_t SND_DEVICE_CALL_HEADSET = 62;
+#endif
 
 static uint32_t DEVICE_HANDSET_RX = 0;           /* handset_rx */
 static uint32_t DEVICE_HANDSET_TX = 1;           /* handset_tx */
-static uint32_t DEVICE_SPEAKER_RX = 2;           /* speaker_stereo_rx */
-static uint32_t DEVICE_SPEAKER_TX = 3;           /* speaker_mono_tx */
-static uint32_t DEVICE_HEADSET_RX = 4;           /* headset_stereo_rx */
-static uint32_t DEVICE_HEADSET_TX = 5;           /* headset_mono_tx */
+static uint32_t DEVICE_SPEAKER_RX = 2;           /* speaker_stereo_rx
+                                                    sam: speaker_rx */
+static uint32_t DEVICE_SPEAKER_TX = 3;           /* speaker_mono_tx
+                                                    sam: speaker_tx */
+static uint32_t DEVICE_HEADSET_RX = 4;           /* headset_stereo_rx
+                                                    sam: headset_rx */
+static uint32_t DEVICE_HEADSET_TX = 5;           /* headset_mono_tx
+                                                    sam: headset_tx */
 static uint32_t DEVICE_FMRADIO_HANDSET_RX = 6;   /* fmradio_handset_rx */
 static uint32_t DEVICE_FMRADIO_HEADSET_RX = 7;   /* fmradio_headset_rx */
 static uint32_t DEVICE_FMRADIO_SPEAKER_RX = 8;   /* fmradio_speaker_rx */
@@ -117,11 +129,28 @@ static uint32_t DEVICE_TTY_HEADSET_MONO_RX = 11; /* tty_headset_mono_rx */
 static uint32_t DEVICE_TTY_HEADSET_MONO_TX = 12; /* tty_headset_mono_tx */
 static uint32_t DEVICE_BT_SCO_RX = 17;           /* bt_sco_rx */
 static uint32_t DEVICE_BT_SCO_TX = 18;           /* bt_sco_tx */
-static uint32_t DEVICE_SPEAKER_HEADSET_RX = 13;  /* headset_stereo_speaker_stereo_rx */
+static uint32_t DEVICE_SPEAKER_HEADSET_RX = 13;  /* headset_stereo_speaker_stereo_rx
+                                                    sam: speaker_headset_rx */
 static uint32_t DEVICE_FMRADIO_STEREO_TX = 14;
 static uint32_t DEVICE_HDMI_STERO_RX = 15;       /* hdmi_stereo_rx */
 static uint32_t DEVICE_FMRADIO_STEREO_RX = 16;
+#ifdef SAMSUNG_AUDIO
+static uint32_t DEVICE_HANDSET_VOIP_RX = 40;     /* handset_voip_rx */
+static uint32_t DEVICE_HANDSET_VOIP_TX = 41;     /* handset_voip_tx */
+static uint32_t DEVICE_SPEAKER_VOIP_RX = 42;     /* speaker_voip_rx */
+static uint32_t DEVICE_SPEAKER_VOIP_TX = 43;     /* speaker_voip_tx */
+static uint32_t DEVICE_HEADSET_VOIP_RX = 44;     /* headset_voip_rx */
+static uint32_t DEVICE_HEADSET_VOIP_TX = 45;     /* headset_voip_tx */
+static uint32_t DEVICE_HANDSET_CALL_RX = 60;     /* handset_call_rx */
+static uint32_t DEVICE_HANDSET_CALL_TX = 61;     /* handset_call_tx */
+static uint32_t DEVICE_SPEAKER_CALL_RX = 62;     /* speaker_call_rx */
+static uint32_t DEVICE_SPEAKER_CALL_TX = 63;     /* speaker_call_tx */
+static uint32_t DEVICE_HEADSET_CALL_RX = 64;     /* headset_call_rx */
+static uint32_t DEVICE_HEADSET_CALL_TX = 65;     /* headset_call_tx */
+static uint32_t DEVICE_COUNT = DEVICE_HEADSET_CALL_TX +1;
+#else
 static uint32_t DEVICE_COUNT = DEVICE_BT_SCO_TX +1;
+#endif
 
 int dev_cnt = 0;
 const char ** name = NULL;
@@ -516,13 +545,17 @@ AudioHardware::AudioHardware() :
                 index = DEVICE_HANDSET_RX;
             else if(strcmp((char* )name[i],"handset_tx") == 0)
                 index = DEVICE_HANDSET_TX;
-            else if(strcmp((char* )name[i],"speaker_stereo_rx") == 0)
+            else if((strcmp((char* )name[i],"speaker_stereo_rx") == 0) ||
+                    (strcmp((char* )name[i],"speaker_rx") == 0))
                 index = DEVICE_SPEAKER_RX;
-            else if(strcmp((char* )name[i],"speaker_mono_tx") == 0)
+            else if((strcmp((char* )name[i],"speaker_mono_tx") == 0) ||
+                    (strcmp((char* )name[i],"speaker_tx") == 0))
                 index = DEVICE_SPEAKER_TX;
-            else if(strcmp((char* )name[i],"headset_stereo_rx") == 0)
+            else if((strcmp((char* )name[i],"headset_stereo_rx") == 0) ||
+                    (strcmp((char* )name[i],"headset_rx") == 0))
                 index = DEVICE_HEADSET_RX;
-            else if(strcmp((char* )name[i],"headset_mono_tx") == 0)
+            else if((strcmp((char* )name[i],"headset_mono_tx") == 0) ||
+                    (strcmp((char* )name[i],"headset_tx") == 0))
                 index = DEVICE_HEADSET_TX;
             else if(strcmp((char* )name[i],"fmradio_handset_rx") == 0)
                 index = DEVICE_FMRADIO_HANDSET_RX;
@@ -542,7 +575,8 @@ AudioHardware::AudioHardware() :
                 index = DEVICE_BT_SCO_RX;
             else if(strcmp((char* )name[i],"bt_sco_tx") == 0)
                 index = DEVICE_BT_SCO_TX;
-            else if(strcmp((char*)name[i],"headset_stereo_speaker_stereo_rx") == 0)
+            else if((strcmp((char*)name[i],"headset_stereo_speaker_stereo_rx") == 0) ||
+                    (strcmp((char*)name[i],"speaker_headset_rx") == 0))
                 index = DEVICE_SPEAKER_HEADSET_RX;
             else if(strcmp((char*)name[i],"fmradio_stereo_tx") == 0)
                 index = DEVICE_FMRADIO_STEREO_TX;
@@ -550,6 +584,32 @@ AudioHardware::AudioHardware() :
                 index = DEVICE_HDMI_STERO_RX;
             else if(strcmp((char*)name[i],"fmradio_stereo_rx") == 0)
                 index = DEVICE_FMRADIO_STEREO_RX;
+#ifdef SAMSUNG_AUDIO
+	    else if(strcmp((char* )name[i], "handset_voip_rx") == 0)
+	        index = DEVICE_HANDSET_VOIP_RX;
+	    else if(strcmp((char* )name[i], "handset_voip_tx") == 0)
+	        index = DEVICE_HANDSET_VOIP_TX;
+	    else if(strcmp((char* )name[i], "speaker_voip_rx") == 0)
+	        index = DEVICE_SPEAKER_VOIP_RX;
+	    else if(strcmp((char* )name[i], "speaker_voip_tx") == 0)
+	        index = DEVICE_SPEAKER_VOIP_TX;
+	    else if(strcmp((char* )name[i], "headset_voip_rx") == 0)
+	        index = DEVICE_HEADSET_VOIP_RX;
+	    else if(strcmp((char* )name[i], "headset_voip_tx") == 0)
+	        index = DEVICE_HEADSET_VOIP_TX;
+	    else if(strcmp((char* )name[i], "handset_call_rx") == 0)
+	        index = DEVICE_HANDSET_CALL_RX;
+	    else if(strcmp((char* )name[i], "handset_call_tx") == 0)
+	        index = DEVICE_HANDSET_CALL_TX;
+	    else if(strcmp((char* )name[i], "speaker_call_rx") == 0)
+	        index = DEVICE_SPEAKER_CALL_RX;
+	    else if(strcmp((char* )name[i], "speaker_call_tx") == 0)
+	        index = DEVICE_SPEAKER_CALL_TX;
+	    else if(strcmp((char* )name[i], "headset_call_rx") == 0)
+	        index = DEVICE_HEADSET_CALL_RX;
+	    else if(strcmp((char* )name[i], "headset_call_tx") == 0)
+	        index = DEVICE_HEADSET_CALL_TX;
+#endif
             else
                 continue;
             ALOGV("index = %d",index);
@@ -1173,6 +1233,38 @@ static status_t do_route_audio_rpc(uint32_t device,
         new_tx_device = cur_tx;
         ALOGV("In DEVICE_FMRADIO_STEREO_RX and cur_tx");
     }
+#ifdef SAMSUNG_AUDIO
+    else if (device == SND_DEVICE_VOIP_HANDSET) {
+        new_rx_device = DEVICE_HANDSET_VOIP_RX;
+        new_tx_device = DEVICE_HANDSET_VOIP_TX;
+        ALOGV("In VOIP HANDSET");
+    }
+    else if (device == SND_DEVICE_VOIP_SPEAKER) {
+        new_rx_device = DEVICE_SPEAKER_VOIP_RX;
+        new_tx_device = DEVICE_SPEAKER_VOIP_TX;
+        ALOGV("In VOIP SPEAKER");
+    }
+    else if (device == SND_DEVICE_VOIP_HEADSET) {
+        new_rx_device = DEVICE_HEADSET_VOIP_RX;
+        new_tx_device = DEVICE_HEADSET_VOIP_TX;
+        ALOGV("In VOIP HEADSET");
+    }
+    else if (device == SND_DEVICE_CALL_HANDSET) {
+        new_rx_device = DEVICE_HANDSET_CALL_RX;
+        new_tx_device = DEVICE_HANDSET_CALL_TX;
+        ALOGV("In CALL HANDSET");
+    }
+    else if (device == SND_DEVICE_CALL_SPEAKER) {
+        new_rx_device = DEVICE_SPEAKER_CALL_RX;
+        new_tx_device = DEVICE_SPEAKER_CALL_TX;
+        ALOGV("In CALL SPEAKER");
+    }
+    else if (device == SND_DEVICE_CALL_HEADSET) {
+        new_rx_device = DEVICE_HEADSET_CALL_RX;
+        new_tx_device = DEVICE_HEADSET_CALL_TX;
+        ALOGV("In CALL HEADSET");
+    }
+#endif
 
     if(new_rx_device != INVALID_DEVICE)
         ALOGD("new_rx = %d", DEV_ID(new_rx_device));
@@ -1399,6 +1491,33 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
             sndDevice = SND_DEVICE_IN_S_SADC_OUT_SPEAKER_PHONE;
         }
     }
+
+#ifdef SAMSUNG_AUDIO
+    if (mMode == AudioSystem::MODE_IN_CALL) {
+        if (sndDevice == SND_DEVICE_HANDSET) {
+            ALOGI("Routing audio to Call Handset\n");
+            sndDevice = SND_DEVICE_CALL_HANDSET;
+        } else if (sndDevice == SND_DEVICE_SPEAKER) {
+            ALOGI("Routing audio to Call Speaker\n");
+            sndDevice = SND_DEVICE_CALL_SPEAKER;
+        } else if (sndDevice == SND_DEVICE_HEADSET) {
+            ALOGI("Routing audio to Call Headset\n");
+            sndDevice = SND_DEVICE_CALL_HEADSET;
+        }
+    } else if (mMode == AudioSystem::MODE_IN_COMMUNICATION) {
+        if (sndDevice == SND_DEVICE_HANDSET) {
+            ALOGI("Routing audio to VOIP handset\n");
+            sndDevice = SND_DEVICE_VOIP_HANDSET;
+        } else if (sndDevice == SND_DEVICE_SPEAKER) {
+            ALOGI("Routing audio to VOIP speaker\n");
+            sndDevice = SND_DEVICE_VOIP_SPEAKER;
+        } else if (sndDevice == SND_DEVICE_HEADSET) {
+            ALOGI("Routing audio to VOIP headset\n");
+            sndDevice = SND_DEVICE_VOIP_HEADSET;
+        }
+    }
+#endif
+
 #ifdef QCOM_FM_ENABLED
     if ((outputDevices & AudioSystem::DEVICE_OUT_FM) && (mFmFd == -1)){
         enableFM(sndDevice);

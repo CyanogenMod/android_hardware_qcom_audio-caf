@@ -16,6 +16,10 @@ ifeq ($(BOARD_HAVE_QCOM_FM),true)
     LOCAL_CFLAGS += -DWITH_QCOM_FM
 endif
 
+ifeq ($(BOARD_HAVE_SAMSUNG_AUDIO),true)
+    LOCAL_CFLAGS += -DSAMSUNG_AUDIO
+endif
+
 LOCAL_SHARED_LIBRARIES := \
     libcutils       \
     libutils        \
