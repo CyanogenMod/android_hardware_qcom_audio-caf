@@ -103,9 +103,9 @@ AudioStreamInALSA::AudioStreamInALSA(AudioHardwareALSA *parent,
                 //Remember to change file system permission of data(e.g. chmod 777 data/),
                 //otherwise, fopen may fail.
                 if ( !mFp_4ch)
-                    mFp_4ch = fopen("/data/4ch_ssr.pcm", "wb");
+                    mFp_4ch = fopen("/data/media/0/4ch_ssr.pcm", "wb");
                 if ( !mFp_6ch)
-                    mFp_6ch = fopen("/data/6ch_ssr.pcm", "wb");
+                    mFp_6ch = fopen("/data/media/0/6ch_ssr.pcm", "wb");
                 if ((!mFp_4ch) || (!mFp_6ch))
                     ALOGE("mfp_4ch or mfp_6ch open failed: mfp_4ch:%p mfp_6ch:%p",mFp_4ch,mFp_6ch);
             }
