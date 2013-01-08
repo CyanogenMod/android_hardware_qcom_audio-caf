@@ -236,6 +236,12 @@ AudioHardwareALSA::AudioHardwareALSA() :
         ALOGE("Failed to open ucm instance: %d", errno);
     } else {
         ALOGI("ucm instance opened: %u", (unsigned)mUcMgr);
+        mUcMgr->acdb_handle = NULL;
+#ifdef QCOM_ACDB_ENABLED
+        if (mAcdbHandle) {
+            mUcMgr->acdb_handle = static_cast<void*> (mAcdbHandle);
+        }
+#endif
     }
 
     //set default AudioParameters
