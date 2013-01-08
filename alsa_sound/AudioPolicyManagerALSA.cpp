@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 The Android Open Source Project
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1235,6 +1235,36 @@ audio_devices_t AudioPolicyManager::getNewDevice(audio_io_handle_t output, bool 
     ALOGV("getNewDevice() selected device %x", device);
     return device;
 }
+
+AudioPolicyManager::routing_strategy AudioPolicyManager::getStrategy(
+        AudioSystem::stream_type stream) {
+    // stream to strategy mapping
+    switch (stream) {
+    case AudioSystem::VOICE_CALL:
+    case AudioSystem::BLUETOOTH_SCO:
+        return STRATEGY_PHONE;
+    case AudioSystem::RING:
+    case AudioSystem::ALARM:
+        return STRATEGY_SONIFICATION;
+    case AudioSystem::NOTIFICATION:
+        return STRATEGY_SONIFICATION_RESPECTFUL;
+    case AudioSystem::DTMF:
+        return STRATEGY_DTMF;
+    default:
+        ALOGE("unknown stream type");
+    case AudioSystem::SYSTEM:
+        // NOTE: SYSTEM stream uses MEDIA strategy because muting music and switching outputs
+        // while key clicks are played produces a poor result
+    case AudioSystem::TTS:
+    case AudioSystem::MUSIC:
+#ifdef QCOM_FM_ENABLED
+    case AudioSystem::FM:
+#endif
+        return STRATEGY_MEDIA;
+    case AudioSystem::ENFORCED_AUDIBLE:
+        return STRATEGY_ENFORCED_AUDIBLE;
+    }
+}
 audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strategy,
                                                              bool fromCache)
 {
@@ -1468,8 +1498,9 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             // device is DEVICE_OUT_SPEAKER if we come from case STRATEGY_SONIFICATION or
             // STRATEGY_ENFORCED_AUDIBLE, AUDIO_DEVICE_NONE otherwise
             device |= device2;
-            if (device) break;
-            device = mDefaultOutputDevice;
+            if (!device) {
+                device = mDefaultOutputDevice;
+            }
             if (device == AUDIO_DEVICE_NONE) {
                 ALOGE("getDeviceForStrategy() no device found for STRATEGY_MEDIA");
             }
@@ -1657,7 +1688,9 @@ AudioPolicyManager::device_category AudioPolicyManager::getDeviceCategory(audio_
         case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET:
         case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP:
         case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES:
+#ifdef QCOM_FM_ENABLED
         case AUDIO_DEVICE_OUT_FM:
+#endif
             return DEVICE_CATEGORY_HEADSET;
         case AUDIO_DEVICE_OUT_SPEAKER:
         case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT:

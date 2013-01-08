@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 The Android Open Source Project
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,9 @@ public:
                                               int index,
                                               audio_devices_t device);
 protected:
+        // return the strategy corresponding to a given stream type
+        static routing_strategy getStrategy(AudioSystem::stream_type stream);
+
         // return appropriate device for streams handled by the specified strategy according to current
         // phone state, connected devices...
         // if fromCache is true, the device is returned from mDeviceForStrategy[],
