@@ -416,6 +416,9 @@ void AudioPolicyManager::setPhoneState(int state)
     }
 
     if (isStateInCall(state)) {
+        // Force calling of setVoiceVolume (in checkAndSetVolume) at the start of
+        // every call.  Otherwise calls may start at max volume regardless of setting.
+        mLastVoiceVolume = -1.0f;
 
         if(!isStateInCall(oldState)) {
             audio_io_handle_t activeInput = getActiveInput();
