@@ -50,6 +50,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #include <pthread.h>
 #include <ctype.h>
 #include <sys/stat.h>
