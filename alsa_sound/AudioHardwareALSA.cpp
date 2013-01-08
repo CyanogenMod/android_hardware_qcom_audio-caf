@@ -112,19 +112,20 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mFusion3Platform = false;
 
 #ifdef QCOM_ACDB_ENABLED
-            mAcdbHandle = ::dlopen("/system/lib/libacdbloader.so", RTLD_NOW);
-            if (mAcdbHandle == NULL) {
-                ALOGE("AudioHardware: DLOPEN not successful for ACDBLOADER");
-            } else {
-                ALOGD("AudioHardware: DLOPEN successful for ACDBLOADER");
-                acdb_init = (int (*)())::dlsym(mAcdbHandle,"acdb_loader_init_ACDB");
-                if (acdb_init == NULL) {
-                    ALOGE("dlsym:Error:%s Loading acdb_loader_init_ACDB", dlerror());
-                }else {
-                   acdb_init();
-                   acdb_deallocate = (void (*)())::dlsym(mAcdbHandle,"acdb_loader_deallocate_ACDB");
-                }
-            }
+    mAcdbHandle = ::dlopen("/system/lib/libacdbloader.so", RTLD_NOW);
+    if (mAcdbHandle == NULL) {
+        ALOGE("AudioHardware: DLOPEN not successful for ACDBLOADER");
+    } else {
+        ALOGD("AudioHardware: DLOPEN successful for ACDBLOADER");
+        acdb_init = (int (*)())::dlsym(mAcdbHandle,"acdb_loader_init_ACDB");
+        if (acdb_init == NULL) {
+            ALOGE("dlsym:Error:%s Loading acdb_loader_init_ACDB", dlerror());
+        }else {
+           acdb_init();
+           acdb_deallocate = (void (*)())::dlsym(mAcdbHandle,"acdb_loader_deallocate_ACDB");
+        }
+    }
+    mALSADevice->setACDBHandle(mAcdbHandle);
 #endif
 
 #ifdef QCOM_CSDCLIENT_ENABLED
