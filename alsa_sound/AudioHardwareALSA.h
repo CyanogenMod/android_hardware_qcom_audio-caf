@@ -842,6 +842,7 @@ protected:
 
     snd_use_case_mgr_t *mUcMgr;
 
+    int32_t            mCurRxDevice;
     int32_t            mCurDevice;
     /* The flag holds all the audio related device settings from
      * Settings and Qualcomm Settings applications */
@@ -874,8 +875,8 @@ protected:
     audio_hw_device_t  *mUsbDevice;
     audio_stream_out   *mExtOutStream;
 
-    bool                mKillExtOutThread;
-    bool                mExtOutThreadAlive;
+    volatile bool       mKillExtOutThread;
+    volatile bool       mExtOutThreadAlive;
     pthread_t           mExtOutThread;
     Mutex               mExtOutMutex;
     Condition           mExtOutCv;
@@ -890,12 +891,6 @@ protected:
       USECASE_FM = 0x10,
     };
     uint32_t mExtOutActiveUseCases;
-
-    enum {
-      A2DP_STREAM = 0x1,
-      USB_STREAM  = 0x10,
-    };
-    uint32_t mActiveExtOut;
 
 public:
     bool mRouteAudioToExtOut;
