@@ -128,26 +128,6 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mALSADevice->setACDBHandle(mAcdbHandle);
 #endif
 
-#ifdef QCOM_CSDCLIENT_ENABLED
-             mCsdHandle = ::dlopen("/system/lib/libcsd-client.so", RTLD_NOW);
-             if (mCsdHandle == NULL) {
-                 ALOGE("AudioHardware: DLOPEN not successful for CSD CLIENT");
-             } else {
-                 ALOGD("AudioHardware: DLOPEN successful for CSD CLIENT");
-                 csd_client_init = (int (*)())::dlsym(mCsdHandle,"csd_client_init");
-                 csd_client_deinit = (int (*)())::dlsym(mCsdHandle,"csd_client_deinit");
-                 csd_start_playback = (int (*)())::dlsym(mCsdHandle,"csd_client_start_playback");
-                 csd_stop_playback = (int (*)())::dlsym(mCsdHandle,"csd_client_stop_playback");
-
-                 if (csd_client_init == NULL) {
-                     ALOGE("dlsym: Error:%s Loading csd_client_init", dlerror());
-                 } else {
-                     csd_client_init();
-                 }
-
-             }
-             mALSADevice->setCsdHandle(mCsdHandle);
-#endif
     if((fp = fopen("/proc/asound/cards","r")) == NULL) {
         ALOGE("Cannot open /proc/asound/cards file to get sound card info");
     } else {
@@ -242,6 +222,29 @@ AudioHardwareALSA::AudioHardwareALSA() :
         }
     }
 
+#ifdef QCOM_CSDCLIENT_ENABLED
+    if (mFusion3Platform) {
+        mCsdHandle = ::dlopen("/system/lib/libcsd-client.so", RTLD_NOW);
+        if (mCsdHandle == NULL) {
+            ALOGE("AudioHardware: DLOPEN not successful for CSD CLIENT");
+        } else {
+            ALOGD("AudioHardware: DLOPEN successful for CSD CLIENT");
+            csd_client_init = (int (*)())::dlsym(mCsdHandle,"csd_client_init");
+            csd_client_deinit = (int (*)())::dlsym(mCsdHandle,"csd_client_deinit");
+            csd_start_playback = (int (*)())::dlsym(mCsdHandle,"csd_client_start_playback");
+            csd_stop_playback = (int (*)())::dlsym(mCsdHandle,"csd_client_stop_playback");
+
+            if (csd_client_init == NULL) {
+                ALOGE("dlsym: Error:%s Loading csd_client_init", dlerror());
+            } else {
+                csd_client_init();
+            }
+
+        }
+        mALSADevice->setCsdHandle(mCsdHandle);
+    }
+#endif
+
     if (mUcMgr < 0) {
         ALOGE("Failed to open ucm instance: %d", errno);
     } else {
@@ -328,15 +331,17 @@ AudioHardwareALSA::~AudioHardwareALSA()
 #endif
 
 #ifdef QCOM_CSDCLEINT_ENABLED
-     if (mCsdHandle) {
-        if (csd_client_deinit == NULL) {
-            ALOGE("dlsym: Error:%s Loading csd_client_deinit", dlerror());
-        } else {
-            csd_client_deinit();
+    if (mFusion3Platform) {
+        if (mCsdHandle) {
+            if (csd_client_deinit == NULL) {
+                ALOGE("dlsym: Error:%s Loading csd_client_deinit", dlerror());
+            } else {
+                csd_client_deinit();
+            }
+            ::dlclose(mCsdHandle);
+            mCsdHandle = NULL;
         }
-        ::dlclose(mCsdHandle);
-        mCsdHandle = NULL;
-     }
+    }
 #endif
 }
 

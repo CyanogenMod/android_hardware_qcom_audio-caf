@@ -693,15 +693,17 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
             tx_dev_id = DEVICE_SPEAKER_TX_ACDB_ID;
         }
 
-#ifdef QCOM_CSDCLIENT_ENABLED
         ALOGV("rx_dev_id=%d, tx_dev_id=%d\n", rx_dev_id, tx_dev_id);
-        if (csd_enable_device == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_client_enable_device", dlerror());
-        } else {
-            err = csd_enable_device(rx_dev_id, tx_dev_id, mDevSettingsFlag);
-            if (err < 0)
-            {
-                ALOGE("csd_client_disable_device failed, error %d", err);
+#ifdef QCOM_CSDCLIENT_ENABLED
+        if (platform_is_Fusion3()) {
+            if (csd_enable_device == NULL) {
+                ALOGE("dlsym:Error:%s Loading csd_client_enable_device", dlerror());
+            } else {
+                err = csd_enable_device(rx_dev_id, tx_dev_id, mDevSettingsFlag);
+                if (err < 0)
+                {
+                    ALOGE("csd_client_disable_device failed, error %d", err);
+                }
             }
         }
 #endif
