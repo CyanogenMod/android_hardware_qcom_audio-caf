@@ -40,8 +40,6 @@
 #include <media/mediarecorder.h>
 #include <stdio.h>
 
-#define MAX_POLL_VOICE_SETUP 20
-
 namespace android_audio_legacy {
 
 // ----------------------------------------------------------------------------
@@ -415,29 +413,14 @@ void AudioPolicyManager::setPhoneState(int state)
         setStreamMute(AudioSystem::RING, true, mPrimaryOutput);
     }
 
+    // Ignore the delay to enable voice call on this target as the enabling the
+    // voice call has enough delay to make sure the ringtone audio completely
+    // played out
+    if (state == AUDIO_MODE_IN_CALL && oldState == AUDIO_MODE_RINGTONE) {
+        delayMs = 40;
+    }
+
     if (isStateInCall(state)) {
-
-        if(!isStateInCall(oldState)) {
-            audio_io_handle_t activeInput = getActiveInput();
-
-            /* Block the policy manager until voice path is setup. This is
-             * done to prevent telephony from signaling call connect before the
-             * entire voice path is established.
-             */
-            for (int i = 0; i < MAX_POLL_VOICE_SETUP; i++) {
-                usleep(100000);
-                String8 voiceActive = mpClientInterface->getParameters(activeInput,
-                                             String8("voice_path_active"));
-
-                if (!voiceActive.compare(String8("voice_path_active=true"))) {
-                    ALOGV("setPhoneState: Voice path is active");
-                    break;
-                } else {
-                    ALOGV("setPhoneState: voice path is not active");
-                }
-            }
-        }
-
         for (size_t i = 0; i < mOutputs.size(); i++) {
             AudioOutputDescriptor *desc = mOutputs.valueAt(i);
             //take the biggest latency for all outputs

@@ -114,11 +114,6 @@ LOCAL_CFLAGS += -DQCOM_PROXY_DEVICE_ENABLED
 #LOCAL_CFLAGS += -DQCOM_SSR_ENABLED
 LOCAL_CFLAGS += -DQCOM_USBAUDIO_ENABLED
 
-
-ifeq ($(BOARD_HAVE_BLUETOOTH),true)
-  LOCAL_CFLAGS += -DWITH_A2DP
-endif
-
 LOCAL_SRC_FILES := \
     audio_policy_hal.cpp \
     AudioPolicyManagerALSA.cpp
@@ -137,13 +132,11 @@ LOCAL_MODULE_TAGS := optional
 
 LOCAL_STATIC_LIBRARIES := \
     libmedia_helper \
-    libaudiohw_legacy \
     libaudiopolicy_legacy
 
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libutils \
-    libmedia
 
 LOCAL_C_INCLUDES += hardware/libhardware_legacy/audio
 

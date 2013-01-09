@@ -65,6 +65,8 @@ extern "C"
     static void (*acdb_deallocate)();
 #endif
 #ifdef QCOM_CSDCLIENT_ENABLED
+    static int (*csd_client_init)();
+    static int (*csd_client_deinit)();
     static int (*csd_start_playback)();
     static int (*csd_stop_playback)();
 #endif
@@ -108,7 +110,6 @@ AudioHardwareALSA::AudioHardwareALSA() :
 #endif
     mBluetoothVGS = false;
     mFusion3Platform = false;
-    mIsVoicePathActive = false;
 
 #ifdef QCOM_ACDB_ENABLED
             mAcdbHandle = ::dlopen("/system/lib/libacdbloader.so", RTLD_NOW);
@@ -132,8 +133,17 @@ AudioHardwareALSA::AudioHardwareALSA() :
                  ALOGE("AudioHardware: DLOPEN not successful for CSD CLIENT");
              } else {
                  ALOGD("AudioHardware: DLOPEN successful for CSD CLIENT");
+                 csd_client_init = (int (*)())::dlsym(mCsdHandle,"csd_client_init");
+                 csd_client_deinit = (int (*)())::dlsym(mCsdHandle,"csd_client_deinit");
                  csd_start_playback = (int (*)())::dlsym(mCsdHandle,"csd_client_start_playback");
                  csd_stop_playback = (int (*)())::dlsym(mCsdHandle,"csd_client_stop_playback");
+
+                 if (csd_client_init == NULL) {
+                     ALOGE("dlsym: Error:%s Loading csd_client_init", dlerror());
+                 } else {
+                     csd_client_init();
+                 }
+
              }
              mALSADevice->setCsdHandle(mCsdHandle);
 #endif
@@ -233,6 +243,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
         ALOGE("Failed to open ucm instance: %d", errno);
     } else {
         ALOGI("ucm instance opened: %u", (unsigned)mUcMgr);
+        mUcMgr->isFusion3Platform = mFusion3Platform;
     }
 
     //set default AudioParameters
@@ -309,6 +320,11 @@ AudioHardwareALSA::~AudioHardwareALSA()
 
 #ifdef QCOM_CSDCLEINT_ENABLED
      if (mCsdHandle) {
+        if (csd_client_deinit == NULL) {
+            ALOGE("dlsym: Error:%s Loading csd_client_deinit", dlerror());
+        } else {
+            csd_client_deinit();
+        }
         ::dlclose(mCsdHandle);
         mCsdHandle = NULL;
      }
@@ -702,19 +718,6 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
             value = mA2dpStream->common.get_parameters(&mA2dpStream->common,key);
         }
         param.add(key, value);
-    }
-
-    key = String8(VOICE_PATH_ACTIVE);
-    if (param.get(key, value) == NO_ERROR) {
-        if (mIsVoicePathActive) {
-            value = String8("true");
-        } else {
-            value = String8("false");
-        }
-        param.add(key, value);
-
-        ALOGV("AudioHardwareALSA::getParameters() mIsVoicePathActive %d",
-              mIsVoicePathActive);
     }
 
     key = String8("tunneled-input-formats");
@@ -1907,7 +1910,6 @@ void AudioHardwareALSA::disableVoiceCall(char* verb, char* modifier, int mode, i
             break;
         }
     }
-    mIsVoicePathActive = false;
 
 #ifdef QCOM_USBAUDIO_ENABLED
    if(musbPlaybackState & USBPLAYBACKBIT_VOICECALL) {
@@ -1956,7 +1958,6 @@ char *use_case;
         snd_use_case_set(mUcMgr, "_enamod", modifier);
     }
     mALSADevice->startVoiceCall(&(*it));
-    mIsVoicePathActive = true;
 
 #ifdef QCOM_USBAUDIO_ENABLED
     if((device & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
