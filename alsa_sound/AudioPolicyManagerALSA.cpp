@@ -39,6 +39,7 @@
 #include <math.h>
 #include <media/mediarecorder.h>
 #include <stdio.h>
+#include <cutils/properties.h>
 
 namespace android_audio_legacy {
 
@@ -202,8 +203,8 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
         }
 #endif
 
-#ifdef QCOM_FM_ENABLED
         audio_devices_t newDevice = getNewDevice(mPrimaryOutput, false /*fromCache*/);
+#ifdef QCOM_FM_ENABLED
         if(device == AUDIO_DEVICE_OUT_FM) {
             if (state == AudioSystem::DEVICE_STATE_AVAILABLE) {
                 ALOGV("setDeviceConnectionState() changeRefCount Inc");
@@ -223,8 +224,8 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
         }
 #endif
         for (size_t i = 0; i < mOutputs.size(); i++) {
-#ifdef QCOM_ANC_HEADSET_ENABLED
             audio_devices_t newDevice = getNewDevice(mOutputs.keyAt(i), true /*fromCache*/);
+#ifdef QCOM_ANC_HEADSET_ENABLED
             if(device == AUDIO_DEVICE_OUT_ANC_HEADPHONE ||
                device == AUDIO_DEVICE_OUT_ANC_HEADSET) {
                 if(newDevice == 0){
@@ -416,7 +417,11 @@ void AudioPolicyManager::setPhoneState(int state)
     // Ignore the delay to enable voice call on this target as the enabling the
     // voice call has enough delay to make sure the ringtone audio completely
     // played out
-    if (state == AUDIO_MODE_IN_CALL && oldState == AUDIO_MODE_RINGTONE) {
+    if (state == AUDIO_MODE_IN_CALL &&
+#ifdef QCOM_CSDCLIENT_ENABLED
+        platform_is_Fusion3() &&
+#endif
+        oldState == AUDIO_MODE_RINGTONE) {
         delayMs = 40;
     }
 
@@ -1918,6 +1923,17 @@ bool AudioPolicyManager::isCompatibleProfile(AudioPolicyManagerBase::IOProfile *
             format %x, channelMask %d",
             device, flags, samplingRate, format, channelMask);
     return true;
+}
+
+bool AudioPolicyManager::platform_is_Fusion3()
+{
+    char platform[128], baseband[128];
+    property_get("ro.board.platform", platform, "");
+    property_get("ro.baseband", baseband, "");
+    if (!strcmp("msm8960", platform) && !strcmp("mdm", baseband))
+        return true;
+    else
+        return false;
 }
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface)
