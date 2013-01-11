@@ -404,7 +404,7 @@ static int create_qcom_ap(const struct audio_policy_device *device,
     qap->policy.unregister_effect = ap_unregister_effect;
     qap->policy.set_effect_enabled = ap_set_effect_enabled;
     qap->policy.is_stream_active = ap_is_stream_active;
-    //qap->policy.is_source_active = ap_is_source_active;
+    qap->policy.is_source_active = ap_is_source_active;
     qap->policy.dump = ap_dump;
 
     qap->service = service;

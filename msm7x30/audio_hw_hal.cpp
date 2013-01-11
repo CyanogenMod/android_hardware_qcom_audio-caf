@@ -526,7 +526,8 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev,
                                          const struct audio_config *config)
 {
     const struct qcom_audio_device *qadev = to_cladev(dev);
-    return qadev->hwif->getInputBufferSize(config->sample_rate,(int) config->format, popcount(config->channel_mask));
+    uint8_t channelCount = popcount(config->channel_mask);
+    return qadev->hwif->getInputBufferSize(config->sample_rate,config->format,channelCount);
 }
 
 

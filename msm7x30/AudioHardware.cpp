@@ -21,8 +21,6 @@
 
 #define LOG_TAG "AudioHardware7x30"
 //#define LOG_NDDEBUG 0
-//#define ALOGI ALOGE
-//#define ALOGD ALOGE
 #include <utils/Log.h>
 #include <utils/String8.h>
 #include <stdio.h>
@@ -1016,7 +1014,7 @@ static unsigned calculate_audpre_table_index(unsigned index)
         default:     return -1;
     }
 }
-size_t AudioHardware::getInputBufferSize(uint32_t sampleRate, int format, audio_channel_mask_t channelCount)
+size_t AudioHardware::getInputBufferSize(uint32_t sampleRate, int format, int channelCount)
 {
     if ((format != AudioSystem::PCM_16_BIT) &&
         (format != AudioSystem::AMR_NB)      &&
