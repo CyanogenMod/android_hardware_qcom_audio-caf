@@ -976,8 +976,8 @@ String8 AudioHardware::getParameters(const String8& keys)
     if ( param.get(key,value) == NO_ERROR ) {
         param.addInt(String8("AMR"), true );
         if (build_id[17] != '1') {
-          param.addInt(String8("EVRC"), true );
-          param.addInt(String8("QCELP"), true );
+            param.addInt(String8("EVRC"), true );
+            param.addInt(String8("QCELP"), true );
         }
     }
 
