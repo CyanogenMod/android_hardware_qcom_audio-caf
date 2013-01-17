@@ -53,6 +53,10 @@ ifeq ($(BOARD_HAVE_AUDIENCE_A2220),true)
   LOCAL_CFLAGS += -DUSE_A2220
 endif
 
+ifeq ($(BOARD_HAVE_DOCK_USBAUDIO),true)
+  LOCAL_CFLAGS += -DDOCK_USBAUDIO_ENABLED
+endif
+
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
   AudioStreamOutALSA.cpp        \
