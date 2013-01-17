@@ -859,7 +859,7 @@ struct qcom_audio_module HAL_MODULE_INFO_SYM = {
             hal_api_version: HARDWARE_HAL_API_VERSION,
             id: AUDIO_HARDWARE_MODULE_ID,
             name: "QCOM Audio HW HAL",
-            author: "Code Aurora Forum",
+            author: "The Linux Foundation",
             methods: &qcom_audio_module_methods,
             dso : NULL,
             reserved : {0},
