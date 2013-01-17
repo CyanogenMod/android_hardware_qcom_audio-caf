@@ -272,8 +272,9 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
             || !strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, strlen(SND_USE_CASE_VERB_HIFI_REC_COMPRESSED))
             || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))
             || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED))) {
-            ALOGV("HWParams: Use 4 channels in kernel for 5.1(%s) recording ", handle->useCase);
             channels = 4;
+            reqBuffSize = DEFAULT_IN_BUFFER_SIZE*4;
+            ALOGV("HWParams: Use 4 channels in kernel for 5.1(%s) recording reqBuffSize:%d", handle->useCase,reqBuffSize);
         }
     }
 #endif
@@ -709,18 +710,17 @@ status_t ALSADevice::open(alsa_handle_t *handle)
         flags |= PCM_QUAD;
     } else if (handle->channels == 6 ) {
 #ifdef QCOM_SSR_ENABLED
-        if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC)
-            || !strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED)
-            || !strcmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC)
-            || !strcmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED)) {
+        if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
+            || !strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, strlen(SND_USE_CASE_VERB_HIFI_REC_COMPRESSED))
+            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))
+            || !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED))) {
             flags |= PCM_QUAD;
-        } else {
+        } else
+#endif
+        {
             flags |= PCM_5POINT1;
         }
-#else
-        flags |= PCM_5POINT1;
     }
-#endif
     else {
         flags |= PCM_STEREO;
     }

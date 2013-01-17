@@ -276,6 +276,17 @@ AudioHardwareALSA::AudioHardwareALSA() :
     param.add(key, value);
     mALSADevice->setFlags(mDevSettingsFlag);
 
+    //set default AudioParameters for surround sound recording
+    char ssr_enabled[6] = "false";
+    property_get("ro.qc.sdk.audio.ssr",ssr_enabled,"0");
+    if (!strncmp("true", ssr_enabled, 4)) {
+        ALOGD("surround sound recording is supported");
+        param.add(String8(AudioParameter::keySSR), String8("true"));
+    } else {
+        ALOGD("surround sound recording is not supported");
+        param.add(String8(AudioParameter::keySSR), String8("false"));
+    }
+
     //mALSADevice->setDeviceList(&mDeviceList);
     mRouteAudioToExtOut = false;
     mA2dpDevice = NULL;
@@ -1727,11 +1738,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
         if (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
             || !strncmp(it->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
             ALOGV("OpenInoutStream: getInputBufferSize sampleRate:%d format:%d, channels:%d", it->sampleRate,*format,it->channels);
-#ifdef TARGET_8974
-            it->bufferSize = DEFAULT_IN_BUFFER_SIZE;
-#else
             it->bufferSize = getInputBufferSize(it->sampleRate,*format,it->channels);
-#endif
         }
 
 #ifdef QCOM_SSR_ENABLED
@@ -1816,7 +1823,11 @@ size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, in
     size_t bufferSize = 0;
     if (format == AUDIO_FORMAT_PCM_16_BIT) {
         if(sampleRate == 8000 || sampleRate == 16000 || sampleRate == 32000) {
+#ifdef TARGET_8974
+            bufferSize = DEFAULT_IN_BUFFER_SIZE;
+#else
             bufferSize = (sampleRate * channelCount * 20 * sizeof(int16_t)) / 1000;
+#endif
         } else if (sampleRate == 11025 || sampleRate == 12000) {
             bufferSize = 256 * sizeof(int16_t)  * channelCount;
         } else if (sampleRate == 22050 || sampleRate == 24000) {
