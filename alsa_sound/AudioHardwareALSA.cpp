@@ -1742,13 +1742,19 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
         }
 
 #ifdef QCOM_SSR_ENABLED
-        //Check if SSR is supported by reading system property
-        char ssr_enabled[6] = "false";
-        property_get("ro.qc.sdk.audio.ssr",ssr_enabled,"0");
-        if (strncmp("true", ssr_enabled, 4)) {
-            if (status) *status = err;
-            ALOGE("openInputStream: FAILED:%d. Surround sound recording is not supported",*status);
-            return in;
+        if (6 == it->channels) {
+            if (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
+                || !strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, strlen(SND_USE_CASE_VERB_HIFI_REC_COMPRESSED))
+                || !strncmp(it->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))
+                || !strncmp(it->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED))) {
+                //Check if SSR is supported by reading system property
+                char ssr_enabled[6] = "false";
+                property_get("ro.qc.sdk.audio.ssr",ssr_enabled,"0");
+                if (strncmp("true", ssr_enabled, 4)) {
+                    if (status) *status = err;
+                    ALOGE("openInputStream: FAILED:%d. Surround sound recording is not supported",*status);
+                }
+            }
         }
 #endif
         err = mALSADevice->open(&(*it));
