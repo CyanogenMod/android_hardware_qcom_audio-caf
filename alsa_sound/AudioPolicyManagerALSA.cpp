@@ -1876,9 +1876,6 @@ bool AudioPolicyManager::isCompatibleProfile(AudioPolicyManagerBase::IOProfile *
                                              uint32_t channelMask,
                                             audio_output_flags_t flags)
 {
-    if (audio_is_a2dp_device(device) || audio_is_bluetooth_sco_device(device)) {
-        return false;
-    }
     if ((profile->mSupportedDevices & device) != device) {
         return false;
     }
