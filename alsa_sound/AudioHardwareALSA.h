@@ -264,6 +264,9 @@ public:
 #ifdef QCOM_CSDCLIENT_ENABLED
     void     setCsdHandle(void*);
 #endif
+#ifdef QCOM_ACDB_ENABLED
+    void     setACDBHandle(void*);
+#endif
 
     bool mSSRComplete;
 protected:
@@ -306,6 +309,7 @@ private:
     int mBtscoSamplerate;
     ALSAUseCaseList mUseCaseList;
     void *mcsd_handle;
+    void *macdb_handle;
     int mCallMode;
     struct mixer*  mMixer;
     int mInChannels;
@@ -646,7 +650,7 @@ public:
     {
         return BAD_VALUE;
     }
-   
+
     virtual status_t removeAudioEffect(effect_handle_t effect)
     {
         return BAD_VALUE;
