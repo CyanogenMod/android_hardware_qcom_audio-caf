@@ -1056,29 +1056,20 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
 
     status_t err = BAD_VALUE;
 #ifdef QCOM_OUTPUT_FLAGS_ENABLED
-    if (flags & AUDIO_OUTPUT_FLAG_LPA) {
+    if (flags & (AUDIO_OUTPUT_FLAG_LPA | AUDIO_OUTPUT_FLAG_TUNNEL)) {
+        int type = !(flags & AUDIO_OUTPUT_FLAG_LPA); //0 for LPA, 1 for tunnel
         AudioSessionOutALSA *out = new AudioSessionOutALSA(this, devices, *format, *channels,
-                                                           *sampleRate, 0, &err);
+                                                           *sampleRate, type, &err);
         if(err != NO_ERROR) {
+            mLock.unlock();
             delete out;
             out = NULL;
-        }
-        if (status) *status = err;
-        return out;
-    }
-
-    if (flags & AUDIO_OUTPUT_FLAG_TUNNEL) {
-        AudioSessionOutALSA *out = new AudioSessionOutALSA(this, devices, *format, *channels,
-                                                           *sampleRate, 1, &err);
-        if(err != NO_ERROR) {
-            delete out;
-            out = NULL;
+            mLock.lock();
         }
         if (status) *status = err;
         return out;
     }
 #endif
-
     AudioStreamOutALSA *out = 0;
     ALSAHandleList::iterator it;
 
