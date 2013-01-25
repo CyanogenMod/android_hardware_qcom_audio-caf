@@ -38,7 +38,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 int pil_fd;
 #define NUM_FD 1
 int bootup_complete = 0;
-char adsp_pil_state_file[] = "/sys/bus/msm_subsys/devices/subsys0/state";
+char adsp_pil_state_file[] = "/sys/kernel/audio_voice_service/status";
 
 namespace android {
 
