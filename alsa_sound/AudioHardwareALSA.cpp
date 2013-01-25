@@ -500,7 +500,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         } else if (value == "dualmic") {
             //Allow changing fluence type to "dualmic" only when fluence type is fluencepro or fluence
             if (0 == strncmp("fluencepro", mFluenceKey, sizeof("fluencepro")) ||
-                0 == strncmp("fluencepro", mFluenceKey, sizeof("fluence"))) {
+                0 == strncmp("fluence", mFluenceKey, sizeof("fluence"))) {
                 mDevSettingsFlag |= DMIC_FLAG;
                 mDevSettingsFlag &= (~QMIC_FLAG);
                 ALOGV("Fluence dualmic feature Enabled");
