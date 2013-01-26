@@ -154,6 +154,21 @@ status_t ALSADevice::setHDMIChannelCount()
     const char *channel_cnt_str = NULL;
     EDID_AUDIO_INFO info = { 0 };
 
+#ifdef TARGET_8974
+    char hdmiEDIDData[MAX_SHORT_AUDIO_DESC_CNT+1];
+    if(!getEDIDData(hdmiEDIDData)) {
+        if (AudioUtil::getHDMIAudioSinkCaps(&info, hdmiEDIDData)) {
+            for (int i = 0; i < info.nAudioBlocks && i < MAX_EDID_BLOCKS; i++) {
+                if (info.AudioBlocksArray[i].nChannels > channel_count &&
+                      info.AudioBlocksArray[i].nChannels <= MAX_HDMI_CHANNEL_CNT) {
+                    channel_count = info.AudioBlocksArray[i].nChannels;
+                }
+            }
+            pcm_set_channel_map(NULL, mMixer, MAX_HDMI_CHANNEL_CNT, info.channelMap);
+            setChannelAlloc(info.channelAllocation);
+        }
+    }
+#else
     if (AudioUtil::getHDMIAudioSinkCaps(&info)) {
         for (int i = 0; i < info.nAudioBlocks && i < MAX_EDID_BLOCKS; i++) {
             if (info.AudioBlocksArray[i].nChannels > channel_count &&
@@ -162,6 +177,7 @@ status_t ALSADevice::setHDMIChannelCount()
             }
         }
     }
+#endif
 
     switch (channel_count) {
     case 8: channel_cnt_str = "Eight"; break;
@@ -798,6 +814,12 @@ status_t ALSADevice::open(alsa_handle_t *handle)
         free(devName);
         devName = NULL;
     }
+
+#ifdef TARGET_8974
+    if(handle->channels > 2)
+        setChannelMap(handle, MAX_HDMI_CHANNEL_CNT);
+#endif
+
     return NO_ERROR;
 }
 
@@ -1987,6 +2009,68 @@ status_t ALSADevice::setCompressedVolume(int value)
     return err;
 }
 
+status_t ALSADevice::setChannelMap(alsa_handle_t *handle, int maxChannels)
+{
+    status_t status = NO_ERROR;
+    char channelMap[maxChannels];
+
+    memset(channelMap, 0, sizeof(channelMap));
+    switch (handle->channels) {
+    case 3:
+    case 4:
+    case 5:
+        ALOGE("TODO: Investigate and add appropriate channel map appropriately");
+        break;
+    case 6:
+        channelMap[0] = PCM_CHANNEL_FL;
+        channelMap[1] = PCM_CHANNEL_FR;
+        channelMap[2] = PCM_CHANNEL_FC;
+        channelMap[3] = PCM_CHANNEL_LFE;
+        channelMap[4] = PCM_CHANNEL_LB;
+        channelMap[5] = PCM_CHANNEL_RB;
+        break;
+    case 7:
+    case 8:
+        channelMap[0] = PCM_CHANNEL_FL;
+        channelMap[1] = PCM_CHANNEL_FR;
+        channelMap[2] = PCM_CHANNEL_FC;
+        channelMap[3] = PCM_CHANNEL_LFE;
+        channelMap[4] = PCM_CHANNEL_LB;
+        channelMap[5] = PCM_CHANNEL_RB;
+        channelMap[6] = PCM_CHANNEL_FLC;
+        channelMap[7] = PCM_CHANNEL_FRC;
+        break;
+    default:
+        ALOGE("un supported channels for setting channel map");
+        return -1;
+    }
+
+    if(handle)
+        status = pcm_set_channel_map(handle->handle, mMixer,
+                                     maxChannels, channelMap);
+    return status;
+}
+
+void ALSADevice::setChannelAlloc(int channelAlloc)
+{
+    ALOGV("channel allocation = 0x%x", channelAlloc);
+    char** setValues;
+    setValues = (char**)malloc(sizeof(char*));
+    if (setValues == NULL) {
+          return;
+    }
+    setValues[0] = (char*)malloc(4*sizeof(char));
+    if (setValues[0] == NULL) {
+          free(setValues);
+          return;
+    }
+    sprintf(setValues[0], "%d", channelAlloc);
+    setMixerControlExt("HDMI RX CA", 1, setValues);
+    free(setValues[0]);
+    free(setValues);
+    return;
+}
+
 status_t ALSADevice::getMixerControl(const char *name, unsigned int &value, int index)
 {
     struct mixer_ctl *ctl;
@@ -2001,6 +2085,23 @@ status_t ALSADevice::getMixerControl(const char *name, unsigned int &value, int 
         return BAD_VALUE;
 
     mixer_ctl_get(ctl, &value);
+    return NO_ERROR;
+}
+
+status_t ALSADevice::getMixerControlExt(const char *name, unsigned **getValues, unsigned *count)
+{
+    struct mixer_ctl *ctl;
+
+    if (!mMixer) {
+        ALOGE("Control not initialized");
+        return NO_INIT;
+    }
+
+    ctl =  mixer_get_control(mMixer, name, 0);
+    if (!ctl)
+        return BAD_VALUE;
+
+    mixer_ctl_get_mulvalues(ctl, getValues, count);
     return NO_ERROR;
 }
 
@@ -2428,6 +2529,38 @@ bool ALSADevice::resumeProxy() {
         }
    }
    return NO_ERROR;
+}
+
+status_t ALSADevice::getEDIDData(char *hdmiEDIDData)
+{
+    status_t err = NO_ERROR;
+    unsigned **EDIDData;
+    EDIDData = (unsigned **)malloc((MAX_SHORT_AUDIO_DESC_CNT + 1)*sizeof(unsigned*));
+                              // additional 1 byte for length of the EDID
+    unsigned count;
+    if(EDIDData) {
+        for (int i=0; i<MAX_SHORT_AUDIO_DESC_CNT + 1; i++) {
+            EDIDData[i] = (unsigned*)malloc(1 * sizeof(unsigned));
+            if(!EDIDData[i])
+                err = BAD_VALUE;
+        }
+    }
+    if(err == NO_ERROR) {
+        err = getMixerControlExt("HDMI EDID", EDIDData, &count);
+        hdmiEDIDData[0] = (char)(count);
+        if(err == NO_ERROR) {
+            for(int i=0; i<count; i++) {
+                hdmiEDIDData[i+1] = (char) (*(EDIDData[i]));
+            }
+        }
+    }
+
+    for(int i=0; i< MAX_SHORT_AUDIO_DESC_CNT+1; i++)
+        if(EDIDData[i])
+            free(EDIDData[i]);
+    if(EDIDData)
+        free(EDIDData);
+    return err;
 }
 
 #ifdef SEPERATED_AUDIO_INPUT

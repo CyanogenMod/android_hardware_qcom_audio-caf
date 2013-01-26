@@ -65,8 +65,13 @@ class AudioHardwareALSA;
 #define RECORD_LATENCY        96000
 #define VOICE_LATENCY         85333
 #define DEFAULT_BUFFER_SIZE   2048
+#ifdef TARGET_8974
+#define DEFAULT_MULTI_CHANNEL_BUF_SIZE    6144
+#else
 //4032 = 336(kernel buffer size) * 2(bytes pcm_16) * 6(number of channels)
 #define DEFAULT_MULTI_CHANNEL_BUF_SIZE    4032
+#endif
+
 #define DEFAULT_VOICE_BUFFER_SIZE   2048
 #define PLAYBACK_LOW_LATENCY_BUFFER_SIZE   1024
 #define PLAYBACK_LOW_LATENCY  22000
@@ -165,6 +170,39 @@ static int USBRECBIT_FM = (1 << 3);
 #define MAX_SLEEP_RETRY 100  /*  Will check 100 times before continuing */
 #define AUDIO_INIT_SLEEP_WAIT 50 /* 50 ms */
 
+/* Front left channel. */
+#define PCM_CHANNEL_FL    1
+/* Front right channel. */
+#define PCM_CHANNEL_FR    2
+/* Front center channel. */
+#define PCM_CHANNEL_FC    3
+/* Left surround channel.*/
+#define PCM_CHANNEL_LS   4
+/* Right surround channel.*/
+#define PCM_CHANNEL_RS   5
+/* Low frequency effect channel. */
+#define PCM_CHANNEL_LFE  6
+/* Center surround channel; Rear center channel. */
+#define PCM_CHANNEL_CS   7
+/* Left back channel; Rear left channel. */
+#define PCM_CHANNEL_LB   8
+/* Right back channel; Rear right channel. */
+#define PCM_CHANNEL_RB   9
+/* Top surround channel. */
+#define PCM_CHANNEL_TS   10
+/* Center vertical height channel.*/
+#define PCM_CHANNEL_CVH  11
+/* Mono surround channel.*/
+#define PCM_CHANNEL_MS   12
+/* Front left of center. */
+#define PCM_CHANNEL_FLC  13
+/* Front right of center. */
+#define PCM_CHANNEL_FRC  14
+/* Rear left of center. */
+#define PCM_CHANNEL_RLC  15
+/* Rear right of center. */
+#define PCM_CHANNEL_RRC  16
+
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
 class ALSADevice;
@@ -247,6 +285,7 @@ public:
     void     enableFENS(bool flag);
     void     setFlags(uint32_t flag);
     status_t setCompressedVolume(int vol);
+    status_t setChannelMap(alsa_handle_t *handle, int maxChannels);
     void     enableSlowTalk(bool flag);
     void     setVocRecMode(uint8_t mode);
     void     setVoLTEMicMute(int state);
@@ -258,6 +297,7 @@ public:
     //TODO:check if this needs to be public
     void     disableDevice(alsa_handle_t *handle);
     char    *getUCMDeviceFromAcdbId(int acdb_id);
+    status_t getEDIDData(char *hdmiEDIDData);
 #ifdef SEPERATED_AUDIO_INPUT
     void     setInput(int);
 #endif
@@ -275,11 +315,13 @@ private:
     void     switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode);
     int      getUseCaseType(const char *useCase);
     status_t setHDMIChannelCount();
+    void     setChannelAlloc(int channelAlloc);
     status_t setHardwareParams(alsa_handle_t *handle);
     int      deviceName(alsa_handle_t *handle, unsigned flags, char **value);
     status_t setSoftwareParams(alsa_handle_t *handle);
     bool     platform_is_Fusion3();
     status_t getMixerControl(const char *name, unsigned int &value, int index = 0);
+    status_t getMixerControlExt(const char *name, unsigned **getValues, unsigned *count);
     status_t setMixerControl(const char *name, unsigned int value, int index = -1);
     status_t setMixerControl(const char *name, const char *);
     status_t setMixerControlExt(const char *name, int count, char **setValues);

@@ -1048,10 +1048,11 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
                                     status_t *status)
 {
     Mutex::Autolock autoLock(mLock);
-    ALOGV("openOutputStream: devices 0x%x channels %d sampleRate %d",
-         devices, *channels, *sampleRate);
 
     audio_output_flags_t flags = static_cast<audio_output_flags_t> (*status);
+
+    ALOGV("openOutputStream: devices 0x%x channels %d sampleRate %d flags %x",
+         devices, *channels, *sampleRate, flags);
 
     status_t err = BAD_VALUE;
 #ifdef QCOM_OUTPUT_FLAGS_ENABLED
@@ -1195,20 +1196,31 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
         alsa_handle.handle = 0;
         alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
 
+#ifdef TARGET_8974
+        char hdmiEDIDData[MAX_SHORT_AUDIO_DESC_CNT + 1];
+                              // additional 1 byte for length of the EDID
+        if (mALSADevice->getEDIDData(hdmiEDIDData) == NO_ERROR) {
+            if (!AudioUtil::getHDMIAudioSinkCaps(&info, hdmiEDIDData)) {
+                ALOGE("openOutputStream: Failed to get HDMI sink capabilities");
+                return NULL;
+            }
+        }
+#else
         if (!AudioUtil::getHDMIAudioSinkCaps(&info)) {
             ALOGE("openOutputStream: Failed to get HDMI sink capabilities");
             return NULL;
         }
+#endif
         if (0 == *channels) {
             alsa_handle.channels = info.AudioBlocksArray[info.nAudioBlocks-1].nChannels;
-            if (alsa_handle.channels > 6) {
-                alsa_handle.channels = 6;
+            if (alsa_handle.channels > 8) {
+                alsa_handle.channels = 8;
             }
             *channels = audio_channel_out_mask_from_count(alsa_handle.channels);
         } else {
             alsa_handle.channels = AudioSystem::popCount(*channels);
         }
-        if (6 == alsa_handle.channels) {
+        if (alsa_handle.channels > 2) {
             alsa_handle.bufferSize = DEFAULT_MULTI_CHANNEL_BUF_SIZE;
         } else {
             alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;

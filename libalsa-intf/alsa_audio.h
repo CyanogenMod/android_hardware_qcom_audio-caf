@@ -1,6 +1,6 @@
 /*
 ** Copyright 2010, The Android Open-Source Project
-** Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -181,6 +181,7 @@ struct mixer_ctl *mixer_get_nth_control(struct mixer *mixer, unsigned n);
 int mixer_ctl_set(struct mixer_ctl *ctl, unsigned percent);
 int mixer_ctl_select(struct mixer_ctl *ctl, const char *value);
 void mixer_ctl_get(struct mixer_ctl *ctl, unsigned *value);
+void mixer_ctl_get_mulvalues(struct mixer_ctl *ctl, unsigned **value, unsigned *count);
 int mixer_ctl_set_value(struct mixer_ctl *ctl, int count, char ** argv);
 
 
