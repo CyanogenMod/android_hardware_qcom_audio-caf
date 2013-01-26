@@ -1,4 +1,4 @@
-ifneq ($(filter msm8960 msm7x30,$(TARGET_BOARD_PLATFORM)),)
+ifneq ($(filter msm8960 msm8660 msm7x30,$(TARGET_BOARD_PLATFORM)),)
 ifeq ($(TARGET_QCOM_AUDIO_VARIANT),caf)
 
 AUDIO_HW_ROOT := $(call my-dir)
@@ -13,6 +13,9 @@ endif
 ifeq ($(TARGET_BOARD_PLATFORM),msm7x30)
     include $(AUDIO_HW_ROOT)/msm7x30/Android.mk
 endif
-
+ifeq ($(TARGET_BOARD_PLATFORM),msm8660)
+    include $(AUDIO_HW_ROOT)/msm8660/Android.mk
+    include $(AUDIO_HW_ROOT)/mm-audio/Android.mk
+endif
 endif
 endif
