@@ -331,10 +331,26 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         memcpy(buf.memBuf, &mOutputMetadataTunnel, mOutputMetadataLength);
         ALOGD("Copy Metadata = %d, bytes = %d", mOutputMetadataLength, bytes);
 
-        if(bytes == 0) {
-          err = pcm_write(mAlsaHandle->handle, buf.memBuf, mAlsaHandle->handle->period_size);
-          buf.bytesToWrite = bytes;
-          return err;
+        if (bytes == 0) {
+            buf.bytesToWrite = 0;
+            err = pcm_write(mAlsaHandle->handle, buf.memBuf, mAlsaHandle->handle->period_size);
+
+            //bad part is !err does not guarantee pcm_write succeeded!
+            if (!err) { //mReachedEOS is already set
+                /*
+                 * This workaround is needed to ensure EOS from the event thread
+                 * is posted when the first (only) buffer given to the driver
+                 * is a zero length buffer. Note that the compressed driver
+                 * does not interrupt the timer fd if the EOS buffer was queued
+                 * after a buffer with valid data (full or partial). So we
+                 * only need to do this in this special case.
+                 */
+                if (mFilledQueue.empty()) {
+                    mFilledQueue.push_back(buf);
+                }
+            }
+
+            return err;
         }
     }
     ALOGV("PCM write before memcpy start");
