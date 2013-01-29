@@ -627,6 +627,7 @@ int use_case_index)
     card_mctrl_t *ctrl_list;
     int list_size, index, verb_index, ret = 0, voice_acdb = 0, rx_id, tx_id;
     char *ident_value = NULL;
+    char current_mod[MAX_STR_LEN];
 
     /* Check if voice call use case/modifier exists */
     if ((!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
@@ -656,6 +657,7 @@ int use_case_index)
                     (!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOIP,
                     strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
                     voice_acdb = 1;
+                    strlcpy(current_mod, ident_value, MAX_STR_LEN);
                     free(ident_value);
                     ident_value = NULL;
                     break;
@@ -724,11 +726,17 @@ int use_case_index)
                     (tx_id != uc_mgr->current_tx_device)) {
                     uc_mgr->current_rx_device = rx_id;
                     uc_mgr->current_tx_device = tx_id;
-                    ALOGD("Voice acdb: rx id %d tx id %d",
+                    ALOGD("Voice acdb: rx id %d tx id %d verb:%s modifier:%s",
                           uc_mgr->current_rx_device,
-                          uc_mgr->current_tx_device);
-                    if (!uc_mgr->isFusion3Platform)
-                        acdb_loader_send_voice_cal(uc_mgr->current_rx_device,
+                          uc_mgr->current_tx_device,
+                          uc_mgr->card_ctxt_ptr->current_verb, current_mod);
+                    if ((!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
+                          SND_USE_CASE_VERB_IP_VOICECALL,
+                          strlen(SND_USE_CASE_VERB_IP_VOICECALL)) ||
+                          (!strncmp(current_mod, SND_USE_CASE_MOD_PLAY_VOIP,
+                           strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) ||
+                          (!uc_mgr->isFusion3Platform))
+                           acdb_loader_send_voice_cal(uc_mgr->current_rx_device,
                                                     uc_mgr->current_tx_device);
                 } else {
                     ALOGV("Voice acdb: Required acdb already pushed \
