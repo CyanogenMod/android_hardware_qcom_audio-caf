@@ -597,6 +597,7 @@ private:
     static void *       eventThreadWrapper(void *me);
     void                eventThreadEntry();
     void                reset();
+    status_t            drainAndPostEOS_l();
 
     //Structure to hold mem buffer information
     class BuffersAllocated {
