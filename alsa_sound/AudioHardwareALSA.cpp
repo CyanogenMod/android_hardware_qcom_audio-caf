@@ -2309,12 +2309,14 @@ status_t AudioHardwareALSA::openExtOutput(int device) {
             ALOGE("openA2DPOutput failed = %d",err);
             return err;
         }
-    } else if (device & AUDIO_DEVICE_OUT_ALL_USB) {
+        mExtOutStream = mA2dpStream;
+    } else if (device & AudioSystem::DEVICE_OUT_ALL_USB) {
         err= openUsbOutput();
         if(err) {
-        ALOGE("openUsbPOutput failed = %d",err);
-        return err;
+            ALOGE("openUsbPOutput failed = %d",err);
+            return err;
         }
+        mExtOutStream = mUsbStream;
     }
     return err;
 }
