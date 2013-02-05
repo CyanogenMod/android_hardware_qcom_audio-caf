@@ -1479,7 +1479,7 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
         } else if ((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET ||
                     devices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET) &&
                     devices & AudioSystem::DEVICE_OUT_SPEAKER) {
-             return strdup(SND_USE_CASE_DEV_PROXY_RX_SPEAKER); /* PROXY RX */
+             return strdup(SND_USE_CASE_DEV_USB_PROXY_RX_SPEAKER); /* USB PROXY RX + SPEAKER */
         } else if ((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET) ||
                   (devices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)) {
              return strdup(SND_USE_CASE_DEV_USB_PROXY_RX); /* PROXY RX */
