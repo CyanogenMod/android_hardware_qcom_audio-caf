@@ -1324,8 +1324,6 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
                     device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES;
                     if (device) break;
                 }
-                device = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_SPEAKER;
-			    if (device) break;
             }
             device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_WIRED_HEADPHONE;
             if (device) break;
