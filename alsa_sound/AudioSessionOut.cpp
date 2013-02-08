@@ -1022,7 +1022,8 @@ status_t AudioSessionOutALSA::drainAndPostEOS_l()
         int ret = ioctl(mAlsaHandle->handle->fd, SNDRV_COMPRESS_DRAIN);
         mLock.lock();
 
-        if (ret < 0 ) {
+        if (ret < 0) {
+            ret = -errno;
             ALOGE("Audio Drain failed with errno %s", strerror(errno));
             switch (ret) {
             case -EINTR: //interrupted by flush
