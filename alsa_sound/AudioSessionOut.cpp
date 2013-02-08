@@ -273,10 +273,10 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 {
     Mutex::Autolock autoLock(mLock);
     int err;
-    int *lbuffer = (int*) buffer;
-    int lbuflength = TUNNEL_BUFFER_SIZE - TUNNEL_METADATA_SIZE;
-    ALOGV("write Empty Queue size() = %d, Filled Queue size() = %d mReached EOS %d, mEosEventReceived %d bytes %d",
-         mEmptyQueue.size(),mFilledQueue.size(), mReachedEOS, mEosEventReceived, bytes);
+
+    ALOGV("write Empty Queue size() = %d, Filled Queue size() = %d "
+          "mReached EOS %d, mEosEventReceived %d bytes %d",
+          mEmptyQueue.size(),mFilledQueue.size(), mReachedEOS, mEosEventReceived, bytes);
 
     mEosEventReceived = false;
     mReachedEOS = false;
@@ -289,31 +289,18 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     //    written into the buffer. Then Enqueue the buffer to the filled
     //    buffer queue
 
-   if (mSkipWrite && (mEmptyQueue.size() == BUFFER_COUNT)) {
-       ALOGV("reducing mSkipWrite by 1 in write");
-       mSkipWrite = false;
-       if(mSkipWrite == false){
-            ALOGV("mSkipWrite is false now write bytes %d", bytes);
-            if( bytes && lbuffer[(lbuflength/sizeof(int))] == 0){
-                 ALOGV("skipping buffer in write %d", lbuffer[(lbuflength/sizeof(int))]);
-                 return 0;
-            } else {
-
-            }
-        } else {
-            //we have not skipped as many buffers as seeks
-             ALOGV("returning from write since we have not skipped enough mSkipWrite %d",
-                 mSkipWrite);
-             return 0;
-        }
+    if (mSkipWrite) {
+        LOG_ALWAYS_FATAL_IF((mEmptyQueue.size() != BUFFER_COUNT),
+                            "::write, mSkipwrite is true but empty queue isnt full");
+        ALOGD("reset mSkipWrite in write");
+        mSkipWrite = false;
+        ALOGD("mSkipWrite is false now write bytes %d", bytes);
+        ALOGD("skipping buffer in write");
+        return 0;
     }
 
-    if(bytes != 0) {
-        ALOGV("not skipping buffer in write since mSkipWrite = %d, mEmptyQueuesize %d, skip flag %d", mSkipWrite, \
-            mEmptyQueue.size(), lbuffer[(lbuflength/sizeof(int))]);
-    } else {
-        ALOGV("not skipping buffer in write since mSkipWrite = %d, mEmptyQueuesize %d ", mSkipWrite, mEmptyQueue.size());
-    }
+    ALOGV("not skipping buffer in write since mSkipWrite = %d, "
+              "mEmptyQueuesize %d ", mSkipWrite, mEmptyQueue.size());
 
     List<BuffersAllocated>::iterator it = mEmptyQueue.begin();
     BuffersAllocated buf = *it;
@@ -830,7 +817,13 @@ status_t AudioSessionOutALSA::isBufferAvailable(int *isAvail) {
           mEmptyQueue.size(),mFilledQueue.size());
     *isAvail = false;
 
-    if (mSkipWrite && (mEmptyQueue.size() == BUFFER_COUNT)) {
+    /*
+     * Only time the below condition is true is when isBufferAvailable is called
+     * immediately after a flush
+     */
+    if (mSkipWrite) {
+        LOG_ALWAYS_FATAL_IF((mEmptyQueue.size() != BUFFER_COUNT),
+                            "::isBufferAvailable, mSkipwrite is true but empty queue isnt full");
         mSkipWrite = false;
     }
     // 1.) Wait till a empty buffer is available in the Empty buffer queue
