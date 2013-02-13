@@ -98,6 +98,10 @@ ifeq ($(call is-board-platform,msm8960),true)
   LOCAL_MODULE := audio.primary.msm8960
 endif
 
+ifeq ($(call is-board-platform,msm8610),true)
+  LOCAL_MODULE := audio.primary.msm8610
+endif
+
 LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_MODULE_TAGS := optional
 
@@ -126,6 +130,10 @@ endif
 
 ifeq ($(call is-board-platform,msm8960),true)
   LOCAL_MODULE := audio_policy.msm8960
+endif
+
+ifeq ($(call is-board-platform,msm8610),true)
+  LOCAL_MODULE := audio_policy.msm8610
 endif
 
 LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
