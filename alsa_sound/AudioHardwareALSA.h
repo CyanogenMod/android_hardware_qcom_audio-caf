@@ -603,6 +603,7 @@ private:
 
     //event fd to signal the EOS and Kill from the userspace
     int mEfd;
+    bool mTunnelMode;
 
 public:
     bool mRouteAudioToA2dp;
