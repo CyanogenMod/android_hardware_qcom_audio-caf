@@ -936,11 +936,11 @@ status_t AudioHardware::setParameters(const String8& keyValuePairs)
 
     key = String8(TTY_MODE_KEY);
     if (param.get(key, value) == NO_ERROR) {
-        if (value == "full") {
+        if (value == "full" || value == "tty_full") {
             mTtyMode = TTY_FULL;
-        } else if (value == "hco") {
+        } else if (value == "hco" || value == "tty_hco") {
             mTtyMode = TTY_HCO;
-        } else if (value == "vco") {
+        } else if (value == "vco" || value == "tty_vco") {
             mTtyMode = TTY_VCO;
         } else {
             mTtyMode = TTY_OFF;
