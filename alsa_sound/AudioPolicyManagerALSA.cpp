@@ -1381,7 +1381,7 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             }
             break;
         }
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
             device |= AUDIO_DEVICE_OUT_FM;
             if (mForceUse[AudioSystem::FOR_MEDIA] == AudioSystem::FORCE_SPEAKER) {
@@ -1482,7 +1482,7 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             if (device2 == AUDIO_DEVICE_NONE) {
                 device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET;
             }
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
             if (device2 == AUDIO_DEVICE_NONE) {
                 device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM_TX;
             }
@@ -1506,7 +1506,7 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_SPEAKER;
         }
 
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
             device |= AUDIO_DEVICE_OUT_FM;
         }
@@ -1571,7 +1571,7 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
     // update stream volumes according to new device
     applyStreamVolumes(output, device, delayMs);
 
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
     //if changing from a combined headset + speaker + FM  route, unmute media streams
     if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM)
         muteWaitMs = checkDeviceMuteStrategies(outputDesc, prevDevice, delayMs);
@@ -1625,7 +1625,7 @@ audio_devices_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
             device = AUDIO_DEVICE_IN_REMOTE_SUBMIX;
         }
         break;
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
    case AUDIO_SOURCE_FM_RX:
         device = AUDIO_DEVICE_IN_FM_RX;
         break;
@@ -1687,7 +1687,7 @@ AudioPolicyManager::device_category AudioPolicyManager::getDeviceCategory(audio_
         case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET:
         case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP:
         case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES:
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         case AUDIO_DEVICE_OUT_FM:
 #endif
             return DEVICE_CATEGORY_HEADSET;

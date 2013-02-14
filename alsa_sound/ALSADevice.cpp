@@ -1562,7 +1562,7 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
             (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE))) {
             return strdup(SND_USE_CASE_DEV_SPEAKER_ANC_HEADSET); /* COMBO SPEAKER+ANC HEADSET RX */
 #endif
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
                  (devices & AudioSystem::DEVICE_OUT_FM_TX)) {
             return strdup(SND_USE_CASE_DEV_SPEAKER_FM_TX); /* COMBO SPEAKER+FM_TX RX */
@@ -1635,7 +1635,7 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
         } else if (devices & AudioSystem::DEVICE_OUT_PROXY) {
             return strdup(SND_USE_CASE_DEV_PROXY_RX); /* PROXY RX */
 #endif
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         } else if (devices & AudioSystem::DEVICE_OUT_FM_TX) {
             return strdup(SND_USE_CASE_DEV_FM_TX); /* FM Tx */
 #endif
@@ -1796,7 +1796,7 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
             if (strncmp(mCurTxUCMDevice, "None", 4)) {
                 return strdup(mCurTxUCMDevice);
             }
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         } else if ((devices & AudioSystem::DEVICE_IN_FM_RX) ||
                    (devices & AudioSystem::DEVICE_IN_FM_RX_A2DP)) {
             /* Nothing to be done, use current tx device or set dummy device */
