@@ -232,6 +232,7 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
         mOutputMetadataLength = sizeof(output_metadata_handle_t);
         ALOGD("openAudioSessionDevice - mOutputMetadataLength = %d", mOutputMetadataLength);
     }
+
     if(use_case) {
         free(use_case);
         use_case = NULL;
@@ -867,6 +868,22 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     } else {
         snd_use_case_set(mUcMgr, "_enamod", useCase);
     }
+
+    //Set Tunnel or LPA bit if the playback over usb is tunnel or Lpa
+    if((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
+        (devices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)){
+        if((!strcmp(useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+           (!strcmp(useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
+            ALOGV("doRouting: LPA device switch to proxy");
+            mParent->startUsbPlaybackIfNotStarted();
+            mParent->musbPlaybackState |= USBPLAYBACKBIT_LPA;
+        } else if((!strcmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+            (!strcmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+            ALOGD("doRouting: Tunnel Player device switch to proxy");
+            mParent->startUsbPlaybackIfNotStarted();
+            mParent->musbPlaybackState |= USBPLAYBACKBIT_TUNNEL;
+        }
+   }
 
     status = mAlsaDevice->open(&alsa_handle);
     if(status != NO_ERROR) {
