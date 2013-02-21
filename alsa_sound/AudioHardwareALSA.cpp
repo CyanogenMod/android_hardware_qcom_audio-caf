@@ -94,7 +94,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mDeviceList.clear();
     mCSCallActive = 0;
     mVolteCallActive = 0;
-    mSGLTECallActive = 0;
+    mVoice2CallActive = 0;
     mIsFmActive = 0;
     mDevSettingsFlag = 0;
     bool audio_init_done = false;
@@ -386,8 +386,8 @@ status_t AudioHardwareALSA::setVoiceVolume(float v)
         } else if (newMode == AUDIO_MODE_IN_CALL){
                if (mCSCallActive == CS_ACTIVE)
                    mALSADevice->setVoiceVolume(vol);
-               else if (mSGLTECallActive == CS_ACTIVE_SESSION2)
-                   mALSADevice->setSGLTEVolume(vol);
+               else if (mVoice2CallActive == CS_ACTIVE_SESSION2)
+                   mALSADevice->setVoice2Volume(vol);
                if (mVolteCallActive == IMS_ACTIVE)
                    mALSADevice->setVoLTEVolume(vol);
         }
@@ -851,11 +851,11 @@ status_t AudioHardwareALSA::doRouting(int device)
     if (device == 0)
         device = mCurDevice;
     ALOGV("doRouting: device %#x newMode %d mCSCallActive %d mVolteCallActive %d"
-          "mSGLTECallActive %d mIsFmActive %d", device, newMode, mCSCallActive,
-          mVolteCallActive, mSGLTECallActive, mIsFmActive);
+          "mVoice2CallActive %d mIsFmActive %d", device, newMode, mCSCallActive,
+          mVolteCallActive, mVoice2CallActive, mIsFmActive);
     isRouted = routeVoLTECall(device, newMode);
     isRouted |= routeVoiceCall(device, newMode);
-    isRouted |= routeSGLTECall(device, newMode);
+    isRouted |= routeVoice2Call(device, newMode);
 
     if(!isRouted) {
 #ifdef QCOM_USBAUDIO_ENABLED
@@ -1800,8 +1800,8 @@ status_t AudioHardwareALSA::setMicMute(bool state)
               if(mALSADevice) {
                  if(mCSCallActive == CS_ACTIVE)
                     mALSADevice->setMicMute(state);
-                 else if(mSGLTECallActive == CS_ACTIVE_SESSION2)
-                    mALSADevice->setSGLTEMicMute(state);
+                 else if(mVoice2CallActive == CS_ACTIVE_SESSION2)
+                    mALSADevice->setVoice2MicMute(state);
                  if(mVolteCallActive == IMS_ACTIVE)
                     mALSADevice->setVoLTEMicMute(state);
               }
@@ -2087,56 +2087,56 @@ int csCallState = mCallState&0xF;
     return isRouted;
 }
 
-bool AudioHardwareALSA::routeSGLTECall(int device, int newMode)
+bool AudioHardwareALSA::routeVoice2Call(int device, int newMode)
 {
-int SGLTECallState = mCallState&0xF00;
+int Voice2CallState = mCallState&0xF00;
  bool isRouted = false;
- switch (SGLTECallState) {
+ switch (Voice2CallState) {
     case CS_INACTIVE_SESSION2:
-        if (mSGLTECallActive != CS_INACTIVE_SESSION2) {
+        if (mVoice2CallActive != CS_INACTIVE_SESSION2) {
             ALOGV("doRouting: Disabling voice call session2");
-            disableVoiceCall((char *)SND_USE_CASE_VERB_SGLTECALL,
-                (char *)SND_USE_CASE_MOD_PLAY_SGLTE, newMode, device);
+            disableVoiceCall((char *)SND_USE_CASE_VERB_VOICE2,
+                (char *)SND_USE_CASE_MOD_PLAY_VOICE2, newMode, device);
             isRouted = true;
-            mSGLTECallActive = CS_INACTIVE_SESSION2;
+            mVoice2CallActive = CS_INACTIVE_SESSION2;
         }
     break;
     case CS_ACTIVE_SESSION2:
-        if (mSGLTECallActive == CS_INACTIVE_SESSION2) {
+        if (mVoice2CallActive == CS_INACTIVE_SESSION2) {
             ALOGV("doRouting: Enabling CS voice call session2 ");
-            enableVoiceCall((char *)SND_USE_CASE_VERB_SGLTECALL,
-                (char *)SND_USE_CASE_MOD_PLAY_SGLTE, newMode, device);
+            enableVoiceCall((char *)SND_USE_CASE_VERB_VOICE2,
+                (char *)SND_USE_CASE_MOD_PLAY_VOICE2, newMode, device);
             isRouted = true;
-            mSGLTECallActive = CS_ACTIVE_SESSION2;
-        } else if (mSGLTECallActive == CS_HOLD_SESSION2) {
+            mVoice2CallActive = CS_ACTIVE_SESSION2;
+        } else if (mVoice2CallActive == CS_HOLD_SESSION2) {
              ALOGV("doRouting: Resume voice call session2 from hold state");
              ALSAHandleList::iterator vt_it;
              for(vt_it = mDeviceList.begin();
                  vt_it != mDeviceList.end(); ++vt_it) {
-                 if((!strncmp(vt_it->useCase, SND_USE_CASE_VERB_SGLTECALL,
-                     strlen(SND_USE_CASE_VERB_SGLTECALL))) ||
-                     (!strncmp(vt_it->useCase, SND_USE_CASE_MOD_PLAY_SGLTE,
-                     strlen(SND_USE_CASE_MOD_PLAY_SGLTE)))) {
+                 if((!strncmp(vt_it->useCase, SND_USE_CASE_VERB_VOICE2,
+                     strlen(SND_USE_CASE_VERB_VOICE2))) ||
+                     (!strncmp(vt_it->useCase, SND_USE_CASE_MOD_PLAY_VOICE2,
+                     strlen(SND_USE_CASE_MOD_PLAY_VOICE2)))) {
                      alsa_handle_t *handle = (alsa_handle_t *)(&(*vt_it));
-                     mSGLTECallActive = CS_ACTIVE_SESSION2;
+                     mVoice2CallActive = CS_ACTIVE_SESSION2;
                      if(ioctl((int)handle->handle->fd,SNDRV_PCM_IOCTL_PAUSE,0)<0)
-                         ALOGE("SGLTE resume failed");
+                         ALOGE("Voice2 resume failed");
                      break;
                  }
              }
         }
     break;
     case CS_HOLD_SESSION2:
-        if (mSGLTECallActive == CS_ACTIVE_SESSION2) {
+        if (mVoice2CallActive == CS_ACTIVE_SESSION2) {
             ALOGV("doRouting: Voice call session2 going to Hold");
              ALSAHandleList::iterator vt_it;
              for(vt_it = mDeviceList.begin();
                  vt_it != mDeviceList.end(); ++vt_it) {
-                 if((!strncmp(vt_it->useCase, SND_USE_CASE_VERB_SGLTECALL,
-                     strlen(SND_USE_CASE_VERB_SGLTECALL))) ||
-                     (!strncmp(vt_it->useCase, SND_USE_CASE_MOD_PLAY_SGLTE,
-                         strlen(SND_USE_CASE_MOD_PLAY_SGLTE)))) {
-                         mSGLTECallActive = CS_HOLD_SESSION2;
+                 if((!strncmp(vt_it->useCase, SND_USE_CASE_VERB_VOICE2,
+                     strlen(SND_USE_CASE_VERB_VOICE2))) ||
+                     (!strncmp(vt_it->useCase, SND_USE_CASE_MOD_PLAY_VOICE2,
+                         strlen(SND_USE_CASE_MOD_PLAY_VOICE2)))) {
+                         mVoice2CallActive = CS_HOLD_SESSION2;
                          alsa_handle_t *handle = (alsa_handle_t *)(&(*vt_it));
                          if(ioctl((int)handle->handle->fd,SNDRV_PCM_IOCTL_PAUSE,1)<0)
                              ALOGE("Voice session2 pause failed");
