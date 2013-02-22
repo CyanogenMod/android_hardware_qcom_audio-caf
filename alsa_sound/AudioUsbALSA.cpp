@@ -458,7 +458,7 @@ void AudioUsbALSA::RecordingThreadEntry() {
     }
 
     musbRecordingHandle = configureDevice(PCM_IN|channelFlag|PCM_MMAP, (char *)"hw:1,0",
-                                         msampleRateCapture, mchannelsCapture,768,false);
+                                         msampleRateCapture, mchannelsCapture,2048,false);
     if (!musbRecordingHandle) {
         ALOGE("ERROR: Could not configure USB device for recording");
         return;
@@ -470,7 +470,7 @@ void AudioUsbALSA::RecordingThreadEntry() {
     pfdUsbRecording[0].events = POLLIN;
 
     mproxyRecordingHandle = configureDevice(PCM_OUT|channelFlag|PCM_MMAP, (char *)"hw:0,7",
-                                            msampleRateCapture, mchannelsCapture,768,false);
+                                            msampleRateCapture, mchannelsCapture,2048,false);
     if (!mproxyRecordingHandle) {
         ALOGE("ERROR: Could not configure Proxy for recording");
         {
