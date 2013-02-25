@@ -492,6 +492,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
            return NO_ERROR;
         }
         doRouting(0);
+        param.remove(key);
     }
 
     key = String8(AudioParameter::keyFluenceType);
@@ -518,6 +519,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         }
         mALSADevice->setFlags(mDevSettingsFlag);
         doRouting(0);
+        param.remove(key);
     }
 
 #ifdef QCOM_CSDCLIENT_ENABLED
@@ -539,6 +541,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
                     csd_stop_playback();
                 }
             }
+            param.remove(key);
         }
     }
 #endif
@@ -554,6 +557,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         }
         mALSADevice->setFlags(mDevSettingsFlag);
         doRouting(0);
+        param.remove(key);
     }
 
     key = String8(AudioParameter::keyRouting);
@@ -578,6 +582,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         } else {
             mBluetoothVGS = false;
         }
+        param.remove(key);
     }
 
     key = String8(WIDEVOICE_KEY);
@@ -688,6 +693,8 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
             }
             mCallState = state;
         }
+        mCallState = state;
+        param.remove(key);
     }
     if (param.size()) {
         status = BAD_VALUE;
