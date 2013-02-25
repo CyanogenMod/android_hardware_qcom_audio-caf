@@ -103,7 +103,13 @@ protected:
         // select input device corresponding to requested audio source
         virtual audio_devices_t getDeviceForInputSource(int inputSource);
 
-
+        // mute/unmute strategies using an incompatible device combination
+        // if muting, wait for the audio in pcm buffer to be drained before proceeding
+        // if unmuting, unmute only after the specified delay
+        // Returns the number of ms waited
+        uint32_t  checkDeviceMuteStrategies(AudioOutputDescriptor *outputDesc,
+                                            audio_devices_t prevDevice,
+                                            uint32_t delayMs);
 
 private:
         // updates device caching and output for streams that can influence the
