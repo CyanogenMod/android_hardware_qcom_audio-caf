@@ -647,10 +647,14 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     key = String8(MODE_CALL_KEY);
     if (param.getInt(key,state) == NO_ERROR) {
         if (mCallState != state) {
+            if(!((!(mCallState & 0xF) && ((state & 0xF) ==  CS_ACTIVE)) ||
+                 (!(mCallState & 0xF0) && ((state & 0xF0) == IMS_ACTIVE)) ||
+                 (!(mCallState & 0xF00) && ((state & 0xF00) == CS_ACTIVE_SESSION2)))) {
+                mCallState = state;
+                doRouting(0);
+            }
             mCallState = state;
-            doRouting(0);
         }
-        mCallState = state;
     }
     if (param.size()) {
         status = BAD_VALUE;
