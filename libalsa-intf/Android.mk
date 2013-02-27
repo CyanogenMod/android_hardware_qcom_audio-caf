@@ -1,6 +1,12 @@
 LOCAL_PATH:= $(call my-dir)
 
 ifeq ($(strip $(BOARD_USES_ALSA_AUDIO)),true)
+
+$(shell mkdir -p $(OUT)/obj/SHARED_LIBRARIES/libalsa-intf_intermediates)
+$(shell touch $(OUT)/obj/SHARED_LIBRARIES/libalsa-intf_intermediates/export_includes)
+$(shell mkdir -p $(OUT)/obj/SHARED_LIBRARIES/libacdbloader_intermediates)
+$(shell touch $(OUT)/obj/SHARED_LIBRARIES/libacdbloader_intermediates/export_includes)
+
 # Any prebuilt files with default TAGS can use the below:
 include $(CLEAR_VARS)
 #LOCAL_SRC_FILES:= aplay.c alsa_pcm.c alsa_mixer.c
