@@ -902,7 +902,9 @@ status_t AudioHardwareALSA::doRouting(int device)
                                     musbPlaybackState |= USBPLAYBACKBIT_TUNNEL;
                                     break;
                          } else if((!strcmp(it->useCase, SND_USE_CASE_VERB_VOICECALL)) ||
-                                   (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOICE))) {
+                                   (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOICE)) ||
+                                   (!strcmp(it->useCase, SND_USE_CASE_VERB_VOLTE)) ||
+                                   (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOLTE))) {
                                     ALOGV("doRouting: VOICE device switch to proxy");
                                     startUsbRecordingIfNotStarted();
                                     startUsbPlaybackIfNotStarted();
