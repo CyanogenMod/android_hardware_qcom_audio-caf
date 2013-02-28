@@ -1047,8 +1047,12 @@ status_t AudioSessionOutALSA::drainAndPostEOS_l()
             ALOGE("Audio Drain failed with errno %s", strerror(errno));
             switch (ret) {
             case -EINTR: //interrupted by flush
-            case -EWOULDBLOCK: //no writes given, drain would block indefintely
               mSkipEOS = true;
+              break;
+            case -EWOULDBLOCK: //no writes given, drain would block indefintely
+              //mReachedEOS might have been cleared in the meantime
+              //by a flush. Do not send a false EOS in that case
+              mSkipEOS = mReachedEOS ? false : true;
               break;
             default:
               mSkipEOS = false;
