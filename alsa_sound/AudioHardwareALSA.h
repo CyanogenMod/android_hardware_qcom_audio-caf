@@ -202,6 +202,9 @@ static int USBRECBIT_FM = (1 << 3);
 /* Rear right of center. */
 #define PCM_CHANNEL_RRC  16
 
+#define SOUND_CARD_SLEEP_RETRY 5  /*  Will check 5 times before continuing */
+#define SOUND_CARD_SLEEP_WAIT 100 /* 100 ms */
+
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
 class ALSADevice;
@@ -943,6 +946,7 @@ protected:
       USECASE_FM = 0x10,
     };
     uint32_t mExtOutActiveUseCases;
+    status_t mStatus;
 
 public:
     bool mRouteAudioToExtOut;

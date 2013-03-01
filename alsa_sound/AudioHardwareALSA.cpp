@@ -79,7 +79,14 @@ namespace android_audio_legacy
 // ----------------------------------------------------------------------------
 
 AudioHardwareInterface *AudioHardwareALSA::create() {
-    return new AudioHardwareALSA();
+
+    AudioHardwareInterface * hardwareInterface = new AudioHardwareALSA();
+    if(hardwareInterface->initCheck() != OK) {
+        ALOGE("NULL - AHAL creation failed");
+        delete hardwareInterface;
+        hardwareInterface = NULL;
+    }
+    return hardwareInterface;
 }
 
 AudioHardwareALSA::AudioHardwareALSA() :
@@ -90,7 +97,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
     char soundCardInfo[200];
     char platform[128], baseband[128], audio_init[128], platformVer[128];
     int codec_rev = 2, verNum = 0;
-    mALSADevice = new ALSADevice();
+
     mDeviceList.clear();
     mCSCallActive = 0;
     mVolteCallActive = 0;
@@ -112,6 +119,29 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mBluetoothVGS = false;
     mFusion3Platform = false;
 
+    mRouteAudioToExtOut = false;
+    mA2dpDevice = NULL;
+    mA2dpStream = NULL;
+    mUsbDevice = NULL;
+    mUsbStream = NULL;
+    mExtOutStream = NULL;
+    mResampler = NULL;
+    mExtOutActiveUseCases = USECASE_NONE;
+    mIsExtOutEnabled = false;
+    mKillExtOutThread = false;
+    mExtOutThreadAlive = false;
+    mExtOutThread = NULL;
+    mUcMgr = NULL;
+
+#ifdef QCOM_ACDB_ENABLED
+    acdb_deallocate = NULL;
+#endif
+
+    mALSADevice = new ALSADevice();
+    if (!mALSADevice) {
+        mStatus = NO_INIT;
+        return;
+    }
 #ifdef QCOM_ACDB_ENABLED
     mAcdbHandle = ::dlopen("/system/lib/libacdbloader.so", RTLD_NOW);
     if (mAcdbHandle == NULL) {
@@ -131,6 +161,8 @@ AudioHardwareALSA::AudioHardwareALSA() :
 
     if((fp = fopen("/proc/asound/cards","r")) == NULL) {
         ALOGE("Cannot open /proc/asound/cards file to get sound card info");
+        mStatus = NO_INIT;
+        return;
     } else {
         while((fgets(soundCardInfo, sizeof(soundCardInfo), fp) != NULL)) {
             ALOGV("SoundCardInfo %s", soundCardInfo);
@@ -138,6 +170,12 @@ AudioHardwareALSA::AudioHardwareALSA() :
                 codec_rev = 1;
                 break;
             } else if (strstr(soundCardInfo, "msm-snd-card")) {
+                codec_rev = 2;
+                break;
+            } else if (strstr(soundCardInfo, "apq8064-tabla-snd-card")) {
+                codec_rev = 2;
+                break;
+            } else if (strstr(soundCardInfo, "msm8960-snd-card")) {
                 codec_rev = 2;
                 break;
             } else if (strstr(soundCardInfo, "msm8930-sitar-snd-card")) {
@@ -155,11 +193,32 @@ AudioHardwareALSA::AudioHardwareALSA() :
             } else if (strstr(soundCardInfo, "msm8974-taiko-liquid-snd-card")) {
                 codec_rev = 43;
                 break;
+            } else if(strstr(soundCardInfo, "no soundcards")) {
+                ALOGE("NO SOUND CARD DETECTED");
+                if(sleep_retry < SOUND_CARD_SLEEP_RETRY) {
+                    ALOGD("Sleeping for 100 ms");
+                    usleep(SOUND_CARD_SLEEP_WAIT * 1000);
+                    sleep_retry++;
+                    fseek(fp, 0, SEEK_SET);
+                    continue;
+                }
+                else {
+                    ALOGE("Failed %d attempts for sound card detection", sleep_retry);
+                    fclose(fp);
+                    mStatus = NO_INIT;
+                    return;
+                }
+            } else {
+                ALOGE("ERROR - Sound card detection");
+                fclose(fp);
+                mStatus = NO_INIT;
+                return;
             }
         }
         fclose(fp);
     }
 
+    sleep_retry = 0;
     while (audio_init_done == false && sleep_retry < MAX_SLEEP_RETRY) {
         property_get("qcom.audio.init", audio_init, NULL);
         ALOGD("qcom.audio.init is set to %s\n",audio_init);
@@ -246,6 +305,8 @@ AudioHardwareALSA::AudioHardwareALSA() :
 
     if (mUcMgr < 0) {
         ALOGE("Failed to open ucm instance: %d", errno);
+        mStatus = NO_INIT;
+        return;
     } else {
         ALOGI("ucm instance opened: %u", (unsigned)mUcMgr);
         mUcMgr->isFusion3Platform = mFusion3Platform;
@@ -289,19 +350,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
         param.add(String8(AudioParameter::keySSR), String8("false"));
     }
 
-    //mALSADevice->setDeviceList(&mDeviceList);
-    mRouteAudioToExtOut = false;
-    mA2dpDevice = NULL;
-    mA2dpStream = NULL;
-    mUsbDevice = NULL;
-    mUsbStream = NULL;
-    mExtOutStream = NULL;
-    mResampler = NULL;
-    mExtOutActiveUseCases = USECASE_NONE;
-    mIsExtOutEnabled = false;
-    mKillExtOutThread = false;
-    mExtOutThreadAlive = false;
-    mExtOutThread = NULL;
+    mStatus = OK;
 }
 
 AudioHardwareALSA::~AudioHardwareALSA()
@@ -354,10 +403,7 @@ AudioHardwareALSA::~AudioHardwareALSA()
 
 status_t AudioHardwareALSA::initCheck()
 {
-    if (!mALSADevice)
-        return NO_INIT;
-
-    return NO_ERROR;
+    return mStatus;
 }
 
 status_t AudioHardwareALSA::setVoiceVolume(float v)
