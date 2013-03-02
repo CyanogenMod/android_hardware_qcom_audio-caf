@@ -110,6 +110,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mObserver           = NULL;
     mOutputMetadataLength = 0;
     mSkipEOS            = false;
+    mTunnelMode         = false;
 
     if(devices == 0) {
         ALOGE("No output device specified");
@@ -231,7 +232,9 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
         }
         mOutputMetadataLength = sizeof(output_metadata_handle_t);
         ALOGD("openAudioSessionDevice - mOutputMetadataLength = %d", mOutputMetadataLength);
+        mTunnelMode = true;
     }
+
     if(use_case) {
         free(use_case);
         use_case = NULL;
@@ -317,11 +320,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 
     mEmptyQueue.erase(it);
 
-    memset(buf.memBuf, 0, mAlsaHandle->handle->period_size);
-    if((!strncmp(mAlsaHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
-            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
-            (!strncmp(mAlsaHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
+    if (mTunnelMode) {
         updateMetaData(bytes);
 
         memcpy(buf.memBuf, &mOutputMetadataTunnel, mOutputMetadataLength);
@@ -351,6 +350,17 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     }
     ALOGV("PCM write before memcpy start");
     memcpy((buf.memBuf + mOutputMetadataLength), buffer, bytes);
+
+    //memset the remaining to 0, only for non-tunnel
+    if (!mTunnelMode) {
+        // zero out the remaining for silence
+        size_t freebytes = (mAlsaHandle->handle->period_size
+                                - (mOutputMetadataLength + bytes));
+        if ((ssize_t)freebytes > 0) { //this is a partial buffer
+            memset((buf.memBuf + mOutputMetadataLength + bytes), 0, freebytes);
+        }
+    }
+
     buf.bytesToWrite = bytes;
 
     //2.) Write the buffer to the Driver
@@ -366,7 +376,8 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                 mAlsaHandle->handle->start = 1;
             }
         }
-        mReachedEOS = true;
+
+        if (!mTunnelMode) mReachedEOS = true;
     }
 
     mFilledQueue.push_back(buf);
@@ -868,6 +879,22 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
         snd_use_case_set(mUcMgr, "_enamod", useCase);
     }
 
+    //Set Tunnel or LPA bit if the playback over usb is tunnel or Lpa
+    if((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
+        (devices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)){
+        if((!strcmp(useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+           (!strcmp(useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
+            ALOGV("doRouting: LPA device switch to proxy");
+            mParent->startUsbPlaybackIfNotStarted();
+            mParent->musbPlaybackState |= USBPLAYBACKBIT_LPA;
+        } else if((!strcmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+            (!strcmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+            ALOGD("doRouting: Tunnel Player device switch to proxy");
+            mParent->startUsbPlaybackIfNotStarted();
+            mParent->musbPlaybackState |= USBPLAYBACKBIT_TUNNEL;
+        }
+   }
+
     status = mAlsaDevice->open(&alsa_handle);
     if(status != NO_ERROR) {
         ALOGE("Could not open the ALSA device for use case %s", alsa_handle.useCase);
@@ -1022,7 +1049,8 @@ status_t AudioSessionOutALSA::drainAndPostEOS_l()
         int ret = ioctl(mAlsaHandle->handle->fd, SNDRV_COMPRESS_DRAIN);
         mLock.lock();
 
-        if (ret < 0 ) {
+        if (ret < 0) {
+            ret = -errno;
             ALOGE("Audio Drain failed with errno %s", strerror(errno));
             switch (ret) {
             case -EINTR: //interrupted by flush

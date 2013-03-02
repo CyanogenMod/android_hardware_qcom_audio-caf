@@ -317,7 +317,6 @@ private:
     status_t setHardwareParams(alsa_handle_t *handle);
     int      deviceName(alsa_handle_t *handle, unsigned flags, char **value);
     status_t setSoftwareParams(alsa_handle_t *handle);
-    bool     platform_is_Fusion3();
     status_t getMixerControl(const char *name, unsigned int &value, int index = 0);
     status_t getMixerControlExt(const char *name, unsigned **getValues, unsigned *count);
     status_t setMixerControl(const char *name, unsigned int value, int index = -1);
@@ -630,6 +629,7 @@ private:
 
     //event fd to signal the EOS and Kill from the userspace
     int mEfd;
+    bool mTunnelMode;
 
 public:
     bool mRouteAudioToA2dp;

@@ -1238,22 +1238,8 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
         mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mDeviceList.end();
         it--;
-        ALOGD("it->useCase %s", it->useCase);
-        mALSADevice->route(&(*it), devices, mode());
-        if(!strcmp(it->useCase, SND_USE_CASE_VERB_HIFI2)) {
-            snd_use_case_set(mUcMgr, "_verb", SND_USE_CASE_VERB_HIFI2 );
-        } else {
-            snd_use_case_set(mUcMgr, "_enamod", SND_USE_CASE_MOD_PLAY_MUSIC2);
-        }
-        ALOGD("channels: %d", AudioSystem::popCount(*channels));
-        err = mALSADevice->open(&(*it));
-
-        if (err) {
-            ALOGE("Device open failed err:%d",err);
-        } else {
-            out = new AudioStreamOutALSA(this, &(*it));
-            err = out->set(format, channels, sampleRate, devices);
-        }
+        out = new AudioStreamOutALSA(this, &(*it));
+        err = out->set(format, channels, sampleRate, devices);
         if (status) *status = err;
         return out;
     } else {
@@ -2352,12 +2338,14 @@ status_t AudioHardwareALSA::openExtOutput(int device) {
             ALOGE("openA2DPOutput failed = %d",err);
             return err;
         }
-    } else if (device & AUDIO_DEVICE_OUT_ALL_USB) {
+        mExtOutStream = mA2dpStream;
+    } else if (device & AudioSystem::DEVICE_OUT_ALL_USB) {
         err= openUsbOutput();
         if(err) {
-        ALOGE("openUsbPOutput failed = %d",err);
-        return err;
+            ALOGE("openUsbPOutput failed = %d",err);
+            return err;
         }
+        mExtOutStream = mUsbStream;
     }
     return err;
 }
