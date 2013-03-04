@@ -30,15 +30,13 @@ extern "C" {
 #ifdef QCOM_CSDCLIENT_ENABLED
 static int (*csd_disable_device)();
 static int (*csd_enable_device)(int, int, uint32_t);
-static int (*csd_volume)(int);
-static int (*csd_mic_mute)(int);
-static int (*csd_wide_voice)(uint8_t);
-static int (*csd_slow_talk)(uint8_t);
-static int (*csd_fens)(uint8_t);
-static int (*csd_start_voice)();
-static int (*csd_stop_voice)();
-static int (*csd_client_volume)(int);
-static int (*csd_client_mic_mute)(int);
+static int (*csd_volume)(uint32_t, int);
+static int (*csd_mic_mute)(uint32_t, int);
+static int (*csd_wide_voice)(uint32_t, uint8_t);
+static int (*csd_slow_talk)(uint32_t, uint8_t);
+static int (*csd_fens)(uint32_t, uint8_t);
+static int (*csd_start_voice)(uint32_t);
+static int (*csd_stop_voice)(uint32_t);
 #endif
 #ifdef QCOM_ACDB_ENABLED
 static int (*acdb_loader_get_ecrx_device)(int acdb_id);
@@ -125,7 +123,8 @@ static bool isPlatformFusion3() {
     char platform[128], baseband[128];
     property_get("ro.board.platform", platform, "");
     property_get("ro.baseband", baseband, "");
-    if (!strcmp("msm8960", platform) && !strcmp("mdm", baseband))
+    if (!strcmp("msm8960", platform) &&
+        (!strcmp("mdm", baseband) || !strcmp("sglte2", baseband)))
         return true;
     else
         return false;
@@ -545,7 +544,7 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
 #ifdef QCOM_CSDCLIENT_ENABLED
     if (isPlatformFusion3() && (inCallDevSwitch == true)) {
         if (csd_disable_device == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_client_disable_device", dlerror());
+            ALOGE("csd_client_disable_device is NULL");
         } else {
             err = csd_disable_device();
             if (err < 0)
@@ -671,7 +670,7 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
                 }
             }
         } else {
-            ALOGE("dlsym:Error:%s Loading acdb_loader_get_ecrx_device", dlerror());
+            ALOGE("acdb_loader_get_ecrx_device is NULL");
         }
     }
 #endif
@@ -697,7 +696,7 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
 #ifdef QCOM_CSDCLIENT_ENABLED
         if (isPlatformFusion3()) {
             if (csd_enable_device == NULL) {
-                ALOGE("dlsym:Error:%s Loading csd_client_enable_device", dlerror());
+                ALOGE("csd_client_enable_device is NULL");
             } else {
                 int adjustedFlags = adjustFlagsForCsd(mDevSettingsFlag,
                         mCurRxUCMDevice);
@@ -957,7 +956,7 @@ status_t ALSADevice::startVoipCall(alsa_handle_t *handle)
      return NO_ERROR;
 }
 
-status_t ALSADevice::startVoiceCall(alsa_handle_t *handle)
+status_t ALSADevice::startVoiceCall(alsa_handle_t *handle, uint32_t vsid)
 {
     char* devName = NULL;
     unsigned flags = 0;
@@ -1056,19 +1055,19 @@ status_t ALSADevice::startVoiceCall(alsa_handle_t *handle)
         goto Error;
     }
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
         if (csd_start_voice == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_client_start_voice", dlerror());
+            ALOGE("csd_client_start_voice is NULL");
         } else {
-            err = csd_start_voice();
+            err = csd_start_voice(vsid);
             if (err < 0){
                 ALOGE("s_start_voice_call: csd_client error %d\n", err);
                 goto Error;
             }
         }
-#endif
     }
+#endif
 
     if (devName) {
         free(devName);
@@ -1082,7 +1081,7 @@ Error:
         free(devName);
         devName = NULL;
     }
-    close(handle);
+    close(handle, vsid);
     return NO_INIT;
 }
 
@@ -1234,29 +1233,33 @@ status_t ALSADevice::start(alsa_handle_t *handle)
     return err;
 }
 
-status_t ALSADevice::close(alsa_handle_t *handle)
+status_t ALSADevice::close(alsa_handle_t *handle, uint32_t vsid)
 {
     int ret;
     status_t err = NO_ERROR;
-     struct pcm *h = handle->rxHandle;
+    struct pcm *h = handle->rxHandle;
 
     handle->rxHandle = 0;
     ALOGD("close: handle %p h %p", handle, h);
     if (h) {
-        if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_VOICECALL) ||
-             !strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_VOICE)) &&
-            isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+        if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_VOICECALL) ||
+             !strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_VOICE)) ||
+            (!strcmp(handle->useCase, SND_USE_CASE_VERB_VOLTE) ||
+             !strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_VOLTE)) ||
+            (!strcmp(handle->useCase, SND_USE_CASE_VERB_VOICE2) ||
+             !strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_VOICE2)) &&
+            isPlatformFusion3()) {
             if (csd_stop_voice == NULL) {
-                ALOGE("dlsym:Error:%s Loading csd_client_disable_device", dlerror());
+                ALOGE("csd_client_disable_device is NULL");
             } else {
-                err = csd_stop_voice();
+                err = csd_stop_voice(vsid);
                 if (err < 0) {
                     ALOGE("s_close: csd_client error %d\n", err);
                 }
             }
-#endif
         }
+#endif
         ALOGV("close rxHandle\n");
         err = pcm_close(h);
         if(err != NO_ERROR) {
@@ -1834,45 +1837,65 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
 void ALSADevice::setVoiceVolume(int vol)
 {
     int err = 0;
+
     ALOGD("setVoiceVolume: volume %d", vol);
     setMixerControl("Voice Rx Volume", vol, 0);
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
         if (csd_volume == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_client_volume", dlerror());
+            ALOGE("csd_client_volume is NULL");
         } else {
-            err = csd_volume(vol);
+            err = csd_volume(ALL_SESSION_VSID, vol);
             if (err < 0) {
                 ALOGE("s_set_voice_volume: csd_client error %d", err);
             }
         }
-#endif
     }
+#endif
 }
 
 void ALSADevice::setVoice2Volume(int vol)
 {
     int err = 0;
+
     ALOGD("setVoice2Volume: volume %d", vol);
     setMixerControl("Voice2 Rx Volume", vol, 0);
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
-        err = csd_client_volume(vol);
-        if (err < 0) {
-            ALOGE("setVoice2Volume: csd_client error %d", err);
+    if (isPlatformFusion3()) {
+        if (csd_volume == NULL) {
+            ALOGE("csd_client_volume is NULL");
+        } else {
+            err = csd_volume(ALL_SESSION_VSID, vol);
+            if (err < 0) {
+                ALOGE("s_set_voice_volume: csd_client error %d", err);
+            }
         }
-#endif
     }
+#endif
 }
 
 void ALSADevice::setVoLTEVolume(int vol)
 {
+    int err = 0;
+
     ALOGD("setVoLTEVolume: volume %d", vol);
     setMixerControl("VoLTE Rx Volume", vol, 0);
-}
 
+#ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
+        if (csd_volume == NULL) {
+            ALOGE("csd_client_volume is NULL");
+        } else {
+            err = csd_volume(ALL_SESSION_VSID, vol);
+            if (err < 0) {
+                ALOGE("s_set_voice_volume: csd_client error %d", err);
+            }
+        }
+    }
+#endif
+}
 
 void ALSADevice::setVoipVolume(int vol)
 {
@@ -1883,43 +1906,65 @@ void ALSADevice::setVoipVolume(int vol)
 void ALSADevice::setMicMute(int state)
 {
     int err = 0;
+
     ALOGD("setMicMute: state %d", state);
     setMixerControl("Voice Tx Mute", state, 0);
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
         if (csd_mic_mute == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_mic_mute", dlerror());
+            ALOGE("csd_mic_mute is NULL");
         } else {
-            err=csd_mic_mute(state);
+            err = csd_mic_mute(ALL_SESSION_VSID, state);
             if (err < 0) {
                 ALOGE("s_set_mic_mute: csd_client error %d", err);
             }
         }
-#endif
     }
+#endif
 }
 
 void ALSADevice::setVoice2MicMute(int state)
 {
     int err = 0;
+
     ALOGD("setVoice2MicMute: state %d", state);
     setMixerControl("Voice2 Tx Mute", state, 0);
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
-        err = csd_client_mic_mute(state);
-        if (err < 0) {
-            ALOGE("setVoice2MicMute: csd_client error %d", err);
+    if (isPlatformFusion3()) {
+        if (csd_mic_mute == NULL) {
+            ALOGE("csd_mic_mute is NULL");
+        } else {
+            err = csd_mic_mute(ALL_SESSION_VSID, state);
+            if (err < 0) {
+                ALOGE("s_set_mic_mute: csd_client error %d", err);
+            }
         }
-#endif
+
     }
+#endif
 }
 
 void ALSADevice::setVoLTEMicMute(int state)
 {
+    int err = 0;
+
     ALOGD("setVolteMicMute: state %d", state);
     setMixerControl("VoLTE Tx Mute", state, 0);
+
+#ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
+        if (csd_mic_mute == NULL) {
+            ALOGE("csd_mic_mute is NULL");
+        } else {
+            err = csd_mic_mute(ALL_SESSION_VSID, state);
+            if (err < 0) {
+                ALOGE("s_set_mic_mute: csd_client error %d", err);
+            }
+        }
+    }
+#endif
 }
 
 void ALSADevice::setVoipMicMute(int state)
@@ -1930,8 +1975,9 @@ void ALSADevice::setVoipMicMute(int state)
 
 void ALSADevice::setVoipConfig(int mode, int rate)
 {
-    ALOGD("setVoipConfig: mode %d,rate %d", mode, rate);
     char** setValues;
+    ALOGD("setVoipConfig: mode %d,rate %d", mode, rate);
+
     setValues = (char**)malloc(2*sizeof(char*));
     if (setValues == NULL) {
           return;
@@ -1964,7 +2010,7 @@ void ALSADevice::setBtscoRate(int rate)
     mBtscoSamplerate = rate;
 }
 
-void ALSADevice::enableWideVoice(bool flag)
+void ALSADevice::enableWideVoice(bool flag, uint32_t vsid)
 {
     int err = 0;
 
@@ -1975,18 +2021,18 @@ void ALSADevice::enableWideVoice(bool flag)
         setMixerControl("Widevoice Enable", 0, 0);
     }
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
         if (csd_wide_voice == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_wide_voice", dlerror());
+            ALOGE("csd_wide_voice is NULL");
         } else {
-            err = csd_wide_voice(flag);
+            err = csd_wide_voice(vsid, flag);
             if (err < 0) {
                 ALOGE("enableWideVoice: csd_client_wide_voice error %d", err);
             }
         }
-#endif
     }
+#endif
 }
 
 void ALSADevice::setVocRecMode(uint8_t mode)
@@ -1995,7 +2041,7 @@ void ALSADevice::setVocRecMode(uint8_t mode)
     setMixerControl("Incall Rec Mode", mode, 0);
 }
 
-void ALSADevice::enableFENS(bool flag)
+void ALSADevice::enableFENS(bool flag, uint32_t vsid)
 {
     int err = 0;
 
@@ -2006,21 +2052,21 @@ void ALSADevice::enableFENS(bool flag)
         setMixerControl("FENS Enable", 0, 0);
     }
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
         if (csd_fens == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_fens", dlerror());
+            ALOGE("csd_fens is NULL");
         } else {
-            err = csd_fens(flag);
+            err = csd_fens(vsid, flag);
             if (err < 0) {
                 ALOGE("s_enable_fens: csd_client error %d", err);
             }
         }
-#endif
     }
+#endif
 }
 
-void ALSADevice::enableSlowTalk(bool flag)
+void ALSADevice::enableSlowTalk(bool flag, uint32_t vsid)
 {
     int err = 0;
 
@@ -2031,18 +2077,18 @@ void ALSADevice::enableSlowTalk(bool flag)
         setMixerControl("Slowtalk Enable", 0, 0);
     }
 
-    if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3()) {
         if (csd_slow_talk == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_slow_talk", dlerror());
+            ALOGE("csd_slow_talk is NULL");
         } else {
-            err = csd_slow_talk(flag);
+            err = csd_slow_talk(vsid, flag);
             if (err < 0) {
                 ALOGE("s_enable_slow_talk: csd_client error %d", err);
             }
         }
-#endif
     }
+#endif
 }
 
 void ALSADevice::setFlags(uint32_t flags)
@@ -2628,17 +2674,24 @@ void  ALSADevice::setCsdHandle(void* handle)
     mcsd_handle = static_cast<void*>(handle);
     ALOGI("%s csd_handle: %p", __func__, mcsd_handle);
 
-    csd_disable_device = (int (*)())::dlsym(mcsd_handle,"csd_client_disable_device");
-    csd_enable_device = (int (*)(int,int,uint32_t))::dlsym(mcsd_handle,"csd_client_enable_device");
-    csd_start_voice = (int (*)())::dlsym(mcsd_handle,"csd_client_start_voice");
-    csd_stop_voice = (int (*)())::dlsym(mcsd_handle,"csd_client_stop_voice");
-    csd_volume = (int (*)(int))::dlsym(mcsd_handle,"csd_client_volume");
-    csd_mic_mute = (int (*)(int))::dlsym(mcsd_handle,"csd_client_mic_mute");
-    csd_wide_voice = (int (*)(uint8_t))::dlsym(mcsd_handle,"csd_client_wide_voice");
-    csd_fens = (int (*)(uint8_t))::dlsym(mcsd_handle,"csd_client_fens");
-    csd_slow_talk = (int (*)(uint8_t))::dlsym(mcsd_handle,"csd_client_slow_talk");
-    csd_client_volume = (int (*)(int))::dlsym(mcsd_handle,"csd_client_volume");
-    csd_client_mic_mute = (int (*)(int))::dlsym(mcsd_handle,"csd_client_mic_mute");
+    csd_disable_device = (int (*)())::dlsym(mcsd_handle,
+                                            "csd_client_disable_device");
+    csd_enable_device = (int (*)(int,int,uint32_t))::dlsym(mcsd_handle,
+                                                    "csd_client_enable_device");
+    csd_start_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
+                                                 "csd_client_start_voice");
+    csd_stop_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
+                                                "csd_client_stop_voice");
+    csd_volume = (int (*)(uint32_t, int))::dlsym(mcsd_handle,
+                                                 "csd_client_volume");
+    csd_mic_mute = (int (*)(uint32_t, int))::dlsym(mcsd_handle,
+                                                   "csd_client_mic_mute");
+    csd_wide_voice = (int (*)(uint32_t, uint8_t))::dlsym(mcsd_handle,
+                                                    "csd_client_wide_voice");
+    csd_fens = (int (*)(uint32_t, uint8_t))::dlsym(mcsd_handle,
+                                                   "csd_client_fens");
+    csd_slow_talk = (int (*)(uint32_t, uint8_t))::dlsym(mcsd_handle,
+                                                        "csd_client_slow_talk");
 }
 #endif
 
@@ -2649,7 +2702,8 @@ void  ALSADevice::setACDBHandle(void* handle)
     macdb_handle = static_cast<void*>(handle);
     ALOGI("%s ACDB_handle: %p", __func__, macdb_handle);
 
-    acdb_loader_get_ecrx_device = (int (*)(int))::dlsym(macdb_handle,"acdb_loader_get_ecrx_device");
+    acdb_loader_get_ecrx_device = (int (*)(int))::dlsym(macdb_handle,
+                                                "acdb_loader_get_ecrx_device");
 }
 #endif
 
