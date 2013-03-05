@@ -928,6 +928,18 @@ status_t AudioHardwareALSA::doRouting(int device)
     isRouted |= routeVoiceCall(device, newMode);
     isRouted |= routeVoice2Call(device, newMode);
 
+    if(((mCSCallActive == CS_ACTIVE) ||
+        (mVolteCallActive == CS_ACTIVE) ||
+        (mVoice2CallActive == CS_ACTIVE_SESSION2))&&
+       (mFusion3Platform == true) &&
+       (newMode == AudioSystem::MODE_RINGTONE)){
+      /* 1st voice call on hold but still the call state will be active as
+       * hold state is not propagated to audio stack, now if there is a MT
+       * call, then consider the MODE_IN_RINGTONE as MODE_IN_CALL
+       * */
+       ALOGE(" CS call active %d on fusion", mCSCallActive);
+      newMode = AudioSystem::MODE_IN_CALL;
+    }
     if(!isRouted) {
 #ifdef QCOM_USBAUDIO_ENABLED
         if(!(device & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET) &&
