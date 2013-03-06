@@ -1829,7 +1829,14 @@ status_t AudioHardwareALSA::dump(int fd, const Vector<String16>& args)
 size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, int channelCount)
 {
     size_t bufferSize = 0;
-    if (format == AUDIO_FORMAT_PCM_16_BIT) {
+    if (format == AUDIO_FORMAT_PCM_16_BIT
+#ifdef QCOM_AUDIO_FORMAT_ENABLED
+        || format == AUDIO_FORMAT_EVRC
+        || format == AUDIO_FORMAT_EVRCB
+        || format == AUDIO_FORMAT_EVRCWB
+#endif
+        || format == AUDIO_FORMAT_AMR_NB
+        || format == AUDIO_FORMAT_AMR_WB) {
         if(sampleRate == 8000 || sampleRate == 16000 || sampleRate == 32000) {
 #ifdef TARGET_8974
             bufferSize = DEFAULT_IN_BUFFER_SIZE;
@@ -1844,7 +1851,8 @@ size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, in
             bufferSize = 1024 * sizeof(int16_t) * channelCount;
         }
     } else {
-        ALOGE("getInputBufferSize bad format: %d", format);
+        bufferSize = DEFAULT_IN_BUFFER_SIZE * channelCount;
+        ALOGE("getInputBufferSize bad format: %x use default input buffersize:%d", format, bufferSize);
     }
     return bufferSize;
 }
