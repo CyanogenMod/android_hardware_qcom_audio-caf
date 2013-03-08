@@ -1016,7 +1016,7 @@ int pcm_set_channel_map(struct pcm *pcm, struct mixer *mixer,
     ALOGV("pcm_set_channel_map: control name:%s", control_name);
     ctl = mixer_get_control(mixer, control_name, 0);
     if(ctl == NULL) {
-        ALOGE(stderr, "Could not get the mixer control\n");
+        ALOGE("Could not get the mixer control\n");
         return -1;
     }
     mixer_ctl_set_value(ctl, max_channels, set_values);
