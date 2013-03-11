@@ -30,6 +30,7 @@ dist_libalsa_intf_DATA    = snd_soc_msm/snd_soc_msm \
                             snd_soc_msm/snd_soc_msm_2x_mpq \
                             snd_soc_msm/snd_soc_msm_2x_Fusion3 \
                             snd_soc_msm/snd_soc_msm_Sitar \
+                            snd_soc_msm/snd_soc_msm_Sitar_Sglte \
                             snd_soc_msm/snd_soc_msm_I2S \
                             snd_soc_msm/snd_soc_msm_auxpcm \
                             snd_soc_msm/snd_soc_msm_2x_auxpcm \
