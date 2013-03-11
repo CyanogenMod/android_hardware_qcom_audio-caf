@@ -659,6 +659,12 @@ int mixer_ctl_set(struct mixer_ctl *ctl, unsigned percent)
         memcpy(ev.value.iec958.status,iec958->status,SPDIF_CHANNEL_STATUS_SIZE);
         break;
     }
+    case SNDRV_CTL_ELEM_TYPE_ENUMERATED: {
+        for (n = 0; n < ctl->info->count; n++) {
+            ev.value.enumerated.item[n] = (unsigned int)percent;
+        }
+        break;
+    }
     default:
         errno = EINVAL;
         return errno;
