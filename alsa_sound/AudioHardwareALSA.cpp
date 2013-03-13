@@ -877,7 +877,7 @@ void AudioHardwareALSA::closeUSBRecording()
 void AudioHardwareALSA::closeUsbPlaybackIfNothingActive(){
     ALOGV("closeUsbPlaybackIfNothingActive, musbPlaybackState: %d", musbPlaybackState);
     if(!musbPlaybackState && mAudioUsbALSA != NULL) {
-        mAudioUsbALSA->exitPlaybackThread(SIGNAL_EVENT_TIMEOUT);
+        mAudioUsbALSA->exitPlaybackThread(SIGNAL_EVENT_KILLTHREAD);
     }
 }
 
@@ -885,7 +885,7 @@ void AudioHardwareALSA::closeUsbRecordingIfNothingActive(){
     ALOGV("closeUsbRecordingIfNothingActive, musbRecordingState: %d", musbRecordingState);
     if(!musbRecordingState && mAudioUsbALSA != NULL) {
         ALOGD("Closing USB Recording Session as no stream is active");
-        mAudioUsbALSA->setkillUsbRecordingThread(true);
+        mAudioUsbALSA->exitRecordingThread(SIGNAL_EVENT_KILLTHREAD);
     }
 }
 
