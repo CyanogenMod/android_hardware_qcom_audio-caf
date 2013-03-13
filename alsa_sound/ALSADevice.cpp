@@ -1398,10 +1398,10 @@ int ALSADevice::getUseCaseType(const char *useCase)
             MAX_LEN(useCase,SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE,
             MAX_LEN(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_SGLTECALL,
-            MAX_LEN(useCase, SND_USE_CASE_VERB_SGLTECALL)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_SGLTE,
-            MAX_LEN(useCase, SND_USE_CASE_MOD_PLAY_SGLTE)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_VOICE2,
+            MAX_LEN(useCase, SND_USE_CASE_VERB_VOICE2)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOICE2,
+            MAX_LEN(useCase, SND_USE_CASE_MOD_PLAY_VOICE2)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_VOLTE,
             MAX_LEN(useCase,SND_USE_CASE_VERB_VOLTE)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOLTE,
@@ -1851,17 +1851,17 @@ void ALSADevice::setVoiceVolume(int vol)
     }
 }
 
-void ALSADevice::setSGLTEVolume(int vol)
+void ALSADevice::setVoice2Volume(int vol)
 {
     int err = 0;
-    ALOGD("setSGLTEVolume: volume %d", vol);
-    setMixerControl("SGLTE Rx Volume", vol, 0);
+    ALOGD("setVoice2Volume: volume %d", vol);
+    setMixerControl("Voice2 Rx Volume", vol, 0);
 
     if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
         err = csd_client_volume(vol);
         if (err < 0) {
-            ALOGE("setSGLTEVolume: csd_client error %d", err);
+            ALOGE("setVoice2Volume: csd_client error %d", err);
         }
 #endif
     }
@@ -1900,17 +1900,17 @@ void ALSADevice::setMicMute(int state)
     }
 }
 
-void ALSADevice::setSGLTEMicMute(int state)
+void ALSADevice::setVoice2MicMute(int state)
 {
     int err = 0;
-    ALOGD("setSGLTEMicMute: state %d", state);
-    setMixerControl("SGLTE Tx Mute", state, 0);
+    ALOGD("setVoice2MicMute: state %d", state);
+    setMixerControl("Voice2 Tx Mute", state, 0);
 
     if (isPlatformFusion3()) {
 #ifdef QCOM_CSDCLIENT_ENABLED
         err = csd_client_mic_mute(state);
         if (err < 0) {
-            ALOGE("setSGLTEMicMute: csd_client error %d", err);
+            ALOGE("setVoice2MicMute: csd_client error %d", err);
         }
 #endif
     }
