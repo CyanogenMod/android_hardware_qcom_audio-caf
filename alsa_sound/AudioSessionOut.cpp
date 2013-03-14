@@ -234,10 +234,11 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
         } else {
             status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
         }
-        mOutputMetadataLength = sizeof(output_metadata_handle_t);
-        ALOGD("openAudioSessionDevice - mOutputMetadataLength = %d", mOutputMetadataLength);
         mTunnelMode = true;
     }
+
+    mOutputMetadataLength = sizeof(output_metadata_handle_t);
+    ALOGD("openAudioSessionDevice - mOutputMetadataLength = %d", mOutputMetadataLength);
 
     if(use_case) {
         free(use_case);
@@ -262,6 +263,14 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
     }
     ALOGV("buffer pointer %p ", mAlsaHandle->handle->addr);
 
+    //Set Meta data mode
+    if (type == LPA_MODE) {
+        status = setMetaDataMode();
+        if(status != NO_ERROR) {
+            return status;
+        }
+    }
+
     //4.) prepare the driver for playback and allocate the buffers
     status = pcm_prepare(mAlsaHandle->handle);
     if (status) {
@@ -276,7 +285,7 @@ status_t AudioSessionOutALSA::openAudioSessionDevice(int type, int devices)
 ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 {
     Mutex::Autolock autoLock(mLock);
-    int err;
+    int err = 0;
 
     ALOGV("write Empty Queue size() = %d, Filled Queue size() = %d "
           "mReached EOS %d, mEosEventReceived %d bytes %d",
@@ -311,46 +320,34 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 
     mEmptyQueue.erase(it);
 
-    if (mTunnelMode) {
-        updateMetaData(bytes);
+    updateMetaData(bytes);
 
-        memcpy(buf.memBuf, &mOutputMetadataTunnel, mOutputMetadataLength);
-        ALOGD("Copy Metadata = %d, bytes = %d", mOutputMetadataLength, bytes);
+    memcpy(buf.memBuf, &mOutputMetadataTunnel, mOutputMetadataLength);
+    ALOGD("buf.memBuf  =%x , Copy Metadata = %d,  bytes = %d", buf.memBuf,mOutputMetadataLength, bytes);
 
-        if (bytes == 0) {
-            buf.bytesToWrite = 0;
-            err = pcm_write(mAlsaHandle->handle, buf.memBuf, mAlsaHandle->handle->period_size);
+    if (bytes == 0) {
+        buf.bytesToWrite = 0;
+        err = pcm_write(mAlsaHandle->handle, buf.memBuf, mAlsaHandle->handle->period_size);
 
-            //bad part is !err does not guarantee pcm_write succeeded!
-            if (!err) { //mReachedEOS is already set
-                /*
-                 * This workaround is needed to ensure EOS from the event thread
-                 * is posted when the first (only) buffer given to the driver
-                 * is a zero length buffer. Note that the compressed driver
-                 * does not interrupt the timer fd if the EOS buffer was queued
-                 * after a buffer with valid data (full or partial). So we
-                 * only need to do this in this special case.
-                 */
-                if (mFilledQueue.empty()) {
-                    mFilledQueue.push_back(buf);
-                }
+        //bad part is !err does not guarantee pcm_write succeeded!
+        if (!err) { //mReachedEOS is already set
+             /*
+              * This workaround is needed to ensure EOS from the event thread
+              * is posted when the first (only) buffer given to the driver
+              * is a zero length buffer. Note that the compressed driver
+              * does not interrupt the timer fd if the EOS buffer was queued
+              * after a buffer with valid data (full or partial). So we
+              * only need to do this in this special case.
+              */
+            if (mFilledQueue.empty()) {
+                mFilledQueue.push_back(buf);
             }
-
-            return err;
         }
+
+        return err;
     }
     ALOGV("PCM write before memcpy start");
     memcpy((buf.memBuf + mOutputMetadataLength), buffer, bytes);
-
-    //memset the remaining to 0, only for non-tunnel
-    if (!mTunnelMode) {
-        // zero out the remaining for silence
-        size_t freebytes = (mAlsaHandle->handle->period_size
-                                - (mOutputMetadataLength + bytes));
-        if ((ssize_t)freebytes > 0) { //this is a partial buffer
-            memset((buf.memBuf + mOutputMetadataLength + bytes), 0, freebytes);
-        }
-    }
 
     buf.bytesToWrite = bytes;
 
@@ -370,7 +367,8 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
 
         if (!mTunnelMode) mReachedEOS = true;
     }
-
+    int32_t * Buf = (int32_t *) buf.memBuf;
+    ALOGD(" buf.memBuf [0] = %x , buf.memBuf [1] = %x",  Buf[0], Buf[1]);
     mFilledQueue.push_back(buf);
     return err;
 }
@@ -790,12 +788,12 @@ status_t AudioSessionOutALSA::getBufferInfo(buf_info **buf) {
     }
     buf_info *tempbuf = (buf_info *)malloc(sizeof(buf_info) + mInputBufferCount*sizeof(int *));
     ALOGV("Get buffer info");
-    tempbuf->bufsize = mAlsaHandle->handle->period_size;
+    tempbuf->bufsize = (mAlsaHandle->handle->period_size - mOutputMetadataLength);
     tempbuf->nBufs = mInputBufferCount;
     tempbuf->buffers = (int **)((char*)tempbuf + sizeof(buf_info));
     List<BuffersAllocated>::iterator it = mBufPool.begin();
     for (int i = 0; i < mInputBufferCount; i++) {
-        tempbuf->buffers[i] = (int *)it->memBuf;
+        tempbuf->buffers[i] = (int *)(((char *)it->memBuf) + mOutputMetadataLength);
         it++;
     }
     *buf = tempbuf;
@@ -1010,8 +1008,8 @@ void AudioSessionOutALSA::updateMetaData(size_t bytes) {
     mOutputMetadataTunnel.metadataLength = sizeof(mOutputMetadataTunnel);
     mOutputMetadataTunnel.timestamp = 0;
     mOutputMetadataTunnel.bufferLength =  bytes;
-    ALOGD("bytes = %d , mAlsaHandle->handle->period_size = %d ",
-            bytes, mAlsaHandle->handle->period_size);
+    ALOGD("bytes = %d , mAlsaHandle->handle->period_size = %d, metadata = %d ",
+            mOutputMetadataTunnel.bufferLength, mAlsaHandle->handle->period_size, mOutputMetadataTunnel.metadataLength);
 }
 
 status_t AudioSessionOutALSA::drainAndPostEOS_l()
@@ -1077,4 +1075,20 @@ status_t AudioSessionOutALSA::drainAndPostEOS_l()
     return OK;
 }
 
+status_t AudioSessionOutALSA::setMetaDataMode() {
+
+    status_t err = NO_ERROR;
+    //Call IOCTL
+    if(mAlsaHandle->handle && !mAlsaHandle->handle->start) {
+        err = ioctl(mAlsaHandle->handle->fd, SNDRV_COMPRESS_METADATA_MODE);
+        if(err < 0) {
+            ALOGE("ioctl Set metadata mode  failed = %d", err);
+        }
+    }
+    else {
+        ALOGE("ALSA pcm handle invalid / pcm driver already started");
+        err = INVALID_OPERATION;
+    }
+    return err;
+}
 }       // namespace android_audio_legacy
