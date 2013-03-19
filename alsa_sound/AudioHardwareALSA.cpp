@@ -37,6 +37,7 @@
 #include <cutils/properties.h>
 #include <media/AudioRecord.h>
 #include <hardware_legacy/power.h>
+#include <audio_utils/resampler.h>
 #include <pthread.h>
 
 #include "AudioHardwareALSA.h"
@@ -295,6 +296,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mUsbDevice = NULL;
     mUsbStream = NULL;
     mExtOutStream = NULL;
+    mResampler = NULL;
     mExtOutActiveUseCases = USECASE_NONE;
     mIsExtOutEnabled = false;
     mKillExtOutThread = false;
@@ -315,6 +317,10 @@ AudioHardwareALSA::~AudioHardwareALSA()
             it != mDeviceList.end(); ++it) {
         it->useCase[0] = 0;
         mDeviceList.erase(it);
+    }
+    if (mResampler) {
+        release_resampler(mResampler);
+        mResampler = NULL;
     }
 #ifdef QCOM_ACDB_ENABLED
      if (acdb_deallocate == NULL) {
@@ -674,10 +680,14 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     key = String8(MODE_CALL_KEY);
     if (param.getInt(key,state) == NO_ERROR) {
         if (mCallState != state) {
+            if(!((!(mCallState & 0xF) && ((state & 0xF) ==  CS_ACTIVE)) ||
+                 (!(mCallState & 0xF0) && ((state & 0xF0) == IMS_ACTIVE)) ||
+                 (!(mCallState & 0xF00) && ((state & 0xF00) == CS_ACTIVE_SESSION2)))) {
+                mCallState = state;
+                doRouting(0);
+            }
             mCallState = state;
-            doRouting(0);
         }
-        mCallState = state;
     }
     if (param.size()) {
         status = BAD_VALUE;
@@ -898,7 +908,9 @@ status_t AudioHardwareALSA::doRouting(int device)
                                     musbPlaybackState |= USBPLAYBACKBIT_TUNNEL;
                                     break;
                          } else if((!strcmp(it->useCase, SND_USE_CASE_VERB_VOICECALL)) ||
-                                   (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOICE))) {
+                                   (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOICE)) ||
+                                   (!strcmp(it->useCase, SND_USE_CASE_VERB_VOLTE)) ||
+                                   (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOLTE))) {
                                     ALOGV("doRouting: VOICE device switch to proxy");
                                     startUsbRecordingIfNotStarted();
                                     startUsbPlaybackIfNotStarted();
@@ -1817,7 +1829,14 @@ status_t AudioHardwareALSA::dump(int fd, const Vector<String16>& args)
 size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, int channelCount)
 {
     size_t bufferSize = 0;
-    if (format == AUDIO_FORMAT_PCM_16_BIT) {
+    if (format == AUDIO_FORMAT_PCM_16_BIT
+#ifdef QCOM_AUDIO_FORMAT_ENABLED
+        || format == AUDIO_FORMAT_EVRC
+        || format == AUDIO_FORMAT_EVRCB
+        || format == AUDIO_FORMAT_EVRCWB
+#endif
+        || format == AUDIO_FORMAT_AMR_NB
+        || format == AUDIO_FORMAT_AMR_WB) {
         if(sampleRate == 8000 || sampleRate == 16000 || sampleRate == 32000) {
 #ifdef TARGET_8974
             bufferSize = DEFAULT_IN_BUFFER_SIZE;
@@ -1832,7 +1851,8 @@ size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, in
             bufferSize = 1024 * sizeof(int16_t) * channelCount;
         }
     } else {
-        ALOGE("getInputBufferSize bad format: %d", format);
+        bufferSize = DEFAULT_IN_BUFFER_SIZE * channelCount;
+        ALOGE("getInputBufferSize bad format: %x use default input buffersize:%d", format, bufferSize);
     }
     return bufferSize;
 }
@@ -2498,6 +2518,7 @@ status_t AudioHardwareALSA::stopExtOutThread()
 void AudioHardwareALSA::switchExtOut(int device) {
 
     ALOGV("switchExtOut");
+    uint32_t sampleRate;
     Mutex::Autolock autolock1(mExtOutMutex);
     if (device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
         mExtOutStream = mA2dpStream;
@@ -2505,6 +2526,37 @@ void AudioHardwareALSA::switchExtOut(int device) {
         mExtOutStream = mUsbStream;
     } else {
         mExtOutStream = NULL;
+    }
+    if (mExtOutStream == mUsbStream) {
+        sampleRate = mExtOutStream->common.get_sample_rate(&mExtOutStream->common);
+        if (sampleRate > AFE_PROXY_SAMPLE_RATE) {
+            ALOGW(" Requested samplerate %d is greater than supported so fall back to %d ",
+                  sampleRate,AFE_PROXY_SAMPLE_RATE);
+            sampleRate = AFE_PROXY_SAMPLE_RATE;
+        }
+        if (mResampler != NULL) {
+            release_resampler(mResampler);
+            mResampler = NULL;
+        }
+        if (sampleRate != AFE_PROXY_SAMPLE_RATE) {
+            mResampler = (struct resampler_itfe *)calloc(1, sizeof(struct resampler_itfe));
+            if (mResampler != NULL ) {
+                status_t err = create_resampler(AFE_PROXY_SAMPLE_RATE,
+                                                sampleRate,
+                                                2, //channel count
+                                                RESAMPLER_QUALITY_DEFAULT,
+                                                NULL,
+                                                &mResampler);
+                ALOGV(" sampleRate %d mResampler %p",sampleRate,mResampler);
+                if (err) {
+                    ALOGE(" Failed to create resampler");
+                    free(mResampler);
+                    mResampler = NULL;
+                }
+            } else{
+                ALOGE(" Failed to allocate memory for mResampler = %p",mResampler);
+            }
+        }
     }
 }
 
@@ -2540,12 +2592,12 @@ void AudioHardwareALSA::extOutThreadFunc() {
     void  *data;
     int err = NO_ERROR;
     ssize_t size = 0;
+    void * outbuffer= malloc(AFE_PROXY_PERIOD_SIZE);
 
     mALSADevice->resetProxyVariables();
 
     ALOGV("mKillExtOutThread = %d", mKillExtOutThread);
     while(!mKillExtOutThread) {
-
         {
             Mutex::Autolock autolock1(mExtOutMutex);
             if (mKillExtOutThread) {
@@ -2583,12 +2635,26 @@ void AudioHardwareALSA::extOutThreadFunc() {
         void *copyBuffer = data;
         numBytesRemaining = size;
         proxyBufferTime = mALSADevice->mProxyParams.mBufferTime;
+        {
+            Mutex::Autolock autolock1(mExtOutMutex);
+            if (mResampler != NULL) {
+                uint32_t inFrames = size/(AFE_PROXY_CHANNEL_COUNT*2);
+                uint32_t outFrames = inFrames;
+                mResampler->resample_from_input(mResampler,
+                                               (int16_t *)data,
+                                               &inFrames,
+                                               (int16_t *)outbuffer,
+                                               &outFrames);
+                copyBuffer = outbuffer;
+                numBytesRemaining = outFrames*(AFE_PROXY_CHANNEL_COUNT*2);
+                ALOGV("inFrames %d outFrames %d",inFrames,outFrames);
+            }
+        }
         while (err == OK && (numBytesRemaining  > 0) && !mKillExtOutThread
                 && mIsExtOutEnabled ) {
             {
                 Mutex::Autolock autolock1(mExtOutMutex);
                 if(mExtOutStream != NULL ) {
-
                     bytesAvailInBuffer = mExtOutStream->common.get_buffer_size(&mExtOutStream->common);
                     uint32_t writeLen = bytesAvailInBuffer > numBytesRemaining ?
                                     numBytesRemaining : bytesAvailInBuffer;

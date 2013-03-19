@@ -1423,21 +1423,14 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
         uint32_t device2 = AUDIO_DEVICE_NONE;
         if (mForceUse[AudioSystem::FOR_MEDIA] != AudioSystem::FORCE_SPEAKER) {
             if (strategy != STRATEGY_SONIFICATION) {
+#ifdef QCOM_PROXY_DEVICE_ENABLED
+                // no sonification on WFD sink
+                device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_PROXY;
+#else
                 // no sonification on remote submix (e.g. WFD)
                 device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_REMOTE_SUBMIX;
-            }
-#ifdef QCOM_PROXY_DEVICE_ENABLED
-            //handle proxy device begin
-            if ((device2 == AUDIO_DEVICE_NONE) ||
-                (device2 == AUDIO_DEVICE_OUT_REMOTE_SUBMIX)) {
-                device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_PROXY;
-                if(device2 != 0) {
-                    ALOGV("getDeviceForStrategy() STRATEGY_MEDIA use DEVICE_OUT_PROXY:%x",device2);
-                    // No combo device allowed with proxy device
-                    device = 0;
-                }
-            }
 #endif
+            }
             if ((device2 == AUDIO_DEVICE_NONE) &&
                     (mForceUse[AudioSystem::FOR_MEDIA] != AudioSystem::FORCE_NO_BT_A2DP) &&
                     !mA2dpSuspended) {
@@ -1510,6 +1503,10 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             device |= AUDIO_DEVICE_OUT_FM;
         }
 #endif
+        if (isInCall()) {
+            // when in call, get the device for Phone strategy
+            device = getDeviceForStrategy(STRATEGY_PHONE, false /*fromCache*/);
+        }
 
         } break;
 

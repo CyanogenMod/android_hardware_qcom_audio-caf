@@ -70,7 +70,8 @@ LOCAL_SHARED_LIBRARIES := \
     libhardware \
     libc        \
     libpower    \
-    libalsa-intf
+    libalsa-intf \
+    libaudioutils
 
 #    libsurround_proc
 
@@ -87,6 +88,7 @@ LOCAL_C_INCLUDES += hardware/libhardware/include
 LOCAL_C_INCLUDES += hardware/libhardware_legacy/include
 LOCAL_C_INCLUDES += frameworks/base/include
 LOCAL_C_INCLUDES += system/core/include
+LOCAL_C_INCLUDES += system/media/audio_utils/include
 
 LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
