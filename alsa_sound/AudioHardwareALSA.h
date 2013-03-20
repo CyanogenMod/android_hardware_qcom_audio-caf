@@ -308,6 +308,7 @@ public:
 #endif
 
     bool mSSRComplete;
+    int mCurDevice;
 protected:
     friend class AudioHardwareALSA;
 private:
