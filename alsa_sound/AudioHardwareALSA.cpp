@@ -699,6 +699,10 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     if (param.get(key, value) == NO_ERROR) {
         if (mA2dpDevice != NULL) {
             mA2dpDevice->set_parameters(mA2dpDevice,keyValuePairs);
+            if(value=="true"){
+                 uint32_t activeUsecase = getExtOutActiveUseCases_l();
+                 status_t err = suspendPlaybackOnExtOut_l(activeUsecase);
+            }
         }
         param.remove(key);
     }
