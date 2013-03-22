@@ -202,6 +202,14 @@ static int USBRECBIT_FM = (1 << 3);
 /* Rear right of center. */
 #define PCM_CHANNEL_RRC  16
 
+#define SOUND_CARD_SLEEP_RETRY 5  /*  Will check 5 times before continuing */
+#define SOUND_CARD_SLEEP_WAIT 100 /* 100 ms */
+
+#define VOICE_SESSION_VSID   0x01
+#define VOLTE_SESSION_VSID   0x02
+#define VOICE2_SESSION_VSID  0x03
+#define ALL_SESSION_VSID     0x04
+
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
 class ALSADevice;
@@ -266,10 +274,10 @@ public:
     virtual ~ALSADevice();
 //    status_t init(alsa_device_t *module, ALSAHandleList &list);
     status_t open(alsa_handle_t *handle);
-    status_t close(alsa_handle_t *handle);
+    status_t close(alsa_handle_t *handle, uint32_t vsid = 0);
     status_t standby(alsa_handle_t *handle);
     status_t route(alsa_handle_t *handle, uint32_t devices, int mode);
-    status_t startVoiceCall(alsa_handle_t *handle);
+    status_t startVoiceCall(alsa_handle_t *handle, uint32_t vsid = 0);
     status_t startVoipCall(alsa_handle_t *handle);
     status_t startFm(alsa_handle_t *handle);
     void     setVoiceVolume(int volume);
@@ -280,17 +288,17 @@ public:
     status_t setFmVolume(int vol);
     void     setBtscoRate(int rate);
     status_t setLpaVolume(int vol);
-    void     enableWideVoice(bool flag);
-    void     enableFENS(bool flag);
+    void     enableWideVoice(bool flag, uint32_t vsid = 0);
+    void     enableFENS(bool flag, uint32_t vsid = 0);
     void     setFlags(uint32_t flag);
     status_t setCompressedVolume(int vol);
     status_t setChannelMap(alsa_handle_t *handle, int maxChannels);
-    void     enableSlowTalk(bool flag);
+    void     enableSlowTalk(bool flag, uint32_t vsid = 0);
     void     setVocRecMode(uint8_t mode);
     void     setVoLTEMicMute(int state);
     void     setVoLTEVolume(int vol);
-    void     setSGLTEMicMute(int state);
-    void     setSGLTEVolume(int vol);
+    void     setVoice2MicMute(int state);
+    void     setVoice2Volume(int vol);
     status_t setEcrxDevice(char *device);
     void     setInChannels(int);
     //TODO:check if this needs to be public
@@ -712,11 +720,6 @@ private:
     unsigned int        mFramesLost;
     AudioSystem::audio_in_acoustics mAcoustics;
 
-#ifdef QCOM_CSDCLIENT_ENABLED
-    int start_csd_record(int param);
-    int stop_csd_record();
-#endif
-
 #ifdef QCOM_SSR_ENABLED
     // Function to read coefficients from files.
     status_t            readCoeffsFromFile();
@@ -867,11 +870,13 @@ protected:
 #endif
     void                setInChannels(int device);
 
-    void                disableVoiceCall(char* verb, char* modifier, int mode, int device);
-    void                enableVoiceCall(char* verb, char* modifier, int mode, int device);
-    bool                routeVoiceCall(int device, int	newMode);
+    void                disableVoiceCall(char* verb, char* modifier, int mode, int device,
+                                         uint32_t vsid = 0);
+    void                enableVoiceCall(char* verb, char* modifier, int mode, int device,
+                                        uint32_t vsid = 0);
+    bool                routeVoiceCall(int device, int newMode);
     bool                routeVoLTECall(int device, int newMode);
-    bool                routeSGLTECall(int device, int newMode);
+    bool                routeVoice2Call(int device, int newMode);
     friend class AudioSessionOutALSA;
     friend class AudioStreamOutALSA;
     friend class AudioStreamInALSA;
@@ -902,7 +907,7 @@ protected:
     bool                mMicMute;
     int mCSCallActive;
     int mVolteCallActive;
-    int mSGLTECallActive;
+    int mVoice2CallActive;
     int mCallState;
     int mIsFmActive;
     bool mBluetoothVGS;
@@ -943,6 +948,7 @@ protected:
       USECASE_FM = 0x10,
     };
     uint32_t mExtOutActiveUseCases;
+    status_t mStatus;
 
 public:
     bool mRouteAudioToExtOut;

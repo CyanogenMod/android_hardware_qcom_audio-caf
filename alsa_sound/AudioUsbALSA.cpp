@@ -1,6 +1,6 @@
 /* AudioUsbALSA.cpp
 
-Copyright (c) 2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -260,12 +260,18 @@ status_t AudioUsbALSA::getCap(char * type, int &channels, int &sampleRate)
 
 void AudioUsbALSA::exitPlaybackThread(uint64_t writeVal)
 {
-    ALOGD("exitPlaybackThread, mproxypfdPlayback: %d", mproxypfdPlayback);
-    mkillPlayBackThread = true;
-    if ((mproxypfdPlayback != -1) && (musbpfdPlayback != -1)) {
-        write(mproxypfdPlayback, &writeVal, sizeof(uint64_t));
-        write(musbpfdPlayback, &writeVal, sizeof(uint64_t));
-        pthread_join(mPlaybackUsb,NULL);
+    {
+        Mutex::Autolock autoLock(mLock);
+        ALOGD("exitPlaybackThread, mproxypfdPlayback: %d", mproxypfdPlayback);
+        mkillPlayBackThread = true;
+        if ((mproxypfdPlayback != -1) && (musbpfdPlayback != -1)) {
+            write(mproxypfdPlayback, &writeVal, sizeof(uint64_t));
+            write(musbpfdPlayback, &writeVal, sizeof(uint64_t));
+        }
+    }
+    if(mPlaybackUsb) {
+        status_t ret = pthread_join(mPlaybackUsb,NULL);
+        ALOGE("return for pthreadjoin = %d", ret);
         mPlaybackUsb = NULL;
     }
     if (writeVal == SIGNAL_EVENT_KILLTHREAD) {
@@ -866,85 +872,81 @@ void AudioUsbALSA::PlaybackThreadEntry() {
 
     int proxySizeRemaining = 0;
     int usbSizeFilled = 0;
+    int usbframes = 0;
+    u_int8_t *proxybuf = NULL;
+    u_int8_t *usbbuf = NULL;
 
     pid_t tid  = gettid();
     androidSetThreadPriority(tid, ANDROID_PRIORITY_URGENT_AUDIO);
 
-    err = getCap((char *)"Playback:", mchannelsPlayback, msampleRatePlayback);
-    if (err) {
-        ALOGE("ERROR: Could not get playback capabilities from usb device");
-        return;
-    }
 
-    musbPlaybackHandle = configureDevice(PCM_OUT|PCM_STEREO|PCM_MMAP, (char *)"hw:1,0",
+    {
+        Mutex::Autolock autoLock(mLock);
+
+        err = getCap((char *)"Playback:", mchannelsPlayback, msampleRatePlayback);
+        if (err) {
+            ALOGE("ERROR: Could not get playback capabilities from usb device");
+            return;
+        }
+        musbPlaybackHandle = configureDevice(PCM_OUT|PCM_STEREO|PCM_MMAP, (char *)"hw:1,0",
                                          msampleRatePlayback, mchannelsPlayback, USB_PERIOD_SIZE, true);
-    if (!musbPlaybackHandle) {
-        ALOGE("ERROR: configureUsbDevice failed, returning");
-        {
-            Mutex::Autolock autoLock(mLock);
-            err = closeDevice(musbPlaybackHandle);
-            if(err == OK) {
-                musbPlaybackHandle = NULL;
-            }
+        if (!musbPlaybackHandle || mkillPlayBackThread) {
+            ALOGE("ERROR: configureUsbDevice failed, returning");
+            return;
+        } else {
+           ALOGD("USB Configured for playback");
         }
-        return;
-    } else {
-        ALOGD("USB Configured for playback");
-    }
 
-    if (!mkillPlayBackThread) {
-        pfdUsbPlayback[0].fd = musbPlaybackHandle->timer_fd;
-        pfdUsbPlayback[0].events = POLLIN;
-        musbpfdPlayback = eventfd(0,0);
-        pfdUsbPlayback[1].fd = musbpfdPlayback;
-        pfdUsbPlayback[1].events = (POLLIN | POLLOUT | POLLERR | POLLNVAL | POLLHUP);
-    }
+        if (!mkillPlayBackThread) {
+            pfdUsbPlayback[0].fd = musbPlaybackHandle->timer_fd;
+            pfdUsbPlayback[0].events = POLLIN;
+            musbpfdPlayback = eventfd(0,0);
+            pfdUsbPlayback[1].fd = musbpfdPlayback;
+            pfdUsbPlayback[1].events = (POLLIN | POLLOUT | POLLERR | POLLNVAL | POLLHUP);
+        }
 
-    mproxyPlaybackHandle = configureDevice(PCM_IN|PCM_STEREO|PCM_MMAP, (char *)"hw:0,8",
+        mproxyPlaybackHandle = configureDevice(PCM_IN|PCM_STEREO|PCM_MMAP, (char *)"hw:0,8",
                                msampleRatePlayback, mchannelsPlayback, PROXY_PERIOD_SIZE, false);
-    if (!mproxyPlaybackHandle) {
-        ALOGE("ERROR: Could not configure Proxy, returning");
-        {
-            Mutex::Autolock autoLock(mLock);
-            err = closeDevice(musbPlaybackHandle);
-            if(err == OK) {
-                musbPlaybackHandle = NULL;
-            }
+        if (!mproxyPlaybackHandle || mkillPlayBackThread) {
+           ALOGE("ERROR: Could not configure Proxy, returning");
+           err = closeDevice(musbPlaybackHandle);
+           if(err == OK) {
+              musbPlaybackHandle = NULL;
+           }
+           return;
+        } else {
+            ALOGD("Proxy Configured for playback");
         }
-        return;
-    } else {
-        ALOGD("Proxy Configured for playback");
+
+        proxyPeriod = mproxyPlaybackHandle->period_size;
+        usbPeriod = musbPlaybackHandle->period_size;
+
+        if (!mkillPlayBackThread) {
+            pfdProxyPlayback[0].fd = mproxyPlaybackHandle->fd;
+            pfdProxyPlayback[0].events = (POLLIN);                                 // | POLLERR | POLLNVAL);
+            mproxypfdPlayback = eventfd(0,0);
+            pfdProxyPlayback[1].fd = mproxypfdPlayback;
+            pfdProxyPlayback[1].events = (POLLIN | POLLERR | POLLNVAL);
+        }
+
+        frames = (mproxyPlaybackHandle->flags & PCM_MONO) ? (proxyPeriod / 2) : (proxyPeriod / 4);
+        x.frames = (mproxyPlaybackHandle->flags & PCM_MONO) ? (proxyPeriod / 2) : (proxyPeriod / 4);
+        usbframes = (musbPlaybackHandle->flags & PCM_MONO) ? (usbPeriod / 2) : (usbPeriod / 4);
+
+        proxybuf = ( u_int8_t *) malloc(PROXY_PERIOD_SIZE);
+        usbbuf = ( u_int8_t *) malloc(USB_PERIOD_SIZE);
+
+        if (proxybuf == NULL || usbbuf == NULL) {
+            ALOGE("ERROR: Unable to allocate USB audio buffer(s): proxybuf=%p, usbbuf=%p",
+                  proxybuf, usbbuf);
+            /* Don't run the playback loop if we failed to allocate either of these buffers.
+            If either pointer is non-NULL they'll be freed after the end of the loop. */
+           mkillPlayBackThread = true;
+        } else {
+            memset(proxybuf, 0x0, PROXY_PERIOD_SIZE);
+            memset(usbbuf, 0x0, USB_PERIOD_SIZE);
+        }
     }
-
-    proxyPeriod = mproxyPlaybackHandle->period_size;
-    usbPeriod = musbPlaybackHandle->period_size;
-
-    if (!mkillPlayBackThread) {
-        pfdProxyPlayback[0].fd = mproxyPlaybackHandle->fd;
-        pfdProxyPlayback[0].events = (POLLIN);                                 // | POLLERR | POLLNVAL);
-        mproxypfdPlayback = eventfd(0,0);
-        pfdProxyPlayback[1].fd = mproxypfdPlayback;
-        pfdProxyPlayback[1].events = (POLLIN | POLLERR | POLLNVAL);
-    }
-
-    frames = (mproxyPlaybackHandle->flags & PCM_MONO) ? (proxyPeriod / 2) : (proxyPeriod / 4);
-    x.frames = (mproxyPlaybackHandle->flags & PCM_MONO) ? (proxyPeriod / 2) : (proxyPeriod / 4);
-    int usbframes = (musbPlaybackHandle->flags & PCM_MONO) ? (usbPeriod / 2) : (usbPeriod / 4);
-
-    u_int8_t *proxybuf = ( u_int8_t *) malloc(PROXY_PERIOD_SIZE);
-    u_int8_t *usbbuf = ( u_int8_t *) malloc(USB_PERIOD_SIZE);
-
-    if (proxybuf == NULL || usbbuf == NULL) {
-        ALOGE("ERROR: Unable to allocate USB audio buffer(s): proxybuf=%p, usbbuf=%p",
-              proxybuf, usbbuf);
-        /* Don't run the playback loop if we failed to allocate either of these buffers.
-           If either pointer is non-NULL they'll be freed after the end of the loop. */
-        mkillPlayBackThread = true;
-    } else {
-        memset(proxybuf, 0x0, PROXY_PERIOD_SIZE);
-        memset(usbbuf, 0x0, USB_PERIOD_SIZE);
-    }
-
     /***********************keep reading from proxy and writing to USB******************************************/
     while (mkillPlayBackThread != true) {
         if (!mproxyPlaybackHandle->running) {
