@@ -1565,12 +1565,6 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
     // update stream volumes according to new device
     applyStreamVolumes(output, device, delayMs);
 
-#ifdef QCOM_FM_ENABLED
-    //if changing from a combined headset + speaker + FM  route, unmute media streams
-    if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM)
-        muteWaitMs = checkDeviceMuteStrategies(outputDesc, prevDevice, delayMs);
-#endif
-
     return muteWaitMs;
 }
 
