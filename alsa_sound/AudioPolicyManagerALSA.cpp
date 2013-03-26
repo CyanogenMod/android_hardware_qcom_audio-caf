@@ -209,14 +209,13 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
             if (state == AudioSystem::DEVICE_STATE_AVAILABLE) {
                 ALOGV("setDeviceConnectionState() changeRefCount Inc");
                 mOutputs.valueFor(mPrimaryOutput)->changeRefCount(AudioSystem::FM, 1);
+                newDevice = (audio_devices_t)(AudioPolicyManagerBase::getNewDevice(mPrimaryOutput, false) | AUDIO_DEVICE_OUT_FM);
             }
             else {
                 ALOGV("setDeviceConnectionState() changeRefCount Dec");
                 mOutputs.valueFor(mPrimaryOutput)->changeRefCount(AudioSystem::FM, -1);
             }
-            if(newDevice == 0){
-                newDevice = getDeviceForStrategy(STRATEGY_MEDIA, false);
-            }
+
             AudioParameter param = AudioParameter();
             param.addInt(String8(AudioParameter::keyHandleFm), (int)newDevice);
             ALOGV("setDeviceConnectionState() setParameters handle_fm");
@@ -1380,7 +1379,6 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
         }
 #ifdef QCOM_FM_ENABLED
         if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
-            device |= AUDIO_DEVICE_OUT_FM;
             if (mForceUse[AudioSystem::FOR_MEDIA] == AudioSystem::FORCE_SPEAKER) {
                 device &= ~(AUDIO_DEVICE_OUT_WIRED_HEADSET);
                 device &= ~(AUDIO_DEVICE_OUT_WIRED_HEADPHONE);
@@ -1496,11 +1494,6 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_SPEAKER;
         }
 
-#ifdef QCOM_FM_ENABLED
-        if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
-            device |= AUDIO_DEVICE_OUT_FM;
-        }
-#endif
         if (isInCall()) {
             // when in call, get the device for Phone strategy
             device = getDeviceForStrategy(STRATEGY_PHONE, false /*fromCache*/);
