@@ -737,7 +737,7 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     unsigned flags = 0;
     int err = NO_ERROR;
 
-    if(handle->devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+    if(mCurDevice & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
         err = setHDMIChannelCount();
         if(err != OK) {
             ALOGE("setHDMIChannelCount err = %d", err);

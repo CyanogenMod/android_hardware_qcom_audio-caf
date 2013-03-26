@@ -908,6 +908,8 @@ status_t AudioHardwareALSA::doRouting(int device)
     int newMode = mode();
     bool isRouted = false;
 
+    if(device)
+        mALSADevice->mCurDevice = device;
     if ((device == AudioSystem::DEVICE_IN_VOICE_CALL)
 #ifdef QCOM_FM_ENABLED
         || (device == AudioSystem::DEVICE_IN_FM_RX)
