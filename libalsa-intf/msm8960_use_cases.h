@@ -75,9 +75,8 @@ extern "C" {
 #define DEVICE_DUALMIC_HANDSET_TX_ENDFIRE_FV5_ACDB_ID   41
 #define DEVICE_SPEAKER_TX_FV5_ACDB_ID                   42
 #define DEVICE_DUALMIC_SPEAKER_TX_ENDFIRE_FV5_ACDB_ID   43
-#define DEVICE_INCALL_VOICE_RECORD_STEREO_ACDB_ID       45
-#define DEVICE_INCALL_MUSIC_DELIVERY_MONO_ACDB_ID       46
-#define DEVICE_INCALL_VOICE_RECORD_MONO_ACDB_ID         47
+#define DEVICE_USB_RX_ACDB_ID                           45// USB_Rx
+#define DEVICE_USB_TX_ACDB_ID                           44// USB_Tx
 #define DEVICE_CAMCORDER_TX_ACDB_ID                     61// CAMCORDER_TX
 #define DEVICE_VOICE_RECOGNITION_ACDB_ID                62// VOICE_RECOGNITION
 
@@ -186,6 +185,7 @@ static const char *card_list[] = {
     "snd_soc_msm_2x_mpq",
     "snd_soc_msm_2x_Fusion3",
     "snd_soc_msm_Sitar",
+    "snd_soc_msm_Sitar_Sglte",
     "snd_soc_msm_I2S",
     "snd_soc_msm_Taiko",
     "snd_soc_msm_Taiko_CDP",
@@ -207,6 +207,7 @@ static card_mapping_t card_mapping_list[] = {
     {"snd_soc_msm_2x_mpq", 0},
     {"snd_soc_msm_2x_Fusion3", 0},
     {"snd_soc_msm_Sitar", 0},
+    {"snd_soc_msm_Sitar_Sglte", 0},
     {"snd_soc_msm_I2S", 0},
     {"snd_soc_msm_Taiko", 0},
     {"snd_soc_msm_Taiko_CDP", 0},
@@ -239,6 +240,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_VERB_HIFI3       "HiFi3"
 #define SND_USE_CASE_VERB_HIFI_TUNNEL2    "HiFi Tunnel2"
 #define SND_USE_CASE_VERB_HIFI_PSEUDO_TUNNEL    "HiFi Pseudo Tunnel"
+#define SND_USE_CASE_VERB_VOICE2             "Voice2"
 
 #define SND_USE_CASE_DEV_FM_TX           "FM Tx"
 #define SND_USE_CASE_DEV_ANC_HEADSET     "ANC Headset"
@@ -324,6 +326,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_MOD_PLAY_TUNNEL1     "Play Tunnel1"
 #define SND_USE_CASE_MOD_PLAY_TUNNEL2     "Play Tunnel2"
 #define SND_USE_CASE_MOD_PSEUDO_TUNNEL     "Pseudo Tunnel"
+#define SND_USE_CASE_MOD_PLAY_VOICE2             "Play Voice2"
 
 
 /* List utility functions for maintaining enabled devices and modifiers */
