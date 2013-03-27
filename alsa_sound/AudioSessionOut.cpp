@@ -727,12 +727,7 @@ status_t AudioSessionOutALSA::standby()
     // At this point, all the buffers with the driver should be
     // flushed.
     status_t err = NO_ERROR;
-    mLock.lock();
-    if( !mAlsaHandle->handle->start) {
-        ALOGV("drain from destructor which will flush the buffers");
-        drain();
-    }
-    mLock.unlock();
+    flush();
     mAlsaHandle->module->standby(mAlsaHandle);
     if (mParent->mRouteAudioToExtOut) {
          ALOGD("Standby - stopPlaybackOnExtOut_l - mUseCase = %d",mUseCase);
