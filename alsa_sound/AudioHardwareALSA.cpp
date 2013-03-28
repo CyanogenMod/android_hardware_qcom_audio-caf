@@ -2115,10 +2115,11 @@ void AudioHardwareALSA::disableVoiceCall(char* verb, char* modifier, int mode,
 #endif
 }
 
-void AudioHardwareALSA::enableVoiceCall(char* verb, char* modifier, int mode,
-                                        int device, uint32_t vsid)
+status_t AudioHardwareALSA::enableVoiceCall(char* verb, char* modifier, int mode,
+                                            int device, uint32_t vsid)
 {
     // Start voice call
+    status_t status;
     unsigned long bufferSize = DEFAULT_VOICE_BUFFER_SIZE;
     alsa_handle_t alsa_handle;
     char *use_case;
@@ -2155,7 +2156,17 @@ void AudioHardwareALSA::enableVoiceCall(char* verb, char* modifier, int mode,
     } else {
         snd_use_case_set(mUcMgr, "_enamod", modifier);
     }
-    mALSADevice->startVoiceCall(&(*it), vsid);
+
+    status = mALSADevice->startVoiceCall(&(*it), vsid);
+
+    if (status == NO_ERROR) {
+        ALOGV("AudioHardwareAlsa: voice call succesfully started");
+    }
+    else {
+        ALOGE("AudioHardwareAlsa: voice call setup was unsuccesfull");
+        mDeviceList.erase(it);
+        return NO_INIT;
+    }
 
 #ifdef QCOM_USBAUDIO_ENABLED
     if((device & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
@@ -2166,6 +2177,8 @@ void AudioHardwareALSA::enableVoiceCall(char* verb, char* modifier, int mode,
        musbRecordingState |= USBRECBIT_VOICECALL;
     }
 #endif
+
+    return NO_ERROR;
 }
 
 bool AudioHardwareALSA::isAnyCallActive() {
@@ -2183,9 +2196,11 @@ bool AudioHardwareALSA::isAnyCallActive() {
 
 bool AudioHardwareALSA::routeVoiceCall(int device, int newMode)
 {
+
+    int err = 0;
     int csCallState = mCallState&0xF;
     bool isRouted = false;
-    int err = 0;
+    status_t status;
 
  switch (csCallState) {
     case CS_INACTIVE:
@@ -2204,12 +2219,19 @@ bool AudioHardwareALSA::routeVoiceCall(int device, int newMode)
         if (mCSCallActive == CS_INACTIVE) {
             ALOGD("doRouting: Enabling CS voice call voice_vsid:%d ",
                   VOICE_SESSION_VSID);
-
-            enableVoiceCall((char *)SND_USE_CASE_VERB_VOICECALL,
-                            (char *)SND_USE_CASE_MOD_PLAY_VOICE,
-                            newMode, device, VOICE_SESSION_VSID);
-            isRouted = true;
-            mCSCallActive = CS_ACTIVE;
+            status = enableVoiceCall((char *)SND_USE_CASE_VERB_VOICECALL,
+                                   (char *)SND_USE_CASE_MOD_PLAY_VOICE,
+                                   newMode, device, VOICE_SESSION_VSID);
+            if (status == NO_INIT) {
+                 ALOGV("doRouting: voice call setup was unsuccesfull");
+                 isRouted = false;
+                 mCSCallActive = CS_INACTIVE;
+            }
+            else {
+                 ALOGV("doRouting: voice call setup was succesfull");
+                 isRouted = true;
+                 mCSCallActive = CS_ACTIVE;
+            }
         } else if (mCSCallActive == CS_HOLD) {
             ALOGD("doRouting: Resume voice call from hold state");
 
@@ -2285,12 +2307,13 @@ bool AudioHardwareALSA::routeVoiceCall(int device, int newMode)
 
 bool AudioHardwareALSA::routeVoice2Call(int device, int newMode)
 {
+
     int Voice2CallState = mCallState&0xF00;
     bool isRouted = false;
+    status_t status;
     int err = 0;
-
  switch (Voice2CallState) {
-        case CS_INACTIVE_SESSION2:
+    case CS_INACTIVE_SESSION2:
         if (mVoice2CallActive != CS_INACTIVE_SESSION2) {
             ALOGV("doRouting: Disabling voice call session2");
             disableVoiceCall((char *)SND_USE_CASE_VERB_VOICE2,
@@ -2302,14 +2325,21 @@ bool AudioHardwareALSA::routeVoice2Call(int device, int newMode)
     break;
     case CS_ACTIVE_SESSION2:
         if (mVoice2CallActive == CS_INACTIVE_SESSION2) {
-            ALOGD("doRouting: Enabling CS voice call session2"\
-                  "voice2_vsid:%d",VOICE2_SESSION_VSID);
-
-            enableVoiceCall((char *)SND_USE_CASE_VERB_VOICE2,
-                            (char *)SND_USE_CASE_MOD_PLAY_VOICE2,
-                            newMode, device, VOICE2_SESSION_VSID);
-            isRouted = true;
-            mVoice2CallActive = CS_ACTIVE_SESSION2;
+            ALOGV("doRouting: Enabling CS voice call session2, voice2_vsid: %d",
+                   VOICE2_SESSION_VSID);
+            status = enableVoiceCall((char *)SND_USE_CASE_VERB_VOICE2,
+                                   (char *)SND_USE_CASE_MOD_PLAY_VOICE2,
+                                   newMode, device, VOICE2_SESSION_VSID);
+            if (status == NO_INIT) {
+                ALOGV("doRouting: SGLTE  call setup was unsuccesfull");
+                isRouted = false;
+                mVoice2CallActive = CS_INACTIVE_SESSION2;
+            }
+            else {
+                ALOGV("doRouting: SGLTE call setup was succesfull");
+                isRouted = true;
+                mVoice2CallActive = CS_ACTIVE_SESSION2;
+           }
         } else if (mVoice2CallActive == CS_HOLD_SESSION2) {
              ALOGV("doRouting: Resume voice call session2 from hold state");
              ALSAHandleList::iterator vt_it;
@@ -2384,10 +2414,11 @@ bool AudioHardwareALSA::routeVoice2Call(int device, int newMode)
 
 bool AudioHardwareALSA::routeVoLTECall(int device, int newMode)
 {
+
     int volteCallState = mCallState&0xF0;
     bool isRouted = false;
+    status_t status;
     int err = 0;
-
  switch (volteCallState) {
     case IMS_INACTIVE:
         if (mVolteCallActive != IMS_INACTIVE) {
@@ -2402,14 +2433,22 @@ bool AudioHardwareALSA::routeVoLTECall(int device, int newMode)
     break;
     case IMS_ACTIVE:
         if (mVolteCallActive == IMS_INACTIVE) {
-            ALOGD("doRouting: Enabling IMS voice call, volte_vsid:%d ",
-                  VOLTE_SESSION_VSID);
-            enableVoiceCall((char *)SND_USE_CASE_VERB_VOLTE,
-                            (char *)SND_USE_CASE_MOD_PLAY_VOLTE,
-                            newMode, device, VOLTE_SESSION_VSID);
-            isRouted = true;
-            mVolteCallActive = IMS_ACTIVE;
-        } else if (mVolteCallActive == IMS_HOLD) {
+            ALOGD("doRouting: Enabling IMS voice call,volte_vsid:%d ",
+                   VOLTE_SESSION_VSID);
+            status = enableVoiceCall((char *)SND_USE_CASE_VERB_VOLTE,
+                                   (char *)SND_USE_CASE_MOD_PLAY_VOLTE,
+                                   newMode, device, VOLTE_SESSION_VSID);
+            if (status == NO_INIT) {
+                ALOGV("doRouting: Volte  call setup was unsuccesfull");
+                isRouted = false;
+                mVolteCallActive = IMS_INACTIVE;
+            }
+            else {
+                ALOGV("doRouting: Volte call setup was succesfull");
+                isRouted = true;
+                mVolteCallActive = IMS_ACTIVE;
+           }
+         } else if (mVolteCallActive == IMS_HOLD) {
              ALOGD("doRouting: Resume IMS call from hold state");
              ALSAHandleList::iterator vt_it;
              for(vt_it = mDeviceList.begin();
