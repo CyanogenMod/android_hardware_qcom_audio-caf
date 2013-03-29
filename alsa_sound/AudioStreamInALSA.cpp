@@ -38,8 +38,8 @@
 
 extern "C" {
 #ifdef QCOM_CSDCLIENT_ENABLED
-static int (*csd_start_record)(int);
-static int (*csd_stop_record)(void);
+static int (*csd_start_record)(uint32_t, int);
+static int (*csd_stop_record)(uint32_t);
 #endif
 #ifdef QCOM_SSR_ENABLED
 #include "surround_filters_interface.h"
@@ -112,6 +112,14 @@ AudioStreamInALSA::AudioStreamInALSA(AudioHardwareALSA *parent,
         }
     }
 #endif
+#ifdef QCOM_CSDCLIENT_ENABLED
+    if (mParent->mCsdHandle != NULL) {
+        csd_start_record = (int (*)(uint32_t, int))::dlsym(mParent->mCsdHandle,
+                                                      "csd_client_start_record");
+        csd_stop_record = (int (*)(uint32_t))::dlsym(mParent->mCsdHandle,
+                                                "csd_client_stop_record");
+    }
+#endif
 }
 
 AudioStreamInALSA::~AudioStreamInALSA()
@@ -133,12 +141,12 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
     int n;
     status_t          err;
     size_t            read = 0;
-    char *use_case;
+    char              *use_case;
     int newMode = mParent->mode();
 
     if((mHandle->handle == NULL) && (mHandle->rxHandle == NULL) &&
-         (strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) &&
-         (strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+        (strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) &&
+        (strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
         mParent->mLock.lock();
         snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
         if ((use_case != NULL) && (strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
@@ -152,7 +160,11 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                         mParent->mALSADevice->setVocRecMode(INCALL_REC_STEREO);
                         strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE,
                                 sizeof(mHandle->useCase));
-                        start_csd_record(INCALL_REC_STEREO);
+                        if (csd_start_record == NULL) {
+                            ALOGE("csd_start_record is NULL");
+                        } else {
+                            csd_start_record(ALL_SESSION_VSID, INCALL_REC_STEREO);
+                        }
                     } else
 #endif
                     {
@@ -170,7 +182,11 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                         mParent->mALSADevice->setVocRecMode(INCALL_REC_MONO);
                         strlcpy(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE,
                                 sizeof(mHandle->useCase));
-                        start_csd_record(INCALL_REC_MONO);
+                        if (csd_start_record == NULL) {
+                            ALOGE("csd_start_record is NULL");
+                        } else {
+                            csd_start_record(ALL_SESSION_VSID, INCALL_REC_MONO);
+                        }
                     } else
 #endif
                     {
@@ -210,10 +226,16 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                     (mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_DNLINK)) {
 #ifdef QCOM_CSDCLIENT_ENABLED
                     if (mParent->mFusion3Platform) {
+                        ALOGD("AudioStreamInALSA: check useCase: %s", mHandle->useCase);
                         mParent->mALSADevice->setVocRecMode(INCALL_REC_STEREO);
                         strlcpy(mHandle->useCase, SND_USE_CASE_VERB_INCALL_REC,
                                 sizeof(mHandle->useCase));
-                        start_csd_record(INCALL_REC_STEREO);
+                       if (csd_start_record == NULL) {
+                           ALOGE("csd_start_record is NULL");
+                       } else {
+                           csd_start_record(ALL_SESSION_VSID,
+                                            INCALL_REC_STEREO);
+                       }
                     } else
 #endif
                     {
@@ -228,10 +250,15 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                 } else if (mParent->mIncallMode & AUDIO_CHANNEL_IN_VOICE_DNLINK) {
 #ifdef QCOM_CSDCLIENT_ENABLED
                    if (mParent->mFusion3Platform) {
+                        ALOGD("AudioStreamInALSA: check useCase: %s", mHandle->useCase);
                        mParent->mALSADevice->setVocRecMode(INCALL_REC_MONO);
                        strlcpy(mHandle->useCase, SND_USE_CASE_VERB_INCALL_REC,
                                sizeof(mHandle->useCase));
-                       start_csd_record(INCALL_REC_MONO);
+                       if (csd_start_record == NULL) {
+                           ALOGE("csd_start_record is NULL");
+                       } else {
+                           csd_start_record(ALL_SESSION_VSID, INCALL_REC_MONO);
+                       }
                    } else
 #endif
                    {
@@ -576,7 +603,11 @@ status_t AudioStreamInALSA::close()
     if (mParent->mFusion3Platform) {
        if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_INCALL_REC)) ||
            (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE))) {
-           stop_csd_record();
+           if (csd_stop_record == NULL) {
+               ALOGE("csd_stop_record is NULL");
+           } else {
+               csd_stop_record(ALL_SESSION_VSID);
+           }
        }
     }
 #endif
@@ -641,14 +672,16 @@ status_t AudioStreamInALSA::standby()
         (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
          return NO_ERROR;
     }
-
 #ifdef QCOM_CSDCLIENT_ENABLED
     ALOGD("standby");
     if (mParent->mFusion3Platform) {
        if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_INCALL_REC)) ||
            (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_CAPTURE_VOICE))) {
-           ALOGD(" into standby, stop record");
-           stop_csd_record();
+           if (csd_stop_record == NULL) {
+               ALOGE("csd_stop_record is NULL");
+           } else {
+               csd_stop_record(ALL_SESSION_VSID);
+           }
        }
     }
 #endif
@@ -916,37 +949,6 @@ status_t AudioStreamInALSA::readCoeffsFromFile()
     fclose(flt4i);
 
     return NO_ERROR;
-}
-#endif
-
-#ifdef QCOM_CSDCLIENT_ENABLED
-int AudioStreamInALSA::start_csd_record(int param)
-{
-    int err = NO_ERROR;
-
-    if (mParent->mCsdHandle != NULL) {
-        csd_start_record = (int (*)(int))::dlsym(mParent->mCsdHandle,"csd_client_start_record");
-        if (csd_start_record == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_client_start_record", dlerror());
-        } else {
-            err = csd_start_record(param);
-        }
-    }
-    return err;
-}
-
-int AudioStreamInALSA::stop_csd_record()
-{
-    int err = NO_ERROR;
-    if (mParent->mCsdHandle != NULL) {
-        csd_stop_record = (int (*)())::dlsym(mParent->mCsdHandle,"csd_client_stop_record");
-        if (csd_start_record == NULL) {
-            ALOGE("dlsym:Error:%s Loading csd_client_start_record", dlerror());
-        } else {
-            csd_stop_record();
-        }
-    }
-    return err;
 }
 #endif
 
