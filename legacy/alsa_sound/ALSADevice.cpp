@@ -367,7 +367,11 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
                    format);
     param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
                    SNDRV_PCM_SUBFORMAT_STD);
+#ifdef SET_MIN_PERIOD_BYTES
+    param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, reqBuffSize);
+#else
     param_set_int(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, reqBuffSize);
+#endif
     //Setting number of periods to 4. If the system is loaded and record
     // obtain buffer is seen increase PCM_RECORD_PERIOD_COUNT to a value between 4-16.
     if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC,

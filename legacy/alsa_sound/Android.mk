@@ -74,6 +74,10 @@ endif
 #LOCAL_CFLAGS += -DSEPERATED_AUDIO_INPUT
 #endif
 
+ifeq ($(BOARD_AUDIO_EXPECTS_MIN_BUFFERSIZE),true)
+    LOCAL_CFLAGS += -DSET_MIN_PERIOD_BYTES
+endif
+
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
   AudioStreamOutALSA.cpp        \
