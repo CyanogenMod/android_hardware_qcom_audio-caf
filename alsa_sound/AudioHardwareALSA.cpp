@@ -1183,6 +1183,12 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
                    (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
                     ALOGD("openOutput:  it->rxHandle %d it->handle %d",it->rxHandle,it->handle);
                     voipstream_active = true;
+                    if(mVoipStreamCount >= 2)
+                    {
+                      ALOGE("Avoid creating multiple VoIP session ");
+                      if (status) *status = err;
+                      return NULL;
+                    }
                     break;
                 }
         }
@@ -1541,6 +1547,12 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
                    (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
                     ALOGD("openInput:  it->rxHandle %p it->handle %p",it->rxHandle,it->handle);
                     voipstream_active = true;
+                    if(mVoipStreamCount >= 2)
+                    {
+                      ALOGE("Avoid creating multiple VoIP session ");
+                      if (status) *status = err;
+                      return NULL;
+                    }
                     break;
                 }
         }
