@@ -778,7 +778,11 @@ status_t ALSADevice::open(alsa_handle_t *handle)
         (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
         ALOGV("LPA/tunnel use case");
         flags |= PCM_MMAP;
+
+#ifdef SET_PCM_DEBUG_FLAG
         flags |= DEBUG_ON;
+#endif
+
     } else if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOWLATENCY_MUSIC)) ||
@@ -2350,7 +2354,11 @@ status_t ALSADevice::openProxyDevice()
 {
     struct snd_pcm_hw_params *params = NULL;
     struct snd_pcm_sw_params *sparams = NULL;
-    int flags = (DEBUG_ON | PCM_MMAP| PCM_STEREO | PCM_IN);
+    int flags = (PCM_MMAP| PCM_STEREO | PCM_IN);
+
+#ifdef SET_PCM_DEBUG_FLAG
+    flags |= DEBUG_ON;
+#endif
 
     ALOGV("openProxyDevice");
     mProxyParams.mProxyPcmHandle = pcm_open(flags, PROXY_CAPTURE_DEVICE_NAME);
