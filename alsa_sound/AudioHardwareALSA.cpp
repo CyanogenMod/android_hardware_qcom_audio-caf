@@ -525,12 +525,12 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     if (param.get(key, value) == NO_ERROR) {
        if (value == "ONLINE") {
            ALOGV("ADSP online set SSRcomplete");
-           mALSADevice->mSSRComplete = true;
+           mALSADevice->mADSPState = ADSP_UP_AFTER_SSR;
            return status;
        }
        else if (value == "OFFLINE") {
            ALOGV("ADSP online re-set SSRcomplete");
-           mALSADevice->mSSRComplete = false;
+           mALSADevice->mADSPState = ADSP_DOWN;
            if ( mRouteAudioToExtOut==true) {
                ALOGV("ADSP offline close EXT output");
                uint32_t activeUsecase = getExtOutActiveUseCases_l();

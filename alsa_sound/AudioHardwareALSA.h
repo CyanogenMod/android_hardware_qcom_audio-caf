@@ -219,6 +219,13 @@ enum {
     INCALL_REC_STEREO,
 };
 
+/* ADSP States */
+enum {
+    ADSP_UP = 0x0,
+    ADSP_DOWN = 0x1,
+    ADSP_UP_AFTER_SSR = 0x2,
+};
+
 enum audio_call_mode {
     CS_INACTIVE   = 0x0,
     CS_ACTIVE     = 0x1,
@@ -315,7 +322,7 @@ public:
     void     setACDBHandle(void*);
 #endif
 
-    bool mSSRComplete;
+    int mADSPState;
 protected:
     friend class AudioHardwareALSA;
 private:
