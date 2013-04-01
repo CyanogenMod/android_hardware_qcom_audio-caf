@@ -2464,7 +2464,6 @@ status_t AudioHardwareALSA::startPlaybackOnExtOut_l(uint32_t activeUsecase) {
 
     ALOGV("startPlaybackOnExtOut_l::usecase = %d ", activeUsecase);
     status_t err = NO_ERROR;
-
     if (!mExtOutStream) {
         ALOGE("Unable to open ExtOut stream");
         return err;
@@ -2565,14 +2564,18 @@ status_t AudioHardwareALSA::openExtOutput(int device) {
             ALOGE("openA2DPOutput failed = %d",err);
             return err;
         }
-        mExtOutStream = mA2dpStream;
+        if(!mExtOutStream) {
+            mExtOutStream = mA2dpStream;
+        }
     } else if (device & AudioSystem::DEVICE_OUT_ALL_USB) {
         err= openUsbOutput();
         if(err) {
             ALOGE("openUsbPOutput failed = %d",err);
             return err;
         }
-        mExtOutStream = mUsbStream;
+        if(!mExtOutStream) {
+            mExtOutStream = mUsbStream;
+        }
     }
     return err;
 }
@@ -2582,14 +2585,17 @@ status_t AudioHardwareALSA::closeExtOutput(int device) {
     ALOGV("closeExtOutput");
     status_t err = NO_ERROR;
     Mutex::Autolock autolock1(mExtOutMutex);
-    mExtOutStream = NULL;
     if (device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
+        if(mExtOutStream == mA2dpStream)
+            mExtOutStream = NULL;
         err= closeA2dpOutput();
         if(err) {
             ALOGE("closeA2DPOutput failed = %d",err);
             return err;
         }
     } else if (device & AUDIO_DEVICE_OUT_ALL_USB) {
+        if(mExtOutStream == mUsbStream)
+            mExtOutStream = NULL;
         err= closeUsbOutput();
         if(err) {
             ALOGE("closeUsbPOutput failed = %d",err);
