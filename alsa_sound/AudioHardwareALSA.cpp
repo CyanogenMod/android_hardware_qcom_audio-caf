@@ -2049,6 +2049,7 @@ void AudioHardwareALSA::disableVoiceCall(char* verb, char* modifier, int mode,
         if((!strcmp(it->useCase, verb)) ||
            (!strcmp(it->useCase, modifier))) {
             ALOGV("Disabling voice call vsid:%d", vsid);
+            mALSADevice->setInChannels(0);
             mALSADevice->close(&(*it), vsid);
             mALSADevice->route(&(*it), (uint32_t)device, mode);
             mDeviceList.erase(it);
