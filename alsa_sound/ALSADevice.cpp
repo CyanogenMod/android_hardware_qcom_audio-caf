@@ -2087,8 +2087,10 @@ void ALSADevice::enableFENS(bool flag, uint32_t vsid)
     ALOGD("enableFENS: flag %d", flag);
     if(flag == true) {
         setMixerControl("FENS Enable", 1, 0);
+        setMixerControl("FENS_VOIP Enable", 1 , 0);
     } else {
         setMixerControl("FENS Enable", 0, 0);
+        setMixerControl("FENS_VOIP Enable", 0 , 0);
     }
 
 #ifdef QCOM_CSDCLIENT_ENABLED
