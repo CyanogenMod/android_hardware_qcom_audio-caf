@@ -901,7 +901,8 @@ protected:
     /* The flag holds all the audio related device settings from
      * Settings and Qualcomm Settings applications */
     uint32_t            mDevSettingsFlag;
-    uint32_t            mVoipStreamCount;
+    uint32_t            mVoipInStreamCount;
+    uint32_t            mVoipOutStreamCount;
     bool                mVoipMicMute;
     uint32_t            mVoipBitRate;
     uint32_t            mIncallMode;

@@ -57,16 +57,12 @@ ALSAStreamOps::~ALSAStreamOps()
 
     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
        (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-        if((mParent->mVoipStreamCount)) {
-            mParent->mVoipStreamCount--;
-            if(mParent->mVoipStreamCount > 0) {
-                ALOGD("ALSAStreamOps::close() Ignore");
-                return ;
-            }
-       }
-       mParent->mVoipStreamCount = 0;
-       mParent->mVoipMicMute = 0;
-       mParent->mVoipBitRate = 0;
+          if(mParent->mVoipInStreamCount^mParent->mVoipOutStreamCount) {
+              ALOGD("ALSAStreamOps::close() Ignore");
+              return ;
+          }
+          mParent->mVoipMicMute = 0;
+          mParent->mVoipBitRate = 0;
     }
     close();
 
@@ -438,11 +434,28 @@ uint32_t ALSAStreamOps::channels() const
 void ALSAStreamOps::close()
 {
     ALOGD("close");
+
+    bool found = false;
+    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
+            it != mParent->mDeviceList.end(); ++it) {
+        if (mHandle == &(*it)) {
+            found = true;
+            ALOGD("close() : Found mHandle %p, proceeding to close", mHandle);
+            break;
+        }
+    }
+
+    if(!found) {
+        ALOGW("close() : mHandle NOT found %p, exiting close", mHandle);
+        return;
+    }
+
     if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
        mParent->mVoipMicMute = false;
        mParent->mVoipBitRate = 0;
-       mParent->mVoipStreamCount = 0;
+       mParent->mVoipInStreamCount = 0;
+       mParent->mVoipOutStreamCount = 0;
     }
     mParent->mALSADevice->close(mHandle);
 }
