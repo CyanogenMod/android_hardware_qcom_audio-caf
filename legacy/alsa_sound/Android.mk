@@ -78,6 +78,10 @@ ifeq ($(BOARD_AUDIO_EXPECTS_MIN_BUFFERSIZE),true)
     LOCAL_CFLAGS += -DSET_MIN_PERIOD_BYTES
 endif
 
+ifeq ($(BOARD_HAVE_DOCK_USBAUDIO),true)
+  LOCAL_CFLAGS += -DDOCK_USBAUDIO_ENABLED
+endif
+
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
   AudioStreamOutALSA.cpp        \
