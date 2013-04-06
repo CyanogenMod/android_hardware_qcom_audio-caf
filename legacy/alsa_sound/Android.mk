@@ -70,9 +70,9 @@ endif
 # 1. Voice Recognition
 # 2. Camcording
 # 3. etc.
-#ifeq ($(strip $(BOARD_USES_SEPERATED_AUDIO_INPUT)),true)
-#LOCAL_CFLAGS += -DSEPERATED_AUDIO_INPUT
-#endif
+ifeq ($(strip $(BOARD_USES_SEPERATED_AUDIO_INPUT)),true)
+LOCAL_CFLAGS += -DSEPERATED_AUDIO_INPUT
+endif
 
 ifeq ($(BOARD_AUDIO_EXPECTS_MIN_BUFFERSIZE),true)
     LOCAL_CFLAGS += -DSET_MIN_PERIOD_BYTES
