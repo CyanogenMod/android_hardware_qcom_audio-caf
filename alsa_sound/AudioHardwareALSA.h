@@ -363,7 +363,7 @@ private:
     int mInChannels;
     bool mIsSglte;
 #ifdef SEPERATED_AUDIO_INPUT
-    int mInput_source
+    int mInputSource;
 #endif
 //   ALSAHandleList  *mDeviceList;
 
