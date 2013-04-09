@@ -1498,6 +1498,7 @@ char *ALSADevice::getUCMDeviceFromAcdbId(int acdb_id)
      switch(acdb_id) {
         case DEVICE_HANDSET_RX_ACDB_ID:
              return strdup(SND_USE_CASE_DEV_HANDSET);
+        case DEVICE_SPEAKER_MONO_RX_ACDB_ID:
         case DEVICE_SPEAKER_RX_ACDB_ID:
              return strdup(SND_USE_CASE_DEV_SPEAKER);
         case DEVICE_HEADSET_RX_ACDB_ID:
