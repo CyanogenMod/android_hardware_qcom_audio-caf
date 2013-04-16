@@ -4241,7 +4241,7 @@ ssize_t AudioHardware::AudioStreamInVoip::read( void* buffer, ssize_t bytes)
             return 0;
         }
 
-        struct msm_audio_mvs_frame audio_mvs_frame;
+        struct q5v2_msm_audio_mvs_frame audio_mvs_frame;
         audio_mvs_frame.frame_type = 0;
         while (count >= mBufferSize) {
             audio_mvs_frame.len = mBufferSize;
