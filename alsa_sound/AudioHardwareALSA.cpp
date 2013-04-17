@@ -1811,11 +1811,17 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
         if(sampleRate) {
             it->sampleRate = *sampleRate;
         }
+#ifdef CAF_LEGACY_INPUT_BUFFER_SIZE
+	if (6 == it->channels) {
+#endif
         if (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_REC, strlen(SND_USE_CASE_VERB_HIFI_REC))
             || !strncmp(it->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
             ALOGV("OpenInoutStream: getInputBufferSize sampleRate:%d format:%d, channels:%d", it->sampleRate,*format,it->channels);
             it->bufferSize = getInputBufferSize(it->sampleRate,*format,it->channels);
         }
+#ifdef CAF_LEGACY_INPUT_BUFFER_SIZE
+	}
+#endif
 
 #ifdef QCOM_SSR_ENABLED
         if (6 == it->channels) {
