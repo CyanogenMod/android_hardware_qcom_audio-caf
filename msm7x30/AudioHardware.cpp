@@ -776,7 +776,7 @@ AudioStreamIn* AudioHardware::openInputStream(
 
     AudioStreamIn *in;
     if((devices == AudioSystem::DEVICE_IN_COMMUNICATION)&& (*sampleRate == 8000)) {
-        ALOGE("Create Audio stream Voip \n");
+        ALOGV("Create Audio stream Voip \n");
         AudioStreamInVoip* inVoip = new AudioStreamInVoip();
         status_t lStatus = NO_ERROR;
         lStatus =  inVoip->set(this, devices, format, channels, sampleRate, acoustic_flags);
@@ -4224,7 +4224,7 @@ ssize_t AudioHardware::AudioStreamInVoip::read( void* buffer, ssize_t bytes)
         mState = AUDIO_INPUT_STARTED;
         bytes = 0;
     }else
-      ALOGE("AudioStreamInVoip::read : device is already open \n");
+      ALOGV("AudioStreamInVoip::read : device is already open \n");
 
 
     if(mFormat == AUDIO_HW_IN_FORMAT)
