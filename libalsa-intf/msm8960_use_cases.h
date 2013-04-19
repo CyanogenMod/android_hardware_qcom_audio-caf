@@ -121,6 +121,7 @@ typedef struct card_mctrl {
     int acdb_id;
     int capability;
     char *effects_mixer_ctl;
+    char *volume_mixer_ctl;
     char *ec_ref_rx_mixer_ctl;
 }card_mctrl_t;
 
@@ -359,6 +360,7 @@ static int snd_ucm_extract_effects_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_extract_ec_ref_rx_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_extract_dev_name(char *buf, char **dev_name);
 static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int count);
+static int snd_ucm_extract_volume_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_print(snd_use_case_mgr_t *uc_mgr);
 static void snd_ucm_free_mixer_list(snd_use_case_mgr_t **uc_mgr);
 #ifdef __cplusplus
