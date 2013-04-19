@@ -64,6 +64,7 @@ extern "C"
 #ifdef QCOM_ACDB_ENABLED
     static int (*acdb_init)();
     static void (*acdb_deallocate)();
+    static void (*acdb_send_audio_cal)(int, int);
 #endif
 #ifdef QCOM_CSDCLIENT_ENABLED
     static int (*csd_client_init)();
@@ -1963,6 +1964,8 @@ void AudioHardwareALSA::handleFm(int device)
 {
     int newMode = mode();
     uint32_t activeUsecase = USECASE_NONE;
+    char ident[70];
+    int tx_dev_id, capability;
 
     if(device & AUDIO_DEVICE_OUT_FM && mIsFmActive == 0) {
         // Start FM Radio on current active device
@@ -1994,6 +1997,33 @@ void AudioHardwareALSA::handleFm(int device)
         mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mDeviceList.end();
         it--;
+
+        // Get the FM device ACDB ID and capability
+        memset(&ident,0,sizeof(ident));
+        strlcpy(ident, "ACDBID/", sizeof(ident));
+        strlcat(ident, "FM TX PREPROC", sizeof(ident));
+        tx_dev_id = snd_use_case_get(alsa_handle.ucMgr, ident, NULL);
+
+        memset(&ident,0,sizeof(ident));
+        strlcpy(ident, "CAPABILITY/", sizeof(ident));
+        strlcat(ident, "FM TX PREPROC", sizeof(ident));
+        capability = snd_use_case_get(alsa_handle.ucMgr, ident, NULL);
+
+        if ((tx_dev_id < 0) || (capability < 0)) {
+            ALOGD("No pre-proc calibration applied on receiving FM stream\n");
+        } else {
+            if (mAcdbHandle == NULL) {
+                ALOGE("mAcdbHandle is NULL\n");
+            } else {
+                acdb_send_audio_cal =
+                    (void (*)(int, int))::dlsym(mAcdbHandle,"acdb_loader_send_audio_cal");
+                if (acdb_send_audio_cal == NULL) {
+                    ALOGE("acdb_send_audio_cal is NULL\n");
+                } else {
+                    acdb_send_audio_cal(tx_dev_id, capability);
+                }
+            }
+        }
         mALSADevice->route(&(*it), (uint32_t)device, newMode);
         if(!strcmp(it->useCase, SND_USE_CASE_VERB_DIGITAL_RADIO)) {
             snd_use_case_set(mUcMgr, "_verb", SND_USE_CASE_VERB_DIGITAL_RADIO);
