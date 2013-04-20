@@ -3660,6 +3660,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::set(
     }
     //mHardware->setMicMute_nosync(false);
     mState = AUDIO_INPUT_OPENED;
+    mHardware->set_mRecordState(true);
 
     if (!acoustic)
         return NO_ERROR;
