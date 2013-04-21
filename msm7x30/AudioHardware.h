@@ -355,6 +355,7 @@ protected:
 
 private:
 
+    status_t    doAudioRouteOrMuteHTC(uint32_t device);
     status_t    doAudioRouteOrMute(uint32_t device);
     status_t    setMicMute_nosync(bool state);
     status_t    checkMicMute();
@@ -691,7 +692,7 @@ private:
             uint32_t    mBluetoothIdRx;
             msm_bt_endpoint *mBTEndpoints;
             int         mNumBTEndpoints;
-            uint32_t    mVoiceVolume;
+            float       mVoiceVolume;
             int         mNoiseSuppressionState;
             bool        mRecordState;
             char        mCurDspProfile[22];
