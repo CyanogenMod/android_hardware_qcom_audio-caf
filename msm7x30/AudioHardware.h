@@ -31,9 +31,11 @@
 
 extern "C" {
 #include <linux/msm_audio.h>
-#include <linux/msm_audio_qcp.h>
 #include <linux/msm_audio_aac.h>
+#ifdef WITH_QCOM_SPEECH
+#include <linux/msm_audio_qcp.h>
 #include <linux/msm_audio_amrnb.h>
+#endif
 }
 
 namespace android_audio_legacy {
@@ -103,6 +105,7 @@ struct msm_audio_stats {
     uint32_t unused[3];
 };
 
+#ifdef WITH_QCOM_SPEECH
 /* AMR frame type definitions */
 typedef enum {
   AMRSUP_SPEECH_GOOD,          /* Good speech frame              */
@@ -209,6 +212,7 @@ typedef struct {
   int   len_c;
   unsigned short *class_c;
 } amrsup_frame_order_type;
+#endif
 
 struct msm_bt_endpoint {
     int tx;
@@ -236,6 +240,8 @@ enum tty_modes {
 #define AUDIO_HW_VOIP_BUFFERSIZE_16K 640
 #define AUDIO_HW_VOIP_SAMPLERATE_8K 8000
 #define AUDIO_HW_VOIP_SAMPLERATE_16K 16000
+
+#ifdef WITH_QCOM_SPEECH
 /* ======================== 12.2 kbps mode ========================== */
 const unsigned short amrsup_bit_order_122_a[AMR_CLASS_A_BITS_122] = {
      0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
@@ -283,6 +289,7 @@ const amrsup_frame_order_type amrsup_122_framing = {
   AMR_CLASS_C_BITS_122,
   (unsigned short *) amrsup_bit_order_122_c
 };
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -299,8 +306,10 @@ class AudioHardware : public  AudioHardwareBase
     class AudioSessionOutMSM7xxx;
 #endif /* QCOM_TUNNEL_LPA_ENABLED */
     class AudioStreamInMSM72xx;
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     class AudioStreamOutDirect;
     class AudioStreamInVoip;
+#endif
 
 public:
                         AudioHardware();
@@ -368,9 +377,13 @@ private:
     uint32_t    getInputSampleRate(uint32_t sampleRate);
     bool        checkOutputStandby();
     status_t    doRouting(AudioStreamInMSM72xx *input);
+#ifdef QCOM_FM_ENABLED
     status_t    enableFM(int sndDevice);
+#endif
     status_t enableComboDevice(uint32_t sndDevice, bool enableOrDisable);
+#ifdef QCOM_FM_ENABLED
     status_t    disableFM();
+#endif
     status_t    get_mMode();
     status_t    set_mRecordState(bool onoff);
     status_t    get_mRecordState();
@@ -383,7 +396,9 @@ private:
     void        aic3254_powerdown();
     int         aic3254_set_volume(int volume);
     AudioStreamInMSM72xx*   getActiveInput_l();
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     AudioStreamInVoip* getActiveVoipInput_l();
+#endif
     FILE *fp;
 
     class AudioStreamOutMSM72xx : public AudioStreamOut {
@@ -419,6 +434,7 @@ private:
                 bool        mStandby;
                 uint32_t    mDevices;
     };
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     class AudioStreamOutDirect : public AudioStreamOut {
     public:
                             AudioStreamOutDirect();
@@ -458,6 +474,7 @@ private:
                 int         mFormat;
 
     };
+#endif
 #ifdef QCOM_TUNNEL_LPA_ENABLED
     class AudioSessionOutMSM7xxx : public AudioStreamOut {
     public:
@@ -540,6 +557,7 @@ private:
                 uint32_t    mFmRec;
     };
 
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     class AudioStreamInVoip : public AudioStreamInMSM72xx  { //*/ AudioStreamIn {
     public:
         enum input_state {
@@ -585,6 +603,7 @@ private:
                 uint32_t    mFmRec;
                 int         mSessionId;
     };
+#endif
             static const uint32_t inputSamplingRates[];
             bool        mInit;
             bool        mMicMute;
@@ -606,21 +625,26 @@ private:
             char        mEffect[10];
             AudioStreamOutMSM72xx*  mOutput;
             SortedVector <AudioStreamInMSM72xx*>   mInputs;
+#ifdef WITH_QCOM_VOIP_OVER_MVS
             AudioStreamOutDirect*  mDirectOutput;
+#endif
             int mCurSndDevice;
             int m7xsnddriverfd;
             bool    mDualMicEnabled;
             int     mTtyMode;
+#ifdef WITH_QCOM_VOIP_OVER_MVS
             SortedVector <AudioStreamInVoip*>   mVoipInputs;
+#endif
 
             friend class AudioStreamInMSM72xx;
             Mutex       mLock;
+#ifdef WITH_QCOM_VOIP_OVER_MVS
             int mVoipFd;
             bool mVoipInActive;
             bool mVoipOutActive;
             Mutex mVoipLock;
             int mVoipSession;
-
+#endif
 };
 
 // ----------------------------------------------------------------------------

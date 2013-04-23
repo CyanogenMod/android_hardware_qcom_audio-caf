@@ -45,7 +45,9 @@ extern "C" {
 #include "AudioHardware.h"
 //#include <media/AudioSystem.h>
 //#include <media/AudioRecord.h>
+#ifdef WITH_QCOM_VOIP_OVER_MVS
 #include <linux/msm_audio_mvs.h>
+#endif
 
 #define LOG_SND_RPC 0  // Set to 1 to log sound RPC's
 
@@ -59,11 +61,13 @@ extern "C" {
 #define EVRC_DEVICE_IN "/dev/msm_evrc_in"
 #define QCELP_DEVICE_IN "/dev/msm_qcelp_in"
 #define AAC_DEVICE_IN "/dev/msm_aac_in"
+#ifdef QCOM_FM_ENABLED
 #define FM_DEVICE  "/dev/msm_fm"
-#define MVS_DEVICE "/dev/msm_mvs"
-
 #define FM_A2DP_REC 1
 #define FM_FILE_REC 2
+#endif
+
+#define MVS_DEVICE "/dev/msm_mvs"
 
 #define AMRNB_FRAME_SIZE 32
 #define EVRC_FRAME_SIZE 23
@@ -215,11 +219,15 @@ static void amr_transcode(unsigned char *src, unsigned char *dst);
 enum STREAM_TYPES {
 PCM_PLAY=1,
 PCM_REC,
+#ifdef QCOM_TUNNEL_LPA_ENABLED
 LPA_DECODE,
+#endif
 VOICE_CALL,
+#ifdef QCOM_FM_ENABLED
 FM_RADIO,
 FM_REC,
 FM_A2DP,
+#endif
 INVALID_STREAM
 };
 
@@ -231,6 +239,7 @@ typedef struct ComboDeviceType
 CurrentComboDeviceStruct CurrentComboDeviceData;
 Mutex   mComboDeviceLock;
 
+#ifdef QCOM_FM_ENABLED
 enum FM_STATE {
     FM_INVALID=1,
     FM_OFF,
@@ -238,6 +247,8 @@ enum FM_STATE {
 };
 
 FM_STATE fmState = FM_INVALID;
+#endif
+
 static uint32_t fmDevice = INVALID_DEVICE;
 
 #define DEV_ID(X) device_list[X].dev_id
@@ -405,14 +416,19 @@ static status_t updateDeviceInfo(int rx_device,int tx_device,
     temp_head = head;
     Mutex::Autolock lock(mDeviceSwitchLock);
 
-    if(!getNodeByStreamType(VOICE_CALL) && !getNodeByStreamType(PCM_PLAY) &&
-       !getNodeByStreamType(LPA_DECODE) && !getNodeByStreamType(FM_RADIO)) {
+    if (!getNodeByStreamType(VOICE_CALL) && !getNodeByStreamType(PCM_PLAY)
+#ifdef QCOM_FM_ENABLED
+        && !getNodeByStreamType(FM_RADIO)
+#endif
+#ifdef QCOM_TUNNEL_LPA_ENABLED
+        && !getNodeByStreamType(LPA_DECODE)
+#endif
+       ) {
         ALOGD("No active voicecall/playback, disabling cur_rx %d", cur_rx);
         if(cur_rx != INVALID_DEVICE && enableDevice(cur_rx, 0)) {
             ALOGE("Disabling device failed for cur_rx %d", cur_rx);
         }
         cur_rx = rx_device;
-
     }
 
     if(!getNodeByStreamType(VOICE_CALL) && !getNodeByStreamType(PCM_REC)) {
@@ -428,8 +444,12 @@ static status_t updateDeviceInfo(int rx_device,int tx_device,
         temp_ptr = temp_head->next;
         switch(temp_ptr->stream_type) {
             case PCM_PLAY:
+#ifdef QCOM_TUNNEL_LPA_ENABLED
             case LPA_DECODE:
+#endif
+#ifdef QCOM_FM_ENABLED
             case FM_RADIO:
+#endif
                 ALOGD("The node type is %d and cur device %d new device %d ", temp_ptr->stream_type, temp_ptr->dev_id, rx_device);
                 if(rx_device == INVALID_DEVICE)
                     return -1;
@@ -474,10 +494,12 @@ static status_t updateDeviceInfo(int rx_device,int tx_device,
                 tx_dev_prev = cur_tx;
                 cur_tx = tx_device ;
                 cur_rx = rx_device ;
+#ifdef WITH_QCOM_VOIPMUTE
                 if((vMicMute == true) && (tx_dev_prev != cur_tx)) {
                     ALOGD("REC:device switch with mute enabled :tx_dev_prev %d cur_tx: %d",tx_dev_prev, cur_tx);
                     msm_device_mute(DEV_ID(cur_tx), true);
                 }
+#endif
                 break;
             case VOICE_CALL:
 
@@ -551,10 +573,11 @@ AudioHardware::AudioHardware() :
     mHACSetting(false), mBluetoothIdTx(0), mBluetoothIdRx(0),
     mOutput(0), mBluetoothVGS(false), mCurSndDevice(SND_DEVICE_CURRENT),
     mVoiceVolume(1), mTtyMode(TTY_OFF), mDualMicEnabled(false),
-    mRecordState(false), mEffectEnabled(false), mFmFd(-1),
-    mVoipFd(-1), mVoipInActive(false), mVoipOutActive(false), mDirectOutput(0)
+    mRecordState(false), mEffectEnabled(false), mFmFd(-1)
+#ifdef WITH_QCOM_VOIP_OVER_MVS
+    ,mVoipFd(-1), mVoipInActive(false), mVoipOutActive(false), mDirectOutput(0)
+#endif
 {
-
         int (*snd_get_num)();
         int (*snd_get_bt_endpoint)(msm_bt_endpoint *);
         int (*set_acoustic_parameters)();
@@ -593,8 +616,10 @@ AudioHardware::AudioHardware() :
             (void)fgets((char *)build_id,sizeof(build_id),fp);
         }
 
+#ifdef WITH_QCOM_RESETALL
         if(msm_reset_all_device() < 0)
             ALOGE("msm_reset_all_device() failed");
+#endif
 
         mixer_cnt = msm_mixer_count();
         ALOGD("msm_mixer_count:mixer_cnt =%d",mixer_cnt);
@@ -849,13 +874,18 @@ AudioStreamOut* AudioHardware::openOutputStream(
         Mutex::Autolock lock(mLock);
 
         // only one output stream allowed
+#ifdef WITH_QCOM_VOIP_OVER_MVS
         if (mOutput && !(flags & AUDIO_OUTPUT_FLAG_DIRECT) ) {
+#else
+        if (mOutput) {
+#endif
             if (status) {
                 *status = INVALID_OPERATION;
             }
             ALOGE(" AudioHardware::openOutputStream Only one output stream allowed \n");
             return 0;
         }
+#ifdef WITH_QCOM_VOIP_OVER_MVS
         status_t lStatus;
         if(flags & AUDIO_OUTPUT_FLAG_DIRECT) {
             if(mDirectOutput == 0) {
@@ -904,6 +934,21 @@ AudioStreamOut* AudioHardware::openOutputStream(
             return mOutput;
          }
      }
+#else
+        // create new output stream
+        AudioStreamOutMSM72xx* out = new AudioStreamOutMSM72xx();
+        status_t lStatus = out->set(this, devices, format, channels, sampleRate);
+        if (status) {
+            *status = lStatus;
+        }
+        if (lStatus == NO_ERROR) {
+            mOutput = out;
+        } else {
+            delete out;
+        }
+    }
+    return mOutput;
+#endif
 }
 
 #ifdef QCOM_TUNNEL_LPA_ENABLED
@@ -932,18 +977,28 @@ AudioStreamOut* AudioHardware::openOutputSession(
 
 void AudioHardware::closeOutputStream(AudioStreamOut* out) {
     Mutex::Autolock lock(mLock);
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     if ((mOutput == 0 && mDirectOutput == 0) || ((mOutput != out) && (mDirectOutput != out))){
+#else
+    if (mOutput == 0 || mOutput != out) {
+#endif
         ALOGW("Attempt to close invalid output stream");
     }
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     else if (mOutput == out) {
+#else
+    else {
+#endif
         delete mOutput;
         mOutput = 0;
     }
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     else if (mDirectOutput == out){
         ALOGV(" deleting  mDirectOutput \n");
         delete mDirectOutput;
         mDirectOutput = 0;
     }
+#endif
 }
 
 AudioStreamIn* AudioHardware::openInputStream(
@@ -960,6 +1015,7 @@ AudioStreamIn* AudioHardware::openInputStream(
 
     mLock.lock();
 
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     AudioStreamIn *in;
     if((devices == AudioSystem::DEVICE_IN_COMMUNICATION)&& (*sampleRate == 8000)) {
         ALOGV("Create Audio stream Voip \n");
@@ -976,7 +1032,19 @@ AudioStreamIn* AudioHardware::openInputStream(
             return 0;
         }
         mVoipInputs.add(inVoip);
+#else
+        AudioStreamInMSM72xx* in = new AudioStreamInMSM72xx();
+        status_t lStatus = in->set(this, devices, format, channels, sampleRate, acoustic_flags);
+        if (status) {
+            *status = lStatus;
+        }
+        if (lStatus != NO_ERROR) {
+#endif
         mLock.unlock();
+#ifndef WITH_QCOM_VOIP_OVER_MVS
+        delete in;
+        return 0;
+#else
         return inVoip;
     } else {
         AudioStreamInMSM72xx* in72xx = new AudioStreamInMSM72xx();
@@ -993,19 +1061,34 @@ AudioStreamIn* AudioHardware::openInputStream(
         mInputs.add(in72xx);
         mLock.unlock();
         return in72xx;
+#endif
     }
+#ifndef WITH_QCOM_VOIP_OVER_MVS
+    mInputs.add(in);
+    mLock.unlock();
+
+    return in;
+#endif
 }
 
 void AudioHardware::closeInputStream(AudioStreamIn* in) {
     Mutex::Autolock lock(mLock);
 
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     ssize_t index = -1;
     if((index = mInputs.indexOf((AudioStreamInMSM72xx *)in)) >= 0) {
         ALOGV("closeInputStream AudioStreamInMSM72xx");
+#else
+    ssize_t index = mInputs.indexOf((AudioStreamInMSM72xx *)in);
+    if (index < 0) {
+        ALOGW("Attempt to close invalid input stream");
+    } else {
+#endif
         mLock.unlock();
         delete mInputs[index];
         mLock.lock();
         mInputs.removeAt(index);
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     } else if ((index = mVoipInputs.indexOf((AudioStreamInVoip *)in)) >= 0) {
         ALOGV("closeInputStream mVoipInputs");
         mLock.unlock();
@@ -1014,6 +1097,7 @@ void AudioHardware::closeInputStream(AudioStreamIn* in) {
         mVoipInputs.removeAt(index);
     } else {
         ALOGE("Attempt to close invalid input stream");
+#endif
      }
 }
 
@@ -1049,14 +1133,18 @@ status_t AudioHardware::setMicMute_nosync(bool state)
     if (mMicMute != state) {
         mMicMute = state;
         ALOGD("setMicMute_nosync calling voice mute with the mMicMute %d", mMicMute);
+#ifdef WITH_QCOM_VOIPMUTE
         if (isStreamOnAndActive(PCM_REC) && (mMode == AudioSystem::MODE_IN_COMMUNICATION)) {
             vMicMute = state;
             ALOGD("VOIP Active: vMicMute %d\n", vMicMute);
             msm_device_mute(DEV_ID(cur_tx), vMicMute);
         } else {
+#endif
             ALOGD("setMicMute_nosync:voice_mute\n");
             msm_set_voice_tx_mute(mMicMute);
+#ifdef WITH_QCOM_VOIPMUTE
         }
+#endif
     }
     return NO_ERROR;
 }
@@ -1075,11 +1163,13 @@ status_t AudioHardware::setParameters(const String8& keyValuePairs)
     const char BT_NREC_KEY[] = "bt_headset_nrec";
     const char BT_NAME_KEY[] = "bt_headset_name";
     const char BT_NREC_VALUE_ON[] = "on";
+#ifdef QCOM_FM_ENABLED
     const char FM_NAME_KEY[] = "FMRadioOn";
     const char FM_VALUE_HANDSET[] = "handset";
     const char FM_VALUE_SPEAKER[] = "speaker";
     const char FM_VALUE_HEADSET[] = "headset";
     const char FM_VALUE_FALSE[] = "false";
+#endif
     const char ACTIVE_AP[] = "active_ap";
     const char EFFECT_ENABLED[] = "sound_effect_enable";
 
@@ -1206,6 +1296,7 @@ String8 AudioHardware::getParameters(const String8& keys)
         if(mBluetoothVGS)
            param.addInt(String8("isVGS"), true);
     }
+#ifdef WITH_QCOM_SPEECH
     key = String8("tunneled-input-formats");
     if ( param.get(key,value) == NO_ERROR ) {
         param.addInt(String8("AMR"), true );
@@ -1214,13 +1305,16 @@ String8 AudioHardware::getParameters(const String8& keys)
             param.addInt(String8("QCELP"), true );
         }
     }
+#endif
 
+#ifdef QCOM_FM_ENABLED
     key = String8("Fm-radio");
     if ( param.get(key,value) == NO_ERROR ) {
         if ( getNodeByStreamType(FM_RADIO) ) {
             param.addInt(String8("isFMON"), true );
         }
     }
+#endif
 
     key = String8(DSP_EFFECT_KEY);
     if (param.get(key, value) == NO_ERROR) {
@@ -1251,9 +1345,11 @@ static unsigned calculate_audpre_table_index(unsigned index)
 size_t AudioHardware::getInputBufferSize(uint32_t sampleRate, int format, int channelCount)
 {
     if ((format != AudioSystem::PCM_16_BIT) &&
+#ifdef WITH_QCOM_SPEECH
         (format != AudioSystem::AMR_NB)      &&
         (format != AudioSystem::EVRC)      &&
         (format != AudioSystem::QCELP)  &&
+#endif
         (format != AudioSystem::AAC)){
         ALOGW("getInputBufferSize bad format: %d", format);
         return 0;
@@ -1263,18 +1359,22 @@ size_t AudioHardware::getInputBufferSize(uint32_t sampleRate, int format, int ch
         return 0;
     }
 
-    if (format == AudioSystem::AMR_NB)
+    if (format == AudioSystem::AAC)
+       return 2048;
+#ifdef WITH_QCOM_SPEECH
+    else if (format == AudioSystem::AMR_NB)
        return 320*channelCount;
-    if (format == AudioSystem::EVRC)
+    else if (format == AudioSystem::EVRC)
        return 230*channelCount;
     else if (format == AudioSystem::QCELP)
        return 350*channelCount;
-    else if (format == AudioSystem::AAC)
-       return 2048;
+#endif
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     else if (sampleRate == AUDIO_HW_VOIP_SAMPLERATE_8K)
        return 320*channelCount;
     else if (sampleRate == AUDIO_HW_VOIP_SAMPLERATE_16K)
        return 640*channelCount;
+#endif
     else
     {
         if (build_id[17] == '1') {
@@ -1521,6 +1621,7 @@ static status_t do_route_audio_rpc(uint32_t device,
         new_tx_device = DEVICE_HANDSET_TX;
         ALOGV("In NO MIC HEADSET");
     }
+#ifdef QCOM_FM_ENABLED
     else if (device == SND_DEVICE_FM_HANDSET) {
         fm_device = DEVICE_FMRADIO_HANDSET_RX;
         ALOGV("In FM HANDSET");
@@ -1533,6 +1634,7 @@ static status_t do_route_audio_rpc(uint32_t device,
         fm_device = DEVICE_FMRADIO_HEADSET_RX;
         ALOGV("In FM HEADSET");
     }
+#endif
     else if(device == SND_DEVICE_IN_S_SADC_OUT_HANDSET) {
         new_rx_device = DEVICE_HANDSET_RX;
         new_tx_device = DEVICE_DUALMIC_HANDSET_TX;
@@ -1578,11 +1680,14 @@ static status_t do_route_audio_rpc(uint32_t device,
         new_rx_device = DEVICE_HDMI_STERO_RX;
         new_tx_device = cur_tx;
         ALOGV("In DEVICE_HDMI_STERO_RX and cur_tx");
-    }else if(device == SND_DEVICE_FM_TX){
+    }
+#ifdef QCOM_FM_ENABLED
+    else if (device == SND_DEVICE_FM_TX) {
         new_rx_device = DEVICE_FMRADIO_STEREO_RX;
         new_tx_device = cur_tx;
         ALOGV("In DEVICE_FMRADIO_STEREO_RX and cur_tx");
     }
+#endif
 #ifdef SAMSUNG_AUDIO
     else if (device == SND_DEVICE_VOIP_HANDSET) {
         new_rx_device = DEVICE_HANDSET_VOIP_RX;
@@ -1731,7 +1836,7 @@ status_t AudioHardware::doAudioRouteOrMuteHTC(uint32_t device)
                device == SND_DEVICE_HANDSET) {
         ALOGD("Update acdb id to hac profile.");
         rx_acdb_id = ACDB_ID_HAC_HANDSET_SPKR;
-       tx_acdb_id = ACDB_ID_HAC_HANDSET_MIC;
+        tx_acdb_id = ACDB_ID_HAC_HANDSET_MIC;
     } else {
         if (isInCall()) {
             rx_acdb_id = getACDB(MOD_RX, device);
@@ -1745,10 +1850,14 @@ status_t AudioHardware::doAudioRouteOrMuteHTC(uint32_t device)
         }
     }
 
-    ALOGV("doAudioRouteOrMuteHTC() rx acdb %d, tx acdb %d", rx_acdb_id, tx_acdb_id);
+    ALOGV("doAudioRouteOrMuteHTC: rx acdb %d, tx acdb %d", rx_acdb_id, tx_acdb_id);
     ALOGV("doAudioRouteOrMuteHTC() device %x, mMode %d, mMicMute %d", device, mMode, mMicMute);
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     int earMute = (mMode != AudioSystem::MODE_IN_CALL) && (mMode != AudioSystem::MODE_IN_COMMUNICATION);
     return do_route_audio_rpc(device,earMute, mMicMute, rx_acdb_id, tx_acdb_id);
+#else
+    return do_route_audio_rpc(device, !isInCall(), mMicMute, rx_acdb_id, tx_acdb_id);
+#endif
 }
 
 // always call with mutex held
@@ -1769,9 +1878,15 @@ status_t AudioHardware::doAudioRouteOrMute(uint32_t device)
     status_t ret = NO_ERROR;
 
     if (!isHTCPhone) {
+#ifdef WITH_QCOM_VOIP_OVER_MVS
         ALOGV("doAudioRouteOrMute() device %d, mMode %d, mMicMute %d",
                 device, mMode, mMicMute);
         ret = do_route_audio_rpc(device, !isInCall(), mMicMute, 0, 0);
+#else
+        ALOGV("doAudioRouteOrMute() device %d, mMode %d, mMicMute %d",
+                device, mMode, mMicMute);
+        ret = do_route_audio_rpc(device, !isInCall(), mMicMute, 0, 0);
+#endif
     } else
         ret = doAudioRouteOrMuteHTC(device);
 
@@ -2064,7 +2179,7 @@ status_t AudioHardware::aic3254_config(uint32_t device) {
                     strcat(name, "_SPK");
                     break;
                 default:
-                   break;
+                    break;
             }
         } else {
             strcpy(name, "Original_Phone");
@@ -2354,7 +2469,6 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
     if ((mFmFd != -1) && !(outputDevices & AudioSystem::DEVICE_OUT_FM)){
         disableFM();
     }
-#endif
     if ((CurrentComboDeviceData.DeviceId == INVALID_DEVICE) &&
         (sndDevice == SND_DEVICE_FM_TX_AND_SPEAKER )){
         /* speaker rx is already enabled change snd device to the fm tx
@@ -2373,6 +2487,7 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
         CurrentComboDeviceData.DeviceId = INVALID_DEVICE;
         CurrentComboDeviceData.StreamType = INVALID_STREAM;
     }
+#endif
 
     if (sndDevice != -1 && sndDevice != mCurSndDevice) {
         ret = doAudioRouteOrMute(sndDevice);
@@ -2381,11 +2496,14 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
 
     return ret;
 }
+#ifdef QCOM_FM_ENABLED
 status_t AudioHardware::enableComboDevice(uint32_t sndDevice, bool enableOrDisable)
 {
     ALOGD("enableComboDevice %u",enableOrDisable);
     status_t status = NO_ERROR;
+#ifdef QCOM_TUNNEL_LPA_ENABLED
     Routing_table *LpaNode = getNodeByStreamType(LPA_DECODE);
+#endif
     Routing_table *PcmNode = getNodeByStreamType(PCM_PLAY);
 
 
@@ -2397,7 +2515,11 @@ status_t AudioHardware::enableComboDevice(uint32_t sndDevice, bool enableOrDisab
             return NO_ERROR;
         }
 
-        if(!LpaNode && !PcmNode) {
+        if(
+#ifdef QCOM_TUNNEL_LPA_ENABLED
+         !LpaNode &&
+#endif
+         !PcmNode) {
             ALOGE("No active playback session active bailing out ");
             return NO_ERROR;
         }
@@ -2419,10 +2541,12 @@ status_t AudioHardware::enableComboDevice(uint32_t sndDevice, bool enableOrDisab
                     temp = PcmNode;
                     CurrentComboDeviceData.StreamType = PCM_PLAY;
                     ALOGD("PCM_PLAY session Active ");
+#ifdef QCOM_TUNNEL_LPA_ENABLED
                 }else if(LpaNode){
                     temp = LpaNode;
                     CurrentComboDeviceData.StreamType = LPA_DECODE;
                     ALOGD("LPA_DECODE session Active ");
+#endif
                 } else {
                     ALOGE("no PLAYback session Active ");
                     return -1;
@@ -2538,7 +2662,7 @@ status_t AudioHardware::disableFM()
     updateDeviceInfo(cur_rx, cur_tx, 0, 0);
     return NO_ERROR;
 }
-
+#endif
 
 status_t AudioHardware::checkMicMute()
 {
@@ -2903,9 +3027,11 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
                 ALOGE("msm_route_stream failed");
                 return 0;
             }
+#ifdef QCOM_FM_ENABLED
             Mutex::Autolock lock_1(mComboDeviceLock);
 
             if(CurrentComboDeviceData.DeviceId == SND_DEVICE_FM_TX_AND_SPEAKER){
+#ifdef QCOM_TUNNEL_LPA_ENABLED
                 Routing_table *LpaNode = getNodeByStreamType(LPA_DECODE);
 
                 /* This de-routes the LPA being routed on to speaker, which is done in
@@ -2922,7 +3048,7 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
                     ALOGE("msm_route_stream failed");
                     return -1;
                 }
-
+#endif
 
                 ALOGD("Routing PCM stream to speaker for combo device");
                 ALOGD("combo:msm_route_stream(PCM_PLAY,session id:%d,dev id:%d,1)",dec_id,
@@ -2935,6 +3061,7 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
                 }
                 CurrentComboDeviceData.StreamType = PCM_PLAY;
             }
+#endif
             addToTable(dec_id,cur_rx,INVALID_DEVICE,PCM_PLAY,true);
             ioctl(mFd, AUDIO_START, 0);
         }
@@ -3061,6 +3188,7 @@ status_t AudioHardware::AudioStreamOutMSM72xx::getRenderPosition(uint32_t *dspFr
     return INVALID_OPERATION;
 }
 
+#ifdef WITH_QCOM_VOIP_OVER_MVS
 AudioHardware::AudioStreamOutDirect::AudioStreamOutDirect() :
     mHardware(0), mFd(-1), mStartCount(0), mRetryCount(0), mStandby(true), mDevices(0),mChannels(AudioSystem::CHANNEL_OUT_MONO),
     mSampleRate(AUDIO_HW_VOIP_SAMPLERATE_8K), mBufferSize(AUDIO_HW_VOIP_BUFFERSIZE_8K)
@@ -3379,7 +3507,7 @@ status_t AudioHardware::AudioStreamOutDirect::getRenderPosition(uint32_t *dspFra
     //TODO: enable when supported by driver
     return INVALID_OPERATION;
 }
-
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -3397,9 +3525,11 @@ status_t AudioHardware::AudioStreamInMSM72xx::set(
 {
     if ((pFormat == 0) ||
         ((*pFormat != AUDIO_HW_IN_FORMAT) &&
+#ifdef WITH_QCOM_SPEECH
          (*pFormat != AudioSystem::AMR_NB) &&
          (*pFormat != AudioSystem::EVRC) &&
          (*pFormat != AudioSystem::QCELP) &&
+#endif
          (*pFormat != AudioSystem::AAC)))
     {
         *pFormat = AUDIO_HW_IN_FORMAT;
@@ -3576,6 +3706,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::set(
         mSampleRate = config.sample_rate;
         mBufferSize = config.buffer_size;
     }
+#ifdef WITH_QCOM_SPEECH
     else if (*pFormat == AudioSystem::EVRC)
     {
           ALOGI("Recording format: EVRC");
@@ -3785,6 +3916,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::set(
             goto  Error;
           }
     }
+#endif
     else if (*pFormat == AudioSystem::AAC)
     {
           ALOGI("Recording format: AAC");
@@ -3947,7 +4079,7 @@ ssize_t AudioHardware::AudioStreamInMSM72xx::read( void* buffer, ssize_t bytes)
         }
         else
 #endif
-{
+        {
             hw->mLock.unlock();
             if(ioctl(mFd, AUDIO_GET_SESSION_ID, &dec_id)) {
                 ALOGE("AUDIO_GET_SESSION_ID failed*********");
@@ -4011,6 +4143,7 @@ ssize_t AudioHardware::AudioStreamInMSM72xx::read( void* buffer, ssize_t bytes)
             }
         }
     }
+#ifdef WITH_QCOM_SPEECH
     else if ((mFormat == AudioSystem::EVRC) || (mFormat == AudioSystem::QCELP) || (mFormat == AudioSystem::AMR_NB))
     {
         uint8_t readBuf[36];
@@ -4063,6 +4196,7 @@ ssize_t AudioHardware::AudioStreamInMSM72xx::read( void* buffer, ssize_t bytes)
             }
         }
     }
+#endif
     else if (mFormat == AudioSystem::AAC)
     {
         *((uint32_t*)recogPtr) = 0x51434F4D ;// ('Q','C','O', 'M') Number to identify format as AAC by higher layers
@@ -4144,6 +4278,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::standby()
         //mHardware->checkMicMute();
         mState = AUDIO_INPUT_CLOSED;
     }
+#ifdef QCOM_FM_ENABLED
     if (mFmRec == FM_A2DP_REC) {
         //A2DP Recording
         temp = getNodeByStreamType(FM_A2DP);
@@ -4169,6 +4304,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::standby()
         }
         deleteFromTable(FM_REC);
     }
+#endif
     temp = getNodeByStreamType(PCM_REC);
     if(temp == NULL)
         return NO_ERROR;
@@ -4270,6 +4406,7 @@ AudioHardware::AudioStreamInMSM72xx *AudioHardware::getActiveInput_l()
     return NULL;
 }
 
+#ifdef WITH_QCOM_VOIP_OVER_MVS
 status_t AudioHardware::setupDeviceforVoipCall(bool value)
 {
 
@@ -4630,7 +4767,7 @@ AudioHardware::AudioStreamInVoip*AudioHardware::getActiveVoipInput_l()
 
     return NULL;
 }
-
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -4638,6 +4775,7 @@ extern "C" AudioHardwareInterface* createAudioHardware(void) {
     return new AudioHardware();
 }
 
+#ifdef WITH_QCOM_SPEECH
 /*===========================================================================
 
 FUNCTION amrsup_frame_len
@@ -4950,5 +5088,6 @@ static void amr_transcode(unsigned char *src, unsigned char *dst)
 
    return;
 }
+#endif
 
 }; // namespace android

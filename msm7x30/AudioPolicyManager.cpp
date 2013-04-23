@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2009 The Android Open Source Project
  * Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, The CyanogenMod Project
  * Not a Contribution, Apache license notifications and license are retained
  * for attribution purposes only.
  *
@@ -377,8 +378,8 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
             ALOGE("setDeviceConnectionState() invalid state: %x", state);
             return BAD_VALUE;
         }
-#ifdef QCOM_FM_ENABLED
 
+#ifdef QCOM_FM_ENABLED
         audio_devices_t NewDevice = AudioPolicyManagerBase::getNewDevice(mPrimaryOutput, false /*fromCache*/);
         if (device == AudioSystem::DEVICE_OUT_FM) {
             if (state == AudioSystem::DEVICE_STATE_AVAILABLE) {
@@ -389,6 +390,7 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
             }
         }
 #endif
+
         checkA2dpSuspend();
         AudioPolicyManagerBase::checkOutputForAllStrategies();
         // outputs must be closed after checkOutputForAllStrategies() is executed
@@ -877,11 +879,11 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream, int index, audio_io_h
     // We actually change the volume if:
     // - the float value returned by computeVolume() changed
     // - the force flag is set
-    if (volume != mOutputs.valueFor(output)->mCurVolume[stream] ||
+    if (volume != mOutputs.valueFor(output)->mCurVolume[stream]
 #ifdef QCOM_FM_ENABLED
-       (stream == AudioSystem::FM) ||
+            || (stream == AudioSystem::FM)
 #endif
-        force) {
+            || force) {
         mOutputs.valueFor(output)->mCurVolume[stream] = volume;
         ALOGVV("checkAndSetVolume() for output %d stream %d, volume %f, delay %d", output, stream, volume, delayMs);
         if (stream == AudioSystem::VOICE_CALL ||
@@ -1004,6 +1006,9 @@ audio_devices_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
     case AUDIO_SOURCE_DEFAULT:
     case AUDIO_SOURCE_MIC:
     case AUDIO_SOURCE_VOICE_RECOGNITION:
+#ifndef WITH_QCOM_VOIP_OVER_MVS
+    case AUDIO_SOURCE_VOICE_COMMUNICATION:
+#endif
         if (mForceUse[AudioSystem::FOR_RECORD] == AudioSystem::FORCE_BT_SCO &&
             mAvailableInputDevices & AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
             device = AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET;
@@ -1013,9 +1018,11 @@ audio_devices_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
             device = AUDIO_DEVICE_IN_BUILTIN_MIC;
         }
         break;
+#ifdef WITH_QCOM_VOIP_OVER_MVS
     case AUDIO_SOURCE_VOICE_COMMUNICATION:
         device = AUDIO_DEVICE_IN_COMMUNICATION;
         break;
+#endif
 
     case AUDIO_SOURCE_CAMCORDER:
         if (mAvailableInputDevices & AUDIO_DEVICE_IN_BACK_MIC) {
@@ -1038,7 +1045,7 @@ audio_devices_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
         break;
 
 #ifdef QCOM_FM_ENABLED
-   case AUDIO_SOURCE_FM_RX:
+    case AUDIO_SOURCE_FM_RX:
         device = AudioSystem::DEVICE_IN_FM_RX;
         break;
     case AUDIO_SOURCE_FM_RX_A2DP:

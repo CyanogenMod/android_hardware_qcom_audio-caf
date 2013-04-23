@@ -13,7 +13,23 @@ ifeq ($(BOARD_HAVE_BLUETOOTH),true)
 endif
 
 ifeq ($(BOARD_HAVE_QCOM_FM),true)
-    LOCAL_CFLAGS += -DWITH_QCOM_FM
+    LOCAL_CFLAGS += -DQCOM_FM_ENABLED
+endif
+
+ifeq ($(BOARD_USES_QCOM_AUDIO_LPA),true)
+    LOCAL_CFLAGS += -DQCOM_TUNNEL_LPA_ENABLED
+endif
+
+ifeq ($(BOARD_USES_QCOM_AUDIO_SPEECH),true)
+    LOCAL_CFLAGS += -DWITH_QCOM_SPEECH
+endif
+
+ifeq ($(BOARD_USES_QCOM_AUDIO_VOIPMUTE),true)
+    LOCAL_CFLAGS += -DWITH_QCOM_VOIPMUTE
+endif
+
+ifeq ($(BOARD_USES_QCOM_AUDIO_RESETALL),true)
+    LOCAL_CFLAGS += -DWITH_QCOM_RESETALL
 endif
 
 ifeq ($(BOARD_HAVE_SAMSUNG_AUDIO),true)
@@ -82,6 +98,10 @@ LOCAL_MODULE_TAGS := optional
 
 ifeq ($(BOARD_HAVE_BLUETOOTH),true)
     LOCAL_CFLAGS += -DWITH_A2DP
+endif
+
+ifeq ($(BOARD_USES_QCOM_AUDIO_LPA),true)
+    LOCAL_CFLAGS += -DQCOM_TUNNEL_LPA_ENABLED
 endif
 
 LOCAL_C_INCLUDES := hardware/libhardware_legacy/audio
