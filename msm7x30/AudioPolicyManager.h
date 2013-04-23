@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 The Android Open Source Project
- * Copyright (c) 2009, 2011-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009, 2011-2012, The Linux Foundation. All rights reserved.
  * Not a Contribution, Apache license notifications and license are retained
  * for attribution purposes only.
  *
@@ -72,32 +72,6 @@ protected:
  virtual audio_devices_t getDeviceForStrategy(routing_strategy strategy, bool fromCache = true);
         // change the route of the specified output
         uint32_t setOutputDevice(audio_io_handle_t output, audio_devices_t device, bool force = false, int delayMs = 0);
-
-        // when a device is connected, checks if an open output can be routed
-        // to this device. If none is open, tries to open one of the available outputs.
-        // Returns an output suitable to this device or 0.
-        // when a device is disconnected, checks if an output is not used any more and
-        // returns its handle if any.
-        // transfers the audio tracks and effects from one output thread to another accordingly.
-        status_t checkOutputsForDevice(audio_devices_t device,
-                                       AudioSystem::device_connection_state state,
-                                       SortedVector<audio_io_handle_t>& outputs);
-
-        virtual AudioPolicyManagerBase::IOProfile* getProfileForDirectOutput(
-                                                     audio_devices_t device,
-                                                     uint32_t samplingRate,
-                                                     uint32_t format,
-                                                     uint32_t channelMask,
-                                                     audio_output_flags_t flags);
-
-
-        bool    isCompatibleProfile(AudioPolicyManagerBase::IOProfile *profile,
-                                    audio_devices_t device,
-                                    uint32_t samplingRate,
-                                    uint32_t format,
-                                    uint32_t channelMask,
-                                    audio_output_flags_t flags);
-
         // check that volume change is permitted, compute and send new volume to audio hardware
         status_t checkAndSetVolume(int stream, int index, audio_io_handle_t output, audio_devices_t device, int delayMs = 0, bool force = false);
         // select input device corresponding to requested audio source
