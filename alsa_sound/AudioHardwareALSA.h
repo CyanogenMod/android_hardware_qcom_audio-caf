@@ -566,6 +566,7 @@ public:
     status_t            resume_l();
 
     void updateMetaData(size_t bytes);
+    status_t setMetaDataMode();
 
 private:
     Mutex               mLock;
