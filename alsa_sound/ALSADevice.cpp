@@ -532,7 +532,8 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
             devices = devices | (AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET |
                       AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET);
 #endif
-        } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+        } else if ((devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) ||
+                  (devices & AudioSystem::DEVICE_IN_AUX_DIGITAL)) {
             devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
                       AudioSystem::DEVICE_IN_AUX_DIGITAL);
 #ifdef QCOM_PROXY_DEVICE_ENABLED
