@@ -576,11 +576,11 @@ status_t AudioStreamInALSA::close()
     ALOGD("close");
     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
         (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-        if((mParent->mVoipStreamCount)) {
+        if(mParent->mVoipInStreamCount||mParent->mVoipOutStreamCount) {
 #ifdef QCOM_USBAUDIO_ENABLED
-            ALOGV("musbRecordingState: %d, mVoipStreamCount:%d",mParent->musbRecordingState,
-                  mParent->mVoipStreamCount );
-            if(mParent->mVoipStreamCount == 1) {
+            ALOGV("musbRecordingState: %d, mVoipInStreamCount:%d, mVoipOutStreamCount:%d",mParent->musbRecordingState,
+                  mParent->mVoipInStreamCount,mParent->mVoipOutStreamCount);
+            if(mParent->mVoipInStreamCount^mParent->mVoipOutStreamCount) {
                 ALOGV("Deregistering VOIP Call bit, musbPlaybackState:%d,"
                        "musbRecordingState:%d", mParent->musbPlaybackState, mParent->musbRecordingState);
                 mParent->musbPlaybackState &= ~USBPLAYBACKBIT_VOIPCALL;
@@ -589,9 +589,13 @@ status_t AudioStreamInALSA::close()
                 mParent->closeUsbPlaybackIfNothingActive();
             }
 #endif
-               return NO_ERROR;
+            if (mParent->mVoipInStreamCount > 0) {
+                mParent->mVoipInStreamCount--;
+            }
+            ALOGE("AudioStreamInALSA Close :mVoipInStreamCount= %d, mParent->mVoipOutStreamCount=%d ",
+                   mParent->mVoipInStreamCount,mParent->mVoipOutStreamCount);
+            return NO_ERROR;
         }
-        mParent->mVoipStreamCount = 0;
         mParent->mVoipMicMute = 0;
 #ifdef QCOM_USBAUDIO_ENABLED
     } else {
