@@ -1875,6 +1875,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
         }
         if (err) {
            ALOGE("Error opening pcm input device");
+           mDeviceList.erase(it);
         } else {
            in = new AudioStreamInALSA(this, &(*it), acoustics);
            err = in->set(format, channels, sampleRate, devices);
