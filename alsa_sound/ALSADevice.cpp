@@ -30,6 +30,7 @@ extern "C" {
 #ifdef QCOM_CSDCLIENT_ENABLED
 static int (*csd_disable_device)();
 static int (*csd_enable_device)(int, int, uint32_t);
+static int (*csd_enable_device_config)(int, int);
 static int (*csd_volume)(uint32_t, int);
 static int (*csd_mic_mute)(uint32_t, int);
 static int (*csd_wide_voice)(uint32_t, uint8_t);
@@ -653,6 +654,38 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
        snd_use_case_set(handle->ucMgr, "_enadev", txDevice);
        strlcpy(mCurTxUCMDevice, txDevice, sizeof(mCurTxUCMDevice));
     }
+#ifdef QCOM_CSDCLIENT_ENABLED
+    if (isPlatformFusion3() && (inCallDevSwitch == true)) {
+
+        /* Get tx acdb id */
+        memset(&ident,0,sizeof(ident));
+        strlcpy(ident, "ACDBID/", sizeof(ident));
+        strlcat(ident, mCurTxUCMDevice, sizeof(ident));
+        tx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
+
+       /* Get rx acdb id */
+        memset(&ident,0,sizeof(ident));
+        strlcpy(ident, "ACDBID/", sizeof(ident));
+        strlcat(ident, mCurRxUCMDevice, sizeof(ident));
+        rx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
+
+        if (rx_dev_id == DEVICE_SPEAKER_RX_ACDB_ID && tx_dev_id == DEVICE_HANDSET_TX_ACDB_ID) {
+            tx_dev_id = DEVICE_SPEAKER_TX_ACDB_ID;
+        }
+
+        /* Parallelize codec configuration on APQ with CSD voice call
+         * sequence on MDM. This will reduce in call device switch delay
+         */
+        if (csd_enable_device_config == NULL) {
+            ALOGE("csd_enable_device_config is NULL");
+        } else {
+            err = csd_enable_device_config(rx_dev_id, tx_dev_id);
+            if (err < 0) {
+                ALOGE("csd_enable_device_config failed, error %d", err);
+            }
+        }
+    }
+#endif
     for(ALSAUseCaseList::iterator it = mUseCaseList.begin(); it != mUseCaseList.end(); ++it) {
         ALOGD("Route use case %s\n", it->useCase);
         if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
@@ -704,41 +737,26 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
         }
     }
 #endif
+#ifdef QCOM_CSDCLIENT_ENABLED
     if (isPlatformFusion3() && (inCallDevSwitch == true)) {
-
-        /* get tx acdb id */
-        memset(&ident,0,sizeof(ident));
-        strlcpy(ident, "ACDBID/", sizeof(ident));
-        strlcat(ident, mCurTxUCMDevice, sizeof(ident));
-        tx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
-
-       /* get rx acdb id */
-        memset(&ident,0,sizeof(ident));
-        strlcpy(ident, "ACDBID/", sizeof(ident));
-        strlcat(ident, mCurRxUCMDevice, sizeof(ident));
-        rx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
-
         if (rx_dev_id == DEVICE_SPEAKER_RX_ACDB_ID && tx_dev_id == DEVICE_HANDSET_TX_ACDB_ID) {
             tx_dev_id = DEVICE_SPEAKER_TX_ACDB_ID;
         }
-
         ALOGV("rx_dev_id=%d, tx_dev_id=%d\n", rx_dev_id, tx_dev_id);
-#ifdef QCOM_CSDCLIENT_ENABLED
-        if (isPlatformFusion3()) {
-            if (csd_enable_device == NULL) {
-                ALOGE("csd_client_enable_device is NULL");
-            } else {
-                int adjustedFlags = adjustFlagsForCsd(mDevSettingsFlag,
-                        mCurRxUCMDevice);
-                err = csd_enable_device(rx_dev_id, tx_dev_id, adjustedFlags);
-                if (err < 0)
-                {
-                    ALOGE("csd_client_disable_device failed, error %d", err);
-                }
+
+        if (csd_enable_device == NULL) {
+            ALOGE("csd_client_enable_device is NULL");
+        } else {
+            int adjustedFlags = adjustFlagsForCsd(mDevSettingsFlag,
+                    mCurRxUCMDevice);
+            err = csd_enable_device(rx_dev_id, tx_dev_id, adjustedFlags);
+            if (err < 0)
+            {
+                ALOGE("csd_client_disable_device failed, error %d", err);
             }
         }
-#endif
     }
+#endif
 
     if (rxDevice != NULL) {
         free(rxDevice);
@@ -2720,6 +2738,8 @@ void  ALSADevice::setCsdHandle(void* handle)
                                             "csd_client_disable_device");
     csd_enable_device = (int (*)(int,int,uint32_t))::dlsym(mcsd_handle,
                                                     "csd_client_enable_device");
+    csd_enable_device_config = (int (*)(int,int))::dlsym(mcsd_handle,
+                                                    "csd_client_enable_device_config");
     csd_start_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
                                                  "csd_client_start_voice");
     csd_stop_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
