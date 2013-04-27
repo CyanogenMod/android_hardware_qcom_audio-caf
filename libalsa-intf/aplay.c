@@ -27,8 +27,10 @@
 #include <getopt.h>
 
 #include <sound/asound.h>
+#ifdef QCOM_COMPRESSED_AUDIO_ENABLED
 #include <sound/compress_params.h>
 #include <sound/compress_offload.h>
+#endif
 #include "alsa_audio.h"
 
 #ifndef ANDROID

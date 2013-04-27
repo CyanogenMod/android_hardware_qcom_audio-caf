@@ -43,7 +43,9 @@
 #include <sys/poll.h>
 #include <linux/ioctl.h>
 #include <linux/types.h>
+#ifdef QCOM_COMPRESSED_AUDIO_ENABLED
 #include <sound/compress_params.h>
+#endif
 #include "alsa_audio.h"
 
 #define __force
