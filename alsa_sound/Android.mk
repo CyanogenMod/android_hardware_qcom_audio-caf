@@ -68,6 +68,10 @@ ifeq ($(BOARD_HAVE_DOCK_USBAUDIO),true)
   LOCAL_CFLAGS += -DDOCK_USBAUDIO_ENABLED
 endif
 
+ifeq ($(BOARD_HAVE_NEW_QCOM_CSDCLIENT),true)
+  LOCAL_CFLAGS += -DNEW_CSDCLIENT
+endif
+
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
   AudioStreamOutALSA.cpp        \
