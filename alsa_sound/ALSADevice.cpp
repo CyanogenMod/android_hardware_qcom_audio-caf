@@ -2579,7 +2579,7 @@ status_t ALSADevice::openProxyDevice()
            mProxyParams.mProxyPcmHandle->period_size/2
            : mProxyParams.mProxyPcmHandle->period_size/4;
    sparams->start_threshold = 1;
-   sparams->stop_threshold = mProxyParams.mProxyPcmHandle->buffer_size;
+   sparams->stop_threshold = INT_MAX;
    sparams->xfer_align = (mProxyParams.mProxyPcmHandle->flags & PCM_MONO) ?
            mProxyParams.mProxyPcmHandle->period_size/2
            : mProxyParams.mProxyPcmHandle->period_size/4; /* needed for old kernels */
