@@ -198,7 +198,7 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
     String8 key = String8(AudioParameter::keyRouting),value;
-    int device;
+    int device, camcorder_enabled;
     status_t err = NO_ERROR;
     int mMode = mParent->mode();
 
@@ -219,8 +219,8 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
         if(device) {
             //checking for camcorder_mode and in call more to select appropriate input device
             key = String8("camcorder_mode");
-            if (param.get(key, value) == NO_ERROR) {
-                if (value) {
+            if (param.getInt(key, camcorder_enabled) == NO_ERROR) {
+                if (camcorder_enabled == 1) {
                     if ((mMode == AudioSystem::MODE_IN_CALL) || (mMode == AudioSystem::MODE_IN_COMMUNICATION)) {
                         if (device & AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
                             device = AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET;
