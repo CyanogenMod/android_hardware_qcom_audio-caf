@@ -1625,7 +1625,7 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
     //  - the requested device is AUDIO_DEVICE_NONE
     //  - the requested device is the same as current device and force is not specified.
     // Doing this check here allows the caller to call setOutputDevice() without conditions
-    if ((device == AUDIO_DEVICE_NONE || device == prevDevice) && !force) {
+    if ((device == AUDIO_DEVICE_NONE) || ((device == prevDevice) && !force)) {
         ALOGV("setOutputDevice() setting same device %04x or null device for output %d", device, output);
         return muteWaitMs;
     }
