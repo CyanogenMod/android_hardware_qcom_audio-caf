@@ -2792,7 +2792,7 @@ void AudioHardwareALSA::switchExtOut(int device) {
     } else {
         mExtOutStream = NULL;
     }
-    if (mExtOutStream == mUsbStream) {
+    if ((mExtOutStream == mUsbStream) && mExtOutStream != NULL) {
         sampleRate = mExtOutStream->common.get_sample_rate(&mExtOutStream->common);
         if (sampleRate > AFE_PROXY_SAMPLE_RATE) {
             ALOGW(" Requested samplerate %d is greater than supported so fall back to %d ",
