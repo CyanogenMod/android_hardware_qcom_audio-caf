@@ -1778,8 +1778,14 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
     ALOGV("setOutputDevice() changing device:%x",device);
     // do the routing
     param.addInt(String8(AudioParameter::keyRouting), (int)device);
-    mpClientInterface->setParameters(output, param.toString(), delayMs);
-
+    if((outputDesc->mFlags & AUDIO_OUTPUT_FLAG_LPA)||(outputDesc->mFlags & AUDIO_OUTPUT_FLAG_TUNNEL))
+    {
+        mpClientInterface->setParameters(output, param.toString(),0 );
+    }
+    else
+    {
+         mpClientInterface->setParameters(output, param.toString(), delayMs);
+    }
     // update stream volumes according to new device
     applyStreamVolumes(output, device, delayMs);
 
