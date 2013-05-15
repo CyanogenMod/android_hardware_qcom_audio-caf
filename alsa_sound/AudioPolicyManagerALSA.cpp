@@ -49,6 +49,19 @@ namespace android_audio_legacy {
 
 AudioParameter param;
 
+void AudioPolicyManager::setStrategyMute(routing_strategy strategy,
+                                             bool on,
+                                             audio_io_handle_t output,
+                                             int delayMs,
+                                             audio_devices_t device)
+{
+    ALOGVV("setStrategyMute() strategy %d, mute %d, output %d", strategy, on, output);
+    for (int stream = 0; stream < AudioSystem::NUM_STREAM_TYPES; stream++) {
+        if (getStrategy((AudioSystem::stream_type)stream) == strategy) {
+            setStreamMute(stream, on, output, delayMs, device);
+        }
+    }
+}
 
 uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *outputDesc,
                                                        audio_devices_t prevDevice,
@@ -121,6 +134,50 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
         return muteWaitMs;
     }
     return 0;
+}
+
+void AudioPolicyManager::setStreamMute(int stream,
+                                           bool on,
+                                           audio_io_handle_t output,
+                                           int delayMs,
+                                           audio_devices_t device)
+{
+    StreamDescriptor &streamDesc = mStreams[stream];
+    AudioOutputDescriptor *outputDesc = mOutputs.valueFor(output);
+    if (device == AUDIO_DEVICE_NONE) {
+        device = outputDesc->device();
+    }
+
+    ALOGVV("setStreamMute() stream %d, mute %d, output %d, mMuteCount %d device %04x",
+          stream, on, output, outputDesc->mMuteCount[stream], device);
+
+    if (on) {
+        if (outputDesc->mMuteCount[stream] > 0) {
+            ALOGV("setStreamMute() muting already muted stream!");
+            return;
+        }
+        if (outputDesc->mMuteCount[stream] == 0) {
+            if (streamDesc.mCanBeMuted &&
+                    ((stream != AudioSystem::ENFORCED_AUDIBLE) ||
+                     (mForceUse[AudioSystem::FOR_SYSTEM] == AudioSystem::FORCE_NONE))) {
+                checkAndSetVolume(stream, 0, output, device, delayMs);
+            }
+        }
+        // increment mMuteCount after calling checkAndSetVolume() so that volume change is not ignored
+        outputDesc->mMuteCount[stream]++;
+    } else {
+        if (outputDesc->mMuteCount[stream] == 0) {
+            ALOGV("setStreamMute() unmuting non muted stream!");
+            return;
+        }
+        if (--outputDesc->mMuteCount[stream] == 0) {
+            checkAndSetVolume(stream,
+                              streamDesc.getVolumeIndex(device),
+                              output,
+                              device,
+                              delayMs);
+        }
+    }
 }
 
 
