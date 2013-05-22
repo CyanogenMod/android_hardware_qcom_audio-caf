@@ -846,6 +846,13 @@ status_t AudioPolicyManager::stopOutput(audio_io_handle_t output,
         // store time at which the stream was stopped - see isStreamActive()
         if (outputDesc->mRefCount[stream] == 0) {
             outputDesc->mStopTime[stream] = systemTime();
+
+            if ((outputDesc->mRefCount[AUDIO_STREAM_RING]!= 0) && (stream == AUDIO_STREAM_VOICE_CALL)) {
+                 // When AUDIO_STREAM_RING is present, Send Mute on RING
+                 // if it gets stopOutput on  AUDIO_STREAM_VOICE_CALL
+                 setStreamMute(AudioSystem::RING, true, mPrimaryOutput);
+            }
+
             audio_devices_t newDevice = getNewDevice(output, false /*fromCache*/);
             // delay the device switch by twice the latency because stopOutput() is executed when
             // the track stop() command is received and at that time the audio track buffer can
