@@ -490,25 +490,27 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
             devices = devices | (AudioSystem::DEVICE_OUT_WIRED_HEADPHONE |
                       AudioSystem::DEVICE_IN_BUILTIN_MIC);
         } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) ||
-                  (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC)) {
-            if((mode == AudioSystem::MODE_IN_COMMUNICATION)
-                    && devices & AudioSystem::DEVICE_IN_BUILTIN_MIC) {
-                ALOGV("Current Rx device %s",mCurRxUCMDevice);
-                if(!strncmp(mCurRxUCMDevice, SND_USE_CASE_DEV_SPEAKER ,
-                        strlen(SND_USE_CASE_DEV_SPEAKER))) {
-                    devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
-                    AudioSystem::DEVICE_OUT_SPEAKER);
-                    ALOGV("Selecting Speaker: device %d",devices);
-                }
-                else{
-                    ALOGV("Selecting earpiece: device %d",devices);
-                    devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
-                    AudioSystem::DEVICE_OUT_EARPIECE);
-                }
+                   (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC)) {
+            if ((mode == AudioSystem::MODE_IN_COMMUNICATION) &&
+                 (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC)) {
+                 if (!strncmp(mCurRxUCMDevice, SND_USE_CASE_DEV_SPEAKER,
+                              strlen(SND_USE_CASE_DEV_SPEAKER))) {
+                     devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+                               AudioSystem::DEVICE_OUT_SPEAKER);
+                 }
+                 else if (!strncmp(mCurRxUCMDevice, SND_USE_CASE_DEV_HDMI,
+                                   strlen(SND_USE_CASE_DEV_HDMI))) {
+                           devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
+                                     AudioSystem::DEVICE_IN_AUX_DIGITAL);
+                 }
+                 else {
+                     devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+                               AudioSystem::DEVICE_OUT_EARPIECE);
+                 }
             }
-            else{
+            else {
                 devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
-                AudioSystem::DEVICE_OUT_EARPIECE);
+                          AudioSystem::DEVICE_OUT_EARPIECE);
             }
         } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
             devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
