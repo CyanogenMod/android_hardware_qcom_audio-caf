@@ -175,6 +175,12 @@ ifeq ($(strip $(AUDIO_FEATURE_MDM_DETECT)),true)
     LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/libmdmdetect/inc
 endif
 
+ifneq ($(BOARD_AUDIO_AMPLIFIER),)
+    LOCAL_CFLAGS += -DUSES_AUDIO_AMPLIFIER
+    LOCAL_SHARED_LIBRARIES += libaudioamp
+    LOCAL_C_INCLUDES += $(BOARD_AUDIO_AMPLIFIER)
+endif
+
 LOCAL_C_INCLUDES += \
 	external/tinyalsa/include \
 	external/tinycompress/include \

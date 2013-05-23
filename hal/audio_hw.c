@@ -55,6 +55,10 @@
 #include "sound/compress_params.h"
 #include "sound/asound.h"
 
+#ifdef USES_AUDIO_AMPLIFIER
+#include <audio_amplifier.h>
+#endif
+
 #define COMPRESS_OFFLOAD_NUM_FRAGMENTS 4
 /* ToDo: Check and update a proper value in msec */
 #define COMPRESS_OFFLOAD_PLAYBACK_LATENCY 96
@@ -819,6 +823,12 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
     usecase->out_snd_device = out_snd_device;
 
     enable_audio_route(adev, usecase);
+
+#ifdef USES_AUDIO_AMPLIFIER
+    /* Rely on amplifier_set_devices to distinguish between in/out devices */
+    amplifier_set_devices(in_snd_device);
+    amplifier_set_devices(out_snd_device);
+#endif
 
 #ifndef PLATFORM_MSM8960
     /* Applicable only on the targets that has external modem.
@@ -2915,6 +2925,10 @@ static int adev_set_mode(struct audio_hw_device *dev, audio_mode_t mode)
     pthread_mutex_lock(&adev->lock);
     if (adev->mode != mode) {
         ALOGD("%s mode %d\n", __func__, mode);
+#ifdef USES_AUDIO_AMPLIFIER
+        if (amplifier_set_mode(mode) != 0)
+            ALOGE("Failed setting amplifier mode");
+#endif
         adev->mode = mode;
     }
     pthread_mutex_unlock(&adev->lock);
@@ -3084,6 +3098,10 @@ static int adev_close(hw_device_t *device)
     pthread_mutex_lock(&adev_init_lock);
 
     if ((--audio_device_ref_count) == 0) {
+#ifdef USES_AUDIO_AMPLIFIER
+        if (amplifier_close() != 0)
+            ALOGE("Amplifier close failed");
+#endif
         audio_extn_listen_deinit(adev);
         audio_route_free(adev->audio_route);
         free(adev->snd_dev_ref_cnt);
@@ -3214,6 +3232,11 @@ static int adev_open(const hw_module_t *module, const char *name,
     }
 
     *device = &adev->device.common;
+
+#ifdef USES_AUDIO_AMPLIFIER
+    if (amplifier_open() != 0)
+        ALOGE("Amplifier initialization failed");
+#endif
 
     audio_device_ref_count++;
     pthread_mutex_unlock(&adev_init_lock);
