@@ -72,6 +72,14 @@ ifeq ($(BOARD_HAVE_NEW_QCOM_CSDCLIENT),true)
   LOCAL_CFLAGS += -DNEW_CSDCLIENT
 endif
 
+ifeq ($(BOARD_HAVE_AUDIENCE_ES325_2MIC),true)
+  LOCAL_CFLAGS += -DUSE_ES325_2MIC
+endif
+
+ifeq ($(BOARD_HAVE_SAMSUNG_CSDCLIENT),true)
+  LOCAL_CFLAGS += -DSAMSUNG_CSDCLIENT
+endif
+
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp         \
   AudioStreamOutALSA.cpp        \
