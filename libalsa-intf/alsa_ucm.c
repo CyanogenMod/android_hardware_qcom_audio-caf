@@ -268,6 +268,10 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
     char ident[MAX_STR_LEN], *ident1, *ident2, *temp_ptr;
     int index, verb_index = 0, ret = 0;
 
+    if (value != NULL) {
+        *value = NULL;
+    }
+
     pthread_mutex_lock(&uc_mgr->card_ctxt_ptr->card_lock);
     if ((uc_mgr->snd_card_index >= (int)MAX_NUM_CARDS) ||
         (uc_mgr->snd_card_index < 0) || (uc_mgr->card_ctxt_ptr == NULL)) {
@@ -369,6 +373,50 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
                 *value = NULL;
                 ret = -ENODEV;
             }
+        } else if (!strncmp(ident1, "PlaybackVolume", 14)) {
+            ident2 = strtok_r(NULL, "/", &temp_ptr);
+            index = 0;
+            if (ident2 != NULL) {
+                verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
+                verb_list = uc_mgr->card_ctxt_ptr->use_case_verb_list;
+                if((get_usecase_type(uc_mgr, ident2)) == CTRL_LIST_VERB) {
+                    ctrl_list = verb_list[verb_index].verb_ctrls;
+                } else {
+                    ctrl_list = verb_list[verb_index].mod_ctrls;
+                }
+                if((verb_index < 0) ||
+                    (!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
+                    SND_UCM_END_OF_LIST, 3)) || (ctrl_list == NULL)) {
+                    ALOGE("Invalid current verb value: %s - %d",
+                         uc_mgr->card_ctxt_ptr->current_verb, verb_index);
+                    pthread_mutex_unlock(&uc_mgr->card_ctxt_ptr->card_lock);
+                    return -EINVAL;
+                }
+                while(strncmp(ctrl_list[index].case_name, ident2,
+                    (strlen(ident2)+1))) {
+                    if (!strncmp(ctrl_list[index].case_name,
+                        SND_UCM_END_OF_LIST, strlen(SND_UCM_END_OF_LIST))){
+                        *value = NULL;
+                        ret = -EINVAL;
+                        break;
+                    } else {
+                        index++;
+                    }
+                }
+            } else {
+                ret = -EINVAL;
+            }
+            if (ret < 0) {
+                ALOGE("No valid device/modifier found with given identifier: %s",
+                     ident2);
+            } else {
+                if (ctrl_list[index].volume_mixer_ctl) {
+                    *value = strdup(ctrl_list[index].volume_mixer_ctl);
+                } else {
+                    *value = NULL;
+                    ret = -ENODEV;
+                }
+            }
         } else if (!strncmp(ident1, "ACDBID", 11)) {
             ident2 = strtok_r(NULL, "/", &temp_ptr);
             index = 0; verb_index = 0;
@@ -401,6 +449,42 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
             } else {
                 if (verb_list[verb_index].device_ctrls[index].acdb_id) {
                     ret = verb_list[verb_index].device_ctrls[index].acdb_id;
+                } else {
+                    ret = -ENODEV;
+                }
+            }
+        } else if (!strncmp(ident1, "CAPABILITY", 11)) {
+            ident2 = strtok_r(NULL, "/", &temp_ptr);
+            index = 0; verb_index = 0;
+            verb_list = uc_mgr->card_ctxt_ptr->use_case_verb_list;
+            if((verb_index < 0) ||
+               (!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
+                SND_UCM_END_OF_LIST, 3)) ||
+                (verb_list[verb_index].verb_ctrls == NULL)) {
+                ALOGE("Invalid current verb value: %s - %d",
+                     uc_mgr->card_ctxt_ptr->current_verb, verb_index);
+                pthread_mutex_unlock(&uc_mgr->card_ctxt_ptr->card_lock);
+                return -EINVAL;
+            }
+            ctrl_list = verb_list[verb_index].device_ctrls;
+            if (ident2 != NULL) {
+                while(strncmp(ctrl_list[index].case_name, ident2,
+                   MAX_LEN(ctrl_list[index].case_name,ident2))) {
+                    if (!strncmp(ctrl_list[index].case_name, SND_UCM_END_OF_LIST,
+                        strlen(SND_UCM_END_OF_LIST))){
+                        ret = -EINVAL;
+                        break;
+                    } else {
+                        index++;
+                    }
+                }
+            }
+            if (ret < 0) {
+                ALOGE("No valid device/modifier found with given identifier: %s",
+                      ident2);
+            } else {
+                if (verb_list[verb_index].device_ctrls[index].capability) {
+                    ret = verb_list[verb_index].device_ctrls[index].capability;
                 } else {
                     ret = -ENODEV;
                 }
@@ -3383,6 +3467,7 @@ char **nxt_str, int verb_index, int ctrl_list_type)
     list->acdb_id = 0;
     list->capability = 0;
     list->effects_mixer_ctl = NULL;
+    list->volume_mixer_ctl = NULL;
     list->ec_ref_rx_mixer_ctl = NULL;
     current_str = *cur_str; next_str = *nxt_str;
     while(strncasecmp(current_str, "EndSection", 10)) {
@@ -3442,6 +3527,12 @@ char **nxt_str, int verb_index, int ctrl_list_type)
             if (ret < 0)
                 break;
             ALOGV("Effects mixer ctl: %s:\n", list->effects_mixer_ctl);
+        } else if (strcasestr(current_str, "PlaybackVolume") != NULL) {
+            ret = snd_ucm_extract_volume_mixer_ctl(current_str,
+                      &list->volume_mixer_ctl);
+            if (ret < 0)
+                break;
+            ALOGV("Volume mixer ctl: %s:\n", list->volume_mixer_ctl);
         } else if (strcasestr(current_str, "EC_REF_RXMixerCTL") != NULL) {
             ret = snd_ucm_extract_ec_ref_rx_mixer_ctl(current_str,
                       &list->ec_ref_rx_mixer_ctl);
@@ -3568,6 +3659,30 @@ static int snd_ucm_extract_effects_mixer_ctl(char *buf, char **mixer_name)
     return ret;
 }
 
+/* Extract Volume Mixer ID string of usecase from config file
+ * Returns 0 on sucess, negative error code otherwise
+ */
+static int snd_ucm_extract_volume_mixer_ctl(char *buf, char **mixer_name)
+{
+    int ret = 0;
+    char *p, *name = *mixer_name, *temp_ptr;
+
+    p = strtok_r(buf, "\"", &temp_ptr);
+    while (p != NULL) {
+        p = strtok_r(NULL, "\"", &temp_ptr);
+        if (p == NULL)
+            break;
+        name = (char *)malloc((strlen(p)+1)*sizeof(char));
+        if(name == NULL) {
+            ret = -ENOMEM;
+            break;
+        }
+        strlcpy(name, p, (strlen(p)+1)*sizeof(char));
+        *mixer_name = name;
+        break;
+    }
+    return ret;
+}
 
 /* Extract Effects Mixer ID of device from config file
  * Returns 0 on sucess, negative error code otherwise
@@ -3812,6 +3927,9 @@ void free_list(card_mctrl_t *list, int verb_index, int count)
         }
         if(list[case_index].effects_mixer_ctl) {
             list[case_index].effects_mixer_ctl = NULL;
+        }
+        if(list[case_index].volume_mixer_ctl) {
+            list[case_index].volume_mixer_ctl = NULL;
         }
         if(list[case_index].ec_ref_rx_mixer_ctl) {
             list[case_index].ec_ref_rx_mixer_ctl = NULL;

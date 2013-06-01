@@ -284,14 +284,13 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
             if (state == AudioSystem::DEVICE_STATE_AVAILABLE) {
                 ALOGV("setDeviceConnectionState() changeRefCount Inc");
                 mOutputs.valueFor(mPrimaryOutput)->changeRefCount(AudioSystem::FM, 1);
+                newDevice = (audio_devices_t)(AudioPolicyManagerBase::getNewDevice(mPrimaryOutput, false) | AUDIO_DEVICE_OUT_FM);
             }
             else {
                 ALOGV("setDeviceConnectionState() changeRefCount Dec");
                 mOutputs.valueFor(mPrimaryOutput)->changeRefCount(AudioSystem::FM, -1);
             }
-            if(newDevice == 0){
-                newDevice = getDeviceForStrategy(STRATEGY_MEDIA, false);
-            }
+
             AudioParameter param = AudioParameter();
             param.addInt(String8(AudioParameter::keyHandleFm), (int)newDevice);
             ALOGV("setDeviceConnectionState() setParameters handle_fm");
@@ -997,6 +996,10 @@ status_t AudioPolicyManager::startInput(audio_io_handle_t input)
     param.addInt(String8("vr_mode"), vr_enabled);
     ALOGV("AudioPolicyManager::startInput(%d), setting vr_mode to %d", inputDesc->mInputSource, vr_enabled);
 
+    //to pass on if camcorder mode is enabled to HAL
+    int camcorder_enabled = inputDesc->mInputSource == AUDIO_SOURCE_CAMCORDER ? 1 : 0;
+    param.addInt(String8("camcorder_mode"), camcorder_enabled);
+
     mpClientInterface->setParameters(input, param.toString());
 
     inputDesc->mRefCount = 1;
@@ -1459,7 +1462,6 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
         }
 #if defined(QCOM_FM_ENABLED) || defined(STE_FM)
         if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
-            device |= AUDIO_DEVICE_OUT_FM;
             if (mForceUse[AudioSystem::FOR_MEDIA] == AudioSystem::FORCE_SPEAKER) {
                 device &= ~(AUDIO_DEVICE_OUT_WIRED_HEADSET);
                 device &= ~(AUDIO_DEVICE_OUT_WIRED_HEADPHONE);
@@ -1575,11 +1577,6 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             device = mAvailableOutputDevices & AUDIO_DEVICE_OUT_SPEAKER;
         }
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
-        if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
-            device |= AUDIO_DEVICE_OUT_FM;
-        }
-#endif
         if (isInCall()) {
             // when in call, get the device for Phone strategy
             device = getDeviceForStrategy(STRATEGY_PHONE, false /*fromCache*/);
@@ -1628,7 +1625,7 @@ uint32_t AudioPolicyManager::setOutputDevice(audio_io_handle_t output,
     //  - the requested device is AUDIO_DEVICE_NONE
     //  - the requested device is the same as current device and force is not specified.
     // Doing this check here allows the caller to call setOutputDevice() without conditions
-    if ((device == AUDIO_DEVICE_NONE || device == prevDevice) && !force) {
+    if ((device == AUDIO_DEVICE_NONE) || ((device == prevDevice) && !force)) {
         ALOGV("setOutputDevice() setting same device %04x or null device for output %d", device, output);
         return muteWaitMs;
     }
@@ -1676,6 +1673,12 @@ audio_devices_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
     case AUDIO_SOURCE_CAMCORDER:
         if (mAvailableInputDevices & AUDIO_DEVICE_IN_BACK_MIC) {
             device = AUDIO_DEVICE_IN_BACK_MIC;
+        } else if (mAvailableInputDevices & AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
+            device = AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET;
+        } else if (mAvailableInputDevices & AUDIO_DEVICE_IN_WIRED_HEADSET) {
+            device = AUDIO_DEVICE_IN_WIRED_HEADSET;
+        } else if (mAvailableInputDevices & AUDIO_DEVICE_IN_AUX_DIGITAL) {
+            device = AUDIO_DEVICE_IN_AUX_DIGITAL;
         } else if (mAvailableInputDevices & AUDIO_DEVICE_IN_BUILTIN_MIC) {
             device = AUDIO_DEVICE_IN_BUILTIN_MIC;
         }

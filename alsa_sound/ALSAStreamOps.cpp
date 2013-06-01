@@ -57,16 +57,12 @@ ALSAStreamOps::~ALSAStreamOps()
 
     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
        (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-        if((mParent->mVoipStreamCount)) {
-            mParent->mVoipStreamCount--;
-            if(mParent->mVoipStreamCount > 0) {
-                ALOGD("ALSAStreamOps::close() Ignore");
-                return ;
-            }
-       }
-       mParent->mVoipStreamCount = 0;
-       mParent->mVoipMicMute = 0;
-       mParent->mVoipBitRate = 0;
+          if(mParent->mVoipInStreamCount^mParent->mVoipOutStreamCount) {
+              ALOGD("ALSAStreamOps::close() Ignore");
+              return ;
+          }
+          mParent->mVoipMicMute = 0;
+          mParent->mVoipBitRate = 0;
     }
     close();
 
@@ -202,8 +198,9 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
 {
     AudioParameter param = AudioParameter(keyValuePairs);
     String8 key = String8(AudioParameter::keyRouting),value;
-    int device;
+    int device, camcorder_enabled;
     status_t err = NO_ERROR;
+    int mMode = mParent->mode();
 
 #ifdef SEPERATED_AUDIO_INPUT
     String8 key_input = String8(AudioParameter::keyInputSource);
@@ -220,6 +217,25 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
         // Ignore routing if device is 0.
         ALOGD("setParameters(): keyRouting with device 0x%x", device);
         if(device) {
+            //checking for camcorder_mode and in call more to select appropriate input device
+            key = String8("camcorder_mode");
+            if (param.getInt(key, camcorder_enabled) == NO_ERROR) {
+                if (camcorder_enabled == 1) {
+                    if ((mMode == AudioSystem::MODE_IN_CALL) || (mMode == AudioSystem::MODE_IN_COMMUNICATION)) {
+                        if (device & AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
+                            device = AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET;
+                        } else if (device & AudioSystem::DEVICE_IN_WIRED_HEADSET) {
+                            device = AudioSystem::DEVICE_IN_WIRED_HEADSET;
+                        } else if (device & AudioSystem::DEVICE_IN_AUX_DIGITAL) {
+                            device = AudioSystem::DEVICE_IN_AUX_DIGITAL;
+                        } else {
+                            device = AudioSystem::DEVICE_IN_BUILTIN_MIC;
+                        }
+                    } else {
+                        device = AudioSystem::DEVICE_IN_BUILTIN_MIC;
+                    }
+                }
+            }
             ALOGD("setParameters(): keyRouting with device %#x", device);
             if (mParent->isExtOutDevice(device)) {
                 mParent->mRouteAudioToExtOut = true;
@@ -438,11 +454,28 @@ uint32_t ALSAStreamOps::channels() const
 void ALSAStreamOps::close()
 {
     ALOGD("close");
+
+    bool found = false;
+    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
+            it != mParent->mDeviceList.end(); ++it) {
+        if (mHandle == &(*it)) {
+            found = true;
+            ALOGD("close() : Found mHandle %p, proceeding to close", mHandle);
+            break;
+        }
+    }
+
+    if(!found) {
+        ALOGW("close() : mHandle NOT found %p, exiting close", mHandle);
+        return;
+    }
+
     if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP, strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
        mParent->mVoipMicMute = false;
        mParent->mVoipBitRate = 0;
-       mParent->mVoipStreamCount = 0;
+       mParent->mVoipInStreamCount = 0;
+       mParent->mVoipOutStreamCount = 0;
     }
     mParent->mALSADevice->close(mHandle);
 }

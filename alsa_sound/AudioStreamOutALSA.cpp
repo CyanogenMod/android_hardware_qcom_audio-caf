@@ -253,7 +253,7 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
         if (write_pending < period_size) {
             write_pending = period_size;
         }
-        if((mParent->mVoipStreamCount) && (mHandle->rxHandle != 0)) {
+        if((mParent->mVoipOutStreamCount) && (mHandle->rxHandle != 0)) {
             n = pcm_write(mHandle->rxHandle,
                      (char *)buffer + sent,
                       period_size);
@@ -305,7 +305,7 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
             write_pending -= period_size;
         }
 
-    } while ((mHandle->handle||(mHandle->rxHandle && mParent->mVoipStreamCount)) && sent < bytes);
+    } while ((mHandle->handle||(mHandle->rxHandle && mParent->mVoipOutStreamCount)) && sent < bytes);
 
     return sent;
 }
@@ -329,9 +329,9 @@ status_t AudioStreamOutALSA::close()
     ALOGV("close");
     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
         (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-         if((mParent->mVoipStreamCount)) {
+         if(mParent->mVoipInStreamCount||mParent->mVoipOutStreamCount) {
 #ifdef QCOM_USBAUDIO_ENABLED
-             if(mParent->mVoipStreamCount == 1) {
+             if(mParent->mVoipInStreamCount^mParent->mVoipOutStreamCount) {
                  ALOGV("Deregistering VOIP Call bit, musbPlaybackState:%d, musbRecordingState: %d",
                        mParent->musbPlaybackState, mParent->musbRecordingState);
                  mParent->musbPlaybackState &= ~USBPLAYBACKBIT_VOIPCALL;
@@ -344,9 +344,13 @@ status_t AudioStreamOutALSA::close()
                  }
              }
 #endif
-                return NO_ERROR;
+             if(mParent->mVoipOutStreamCount > 0) {
+                 mParent->mVoipOutStreamCount--;
+             }
+             ALOGE("AudioStreamOutALSA Close :mVoipInStreamCount= %d, mParent->mVoipOutStreamCount=%d ",
+                    mParent->mVoipInStreamCount, mParent->mVoipOutStreamCount);
+             return NO_ERROR;
          }
-         mParent->mVoipStreamCount = 0;
          mParent->mVoipMicMute = 0;
     }
 #ifdef QCOM_USBAUDIO_ENABLED
