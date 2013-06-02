@@ -318,7 +318,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     updateMetaData(bytes);
 
     memcpy(buf.memBuf, &mOutputMetadataTunnel, mOutputMetadataLength);
-    ALOGD("buf.memBuf  =%x , Copy Metadata = %d,  bytes = %d", buf.memBuf,mOutputMetadataLength, bytes);
+    ALOGV("buf.memBuf  =%x , Copy Metadata = %d,  bytes = %d", buf.memBuf,mOutputMetadataLength, bytes);
 
     if (bytes == 0) {
         buf.bytesToWrite = 0;
@@ -363,7 +363,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         if (!mTunnelMode) mReachedEOS = true;
     }
     int32_t * Buf = (int32_t *) buf.memBuf;
-    ALOGD(" buf.memBuf [0] = %x , buf.memBuf [1] = %x",  Buf[0], Buf[1]);
+    ALOGV(" buf.memBuf [0] = %x , buf.memBuf [1] = %x",  Buf[0], Buf[1]);
     mFilledQueue.push_back(buf);
     return err;
 }
@@ -1003,7 +1003,7 @@ void AudioSessionOutALSA::updateMetaData(size_t bytes) {
     mOutputMetadataTunnel.metadataLength = sizeof(mOutputMetadataTunnel);
     mOutputMetadataTunnel.timestamp = 0;
     mOutputMetadataTunnel.bufferLength =  bytes;
-    ALOGD("bytes = %d , mAlsaHandle->handle->period_size = %d, metadata = %d ",
+    ALOGV("bytes = %d , mAlsaHandle->handle->period_size = %d, metadata = %d ",
             mOutputMetadataTunnel.bufferLength, mAlsaHandle->handle->period_size, mOutputMetadataTunnel.metadataLength);
 }
 
