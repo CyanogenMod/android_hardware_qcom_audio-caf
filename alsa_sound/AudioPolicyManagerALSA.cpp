@@ -1354,10 +1354,10 @@ audio_devices_t AudioPolicyManager::getNewDevice(audio_io_handle_t output, bool 
     //      use device for strategy media
     // 6: the strategy DTMF is active on the output:
     //      use device for strategy DTMF
-    if ((primaryOutputDesc->isUsedByStrategy(STRATEGY_ENFORCED_AUDIBLE))) {
+    if (outputDesc->isUsedByStrategy(STRATEGY_ENFORCED_AUDIBLE)) {
         device = getDeviceForStrategy(STRATEGY_ENFORCED_AUDIBLE, fromCache);
     } else if (isInCall() ||
-                (primaryOutputDesc->isUsedByStrategy(STRATEGY_PHONE))) {
+                    outputDesc->isUsedByStrategy(STRATEGY_PHONE)) {
         device = getDeviceForStrategy(STRATEGY_PHONE, fromCache);
     } else if (outputDesc->isUsedByStrategy(STRATEGY_SONIFICATION)){
         device = getDeviceForStrategy(STRATEGY_SONIFICATION, fromCache);
