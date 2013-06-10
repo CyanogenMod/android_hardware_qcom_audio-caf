@@ -467,19 +467,26 @@ status_t  AudioHardwareALSA::setFmVolume(float value)
 
     int vol;
 
-    if (value < 0.0) {
-        ALOGW("setFmVolume(%f) under 0.0, assuming 0.0\n", value);
-        value = 0.0;
-    } else if (value > 1.0) {
-        ALOGW("setFmVolume(%f) over 1.0, assuming 1.0\n", value);
-        value = 1.0;
+    for(ALSAHandleList::iterator it = mDeviceList.begin();
+      it != mDeviceList.end(); ++it) {
+        if((!strcmp(it->useCase, SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
+           (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_FM))) {
+            if (value < 0.0) {
+                ALOGW("setFmVolume(%f) under 0.0, assuming 0.0\n", value);
+                value = 0.0;
+            } else if (value > 1.0) {
+                ALOGW("setFmVolume(%f) over 1.0, assuming 1.0\n", value);
+                value = 1.0;
+            }
+            vol  = lrint((value * 0x2000) + 0.5);
+
+            ALOGV("setFmVolume(%f)\n", value);
+            ALOGV("Setting FM volume to %d (available range is 0 to 0x2000)\n", vol);
+
+            mALSADevice->setFmVolume(vol, &(*it));
+            break;
+        }
     }
-    vol  = lrint((value * 0x2000) + 0.5);
-
-    ALOGV("setFmVolume(%f)\n", value);
-    ALOGV("Setting FM volume to %d (available range is 0 to 0x2000)\n", vol);
-
-    mALSADevice->setFmVolume(vol);
 
     return status;
 }
