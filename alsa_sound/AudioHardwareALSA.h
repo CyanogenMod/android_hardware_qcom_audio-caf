@@ -875,9 +875,9 @@ protected:
 
     void                disableVoiceCall(char* verb, char* modifier, int mode, int device,
                                          uint32_t vsid = 0);
-    void                enableVoiceCall(char* verb, char* modifier, int mode, int device,
-                                        uint32_t vsid = 0);
     bool                isAnyCallActive();
+    status_t            enableVoiceCall(char* verb, char* modifier, int mode, int device,
+                                        uint32_t vsid = 0);
     bool                routeVoiceCall(int device, int newMode);
     bool                routeVoLTECall(int device, int newMode);
     bool                routeVoice2Call(int device, int newMode);
