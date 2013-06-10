@@ -354,7 +354,7 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
             mpClientInterface->setParameters(mPrimaryOutput, param.toString());
         }
 #endif
-        for (size_t i = 0; i < mOutputs.size(); i++) {
+        for (int i = mOutputs.size() -1; i >= 0; i--) {
             audio_devices_t newDevice = getNewDevice(mOutputs.keyAt(i), true /*fromCache*/);
 #ifdef QCOM_ANC_HEADSET_ENABLED
             if(device == AUDIO_DEVICE_OUT_ANC_HEADPHONE ||
@@ -670,7 +670,7 @@ void AudioPolicyManager::setForceUse(AudioSystem::force_use usage, AudioSystem::
     checkA2dpSuspend();
     checkOutputForAllStrategies();
     updateDevicesAndOutputs();
-    for (size_t i = 0; i < mOutputs.size(); i++) {
+    for (int i = mOutputs.size() -1; i >= 0; i--) {
         audio_io_handle_t output = mOutputs.keyAt(i);
         audio_devices_t newDevice = getNewDevice(output, true /*fromCache*/);
         setOutputDevice(output, newDevice, (newDevice != AUDIO_DEVICE_NONE));
