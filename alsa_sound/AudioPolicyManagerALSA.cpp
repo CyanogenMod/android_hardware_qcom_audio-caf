@@ -107,10 +107,14 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
                 setStrategyMute((routing_strategy)i, mute, curOutput, mute ? 0 : delayMs * 4);
                 if (desc->strategyRefCount((routing_strategy)i) != 0) {
                     if (tempMute) {
-                        setStrategyMute((routing_strategy)i, true, curOutput);
-                        setStrategyMute((routing_strategy)i, false, curOutput,
+                        if ((desc != outputDesc) && (desc->device() == device)) {
+                            ALOGD("avoid tempmute on curOutput %d as device is same", curOutput);
+                        } else {
+                            setStrategyMute((routing_strategy)i, true, curOutput);
+                            setStrategyMute((routing_strategy)i, false, curOutput,
                                          desc->latency() * ((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) ? 4 : 2),
                                          device);
+                        }
                     }
                     if (tempMute || mute) {
                         if (muteWaitMs < desc->latency()) {
