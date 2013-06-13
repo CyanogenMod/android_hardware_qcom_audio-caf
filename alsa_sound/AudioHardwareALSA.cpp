@@ -859,6 +859,12 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
         param.addInt(key, mCurDevice);
     }
 
+    key = String8(ECHO_SUPRESSION);
+    if (param.get(key, value) == NO_ERROR) {
+        value = String8("yes");
+        param.add(key, value);
+    }
+
     ALOGV("AudioHardwareALSA::getParameters() %s", param.toString().string());
     return param.toString();
 }

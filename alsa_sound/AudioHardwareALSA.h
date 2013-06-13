@@ -114,6 +114,7 @@ class AudioHardwareALSA;
 #define FENS_KEY            "fens_enable"
 #define ST_KEY              "st_enable"
 #define INCALLMUSIC_KEY     "incall_music_enabled"
+#define ECHO_SUPRESSION     "ec_supported"
 
 #define ANC_FLAG        0x00000001
 #define DMIC_FLAG       0x00000002
