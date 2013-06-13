@@ -49,6 +49,19 @@ namespace android_audio_legacy {
 
 AudioParameter param;
 
+void AudioPolicyManager::setStrategyMute(routing_strategy strategy,
+                                             bool on,
+                                             audio_io_handle_t output,
+                                             int delayMs,
+                                             audio_devices_t device)
+{
+    ALOGVV("setStrategyMute() strategy %d, mute %d, output %d", strategy, on, output);
+    for (int stream = 0; stream < AudioSystem::NUM_STREAM_TYPES; stream++) {
+        if (getStrategy((AudioSystem::stream_type)stream) == strategy) {
+            setStreamMute(stream, on, output, delayMs, device);
+        }
+    }
+}
 
 uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *outputDesc,
                                                        audio_devices_t prevDevice,
@@ -96,7 +109,7 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
                     if (tempMute) {
                         setStrategyMute((routing_strategy)i, true, curOutput);
                         setStrategyMute((routing_strategy)i, false, curOutput,
-                                         desc->latency() * (desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) ? 4 : 2,
+                                         desc->latency() * ((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) ? 4 : 2),
                                          device);
                     }
                     if (tempMute || mute) {
@@ -121,6 +134,50 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
         return muteWaitMs;
     }
     return 0;
+}
+
+void AudioPolicyManager::setStreamMute(int stream,
+                                           bool on,
+                                           audio_io_handle_t output,
+                                           int delayMs,
+                                           audio_devices_t device)
+{
+    StreamDescriptor &streamDesc = mStreams[stream];
+    AudioOutputDescriptor *outputDesc = mOutputs.valueFor(output);
+    if (device == AUDIO_DEVICE_NONE) {
+        device = outputDesc->device();
+    }
+
+    ALOGVV("setStreamMute() stream %d, mute %d, output %d, mMuteCount %d device %04x",
+          stream, on, output, outputDesc->mMuteCount[stream], device);
+
+    if (on) {
+        if (outputDesc->mMuteCount[stream] > 0) {
+            ALOGV("setStreamMute() muting already muted stream!");
+            return;
+        }
+        if (outputDesc->mMuteCount[stream] == 0) {
+            if (streamDesc.mCanBeMuted &&
+                    ((stream != AudioSystem::ENFORCED_AUDIBLE) ||
+                     (mForceUse[AudioSystem::FOR_SYSTEM] == AudioSystem::FORCE_NONE))) {
+                checkAndSetVolume(stream, 0, output, device, delayMs);
+            }
+        }
+        // increment mMuteCount after calling checkAndSetVolume() so that volume change is not ignored
+        outputDesc->mMuteCount[stream]++;
+    } else {
+        if (outputDesc->mMuteCount[stream] == 0) {
+            ALOGV("setStreamMute() unmuting non muted stream!");
+            return;
+        }
+        if (--outputDesc->mMuteCount[stream] == 0) {
+            checkAndSetVolume(stream,
+                              streamDesc.getVolumeIndex(device),
+                              output,
+                              device,
+                              delayMs);
+        }
+    }
 }
 
 
@@ -846,6 +903,13 @@ status_t AudioPolicyManager::stopOutput(audio_io_handle_t output,
         // store time at which the stream was stopped - see isStreamActive()
         if (outputDesc->mRefCount[stream] == 0) {
             outputDesc->mStopTime[stream] = systemTime();
+
+            if ((outputDesc->mRefCount[AUDIO_STREAM_RING]!= 0) && (stream == AUDIO_STREAM_VOICE_CALL)) {
+                 // When AUDIO_STREAM_RING is present, Send Mute on RING
+                 // if it gets stopOutput on  AUDIO_STREAM_VOICE_CALL
+                 setStreamMute(AudioSystem::RING, true, mPrimaryOutput);
+            }
+
             audio_devices_t newDevice = getNewDevice(output, false /*fromCache*/);
             // delay the device switch by twice the latency because stopOutput() is executed when
             // the track stop() command is received and at that time the audio track buffer can
@@ -1290,10 +1354,10 @@ audio_devices_t AudioPolicyManager::getNewDevice(audio_io_handle_t output, bool 
     //      use device for strategy media
     // 6: the strategy DTMF is active on the output:
     //      use device for strategy DTMF
-    if ((primaryOutputDesc->isUsedByStrategy(STRATEGY_ENFORCED_AUDIBLE))) {
+    if (outputDesc->isUsedByStrategy(STRATEGY_ENFORCED_AUDIBLE)) {
         device = getDeviceForStrategy(STRATEGY_ENFORCED_AUDIBLE, fromCache);
     } else if (isInCall() ||
-                (primaryOutputDesc->isUsedByStrategy(STRATEGY_PHONE))) {
+                    outputDesc->isUsedByStrategy(STRATEGY_PHONE)) {
         device = getDeviceForStrategy(STRATEGY_PHONE, fromCache);
     } else if (outputDesc->isUsedByStrategy(STRATEGY_SONIFICATION)){
         device = getDeviceForStrategy(STRATEGY_SONIFICATION, fromCache);

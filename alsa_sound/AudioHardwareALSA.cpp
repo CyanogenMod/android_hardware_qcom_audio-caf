@@ -2204,7 +2204,10 @@ bool AudioHardwareALSA::isAnyCallActive() {
 
     if ((mCSCallActive == CS_ACTIVE) ||
         (mVoice2CallActive == CS_ACTIVE_SESSION2) ||
-        (mVolteCallActive == IMS_ACTIVE)) {
+        (mVolteCallActive == IMS_ACTIVE) ||
+        (mCSCallActive == CS_HOLD) ||
+        (mVoice2CallActive == CS_HOLD_SESSION2) ||
+        (mVolteCallActive == IMS_HOLD)) {
         ret = true;
     }
 
