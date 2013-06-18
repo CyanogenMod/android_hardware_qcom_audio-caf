@@ -875,6 +875,11 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
         if (waitMs > muteWaitMs) {
             usleep((waitMs - muteWaitMs) * 2 * 1000);
         }
+    } else {
+        // handle special case for sonification while in call
+        if (isInCall()) {
+            handleIncallSonification(stream, true, false);
+        }
     }
     return NO_ERROR;
 }
