@@ -116,6 +116,7 @@ class AudioHardwareALSA;
 #define FENS_KEY            "fens_enable"
 #define ST_KEY              "st_enable"
 #define INCALLMUSIC_KEY     "incall_music_enabled"
+#define ECHO_SUPRESSION     "ec_supported"
 
 #define ANC_FLAG        0x00000001
 #define DMIC_FLAG       0x00000002
@@ -294,7 +295,7 @@ public:
     void     setMicMute(int state);
     void     setVoipMicMute(int state);
     void     setVoipConfig(int mode, int rate);
-    status_t setFmVolume(int vol);
+    status_t setFmVolume(int vol, alsa_handle_t *handle);
     void     setBtscoRate(int rate);
     status_t setLpaVolume(int vol);
     void     enableWideVoice(bool flag, uint32_t vsid = 0);
@@ -893,9 +894,9 @@ protected:
 
     void                disableVoiceCall(char* verb, char* modifier, int mode, int device,
                                          uint32_t vsid = 0);
-    void                enableVoiceCall(char* verb, char* modifier, int mode, int device,
-                                        uint32_t vsid = 0);
     bool                isAnyCallActive();
+    status_t            enableVoiceCall(char* verb, char* modifier, int mode, int device,
+                                        uint32_t vsid = 0);
     bool                routeVoiceCall(int device, int newMode);
     bool                routeVoLTECall(int device, int newMode);
     bool                routeVoice2Call(int device, int newMode);
