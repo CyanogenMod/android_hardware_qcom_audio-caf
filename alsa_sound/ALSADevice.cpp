@@ -34,6 +34,7 @@ extern "C" {
 static int (*csd_disable_device)();
 static int (*csd_enable_device)(int, int, uint32_t);
 #ifdef NEW_CSDCLIENT
+static int (*csd_enable_device_config)(int, int);
 static int (*csd_volume)(uint32_t, int);
 static int (*csd_mic_mute)(uint32_t, int);
 static int (*csd_wide_voice)(uint32_t, uint8_t);
@@ -66,6 +67,11 @@ static int (*acdb_loader_get_ecrx_device)(int acdb_id);
 #define AFE_PROXY_PERIOD_SIZE 3072
 #define KILL_A2DP_THREAD 1
 #define SIGNAL_A2DP_THREAD 2
+
+// Setting number of periods to 4. If the system is loaded
+// and record obtain buffer is seen increase
+// PCM_RECORD_PERIOD_COUNT to a value between 4-16.
+#define PCM_RECORD_PERIOD_COUNT 4
 #define PROXY_CAPTURE_DEVICE_NAME (const char *)("hw:0,8")
 #define ADSP_UP_CHK_TRIES 5
 #define ADSP_UP_CHK_SLEEP 1*1000*1000
@@ -89,6 +95,7 @@ ALSADevice::ALSADevice() {
     mBtscoSamplerate = 8000;
     mCallMode = AUDIO_MODE_NORMAL;
     mInChannels = 0;
+    mIsFmEnabled = false;
     char value[128], platform[128], baseband[128];
 
     property_get("persist.audio.handset.mic",value,"0");
@@ -415,6 +422,14 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 #else
     param_set_int(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, reqBuffSize);
 #endif
+    //Setting number of periods to 4. If the system is loaded and record
+    // obtain buffer is seen increase PCM_RECORD_PERIOD_COUNT to a value between 4-16.
+    if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_REC,
+            strlen(SND_USE_CASE_VERB_HIFI_REC)) ||
+            !strncmp(handle->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC,
+            strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
+        param_set_int(params, SNDRV_PCM_HW_PARAM_PERIODS, PCM_RECORD_PERIOD_COUNT);
+    }
     param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
     param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
                    channels * 16);
@@ -534,8 +549,27 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
         } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) ||
                   (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC) ||
                   (devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)) {
-            devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
-                      AudioSystem::DEVICE_OUT_EARPIECE);
+            if ((mode == AudioSystem::MODE_IN_COMMUNICATION) &&
+                 (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC)) {
+                 if (!strncmp(mCurRxUCMDevice, SND_USE_CASE_DEV_SPEAKER,
+                              strlen(SND_USE_CASE_DEV_SPEAKER))) {
+                     devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+                               AudioSystem::DEVICE_OUT_SPEAKER);
+                 }
+                 else if (!strncmp(mCurRxUCMDevice, SND_USE_CASE_DEV_HDMI,
+                                   strlen(SND_USE_CASE_DEV_HDMI))) {
+                           devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
+                                     AudioSystem::DEVICE_IN_AUX_DIGITAL);
+                 }
+                 else {
+                     devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+                               AudioSystem::DEVICE_OUT_EARPIECE);
+                 }
+            }
+            else {
+                devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+                          AudioSystem::DEVICE_OUT_EARPIECE);
+            }
         } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
             devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
                        AudioSystem::DEVICE_OUT_SPEAKER);
@@ -559,7 +593,8 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
             devices = devices | (AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET |
                       AudioSystem::DEVICE_IN_ANLG_DOCK_HEADSET);
 #endif
-        } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+        } else if ((devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) ||
+                  (devices & AudioSystem::DEVICE_IN_AUX_DIGITAL)) {
             devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
                       AudioSystem::DEVICE_IN_AUX_DIGITAL);
 #ifdef QCOM_PROXY_DEVICE_ENABLED
@@ -685,6 +720,39 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
        snd_use_case_set(handle->ucMgr, "_enadev", txDevice);
        strlcpy(mCurTxUCMDevice, txDevice, sizeof(mCurTxUCMDevice));
     }
+
+#if defined(QCOM_CSDCLIENT_ENABLED) && defined (NEW_CSDCLIENT)
+    if (isPlatformFusion3() && (inCallDevSwitch == true)) {
+
+        /* Get tx acdb id */
+        memset(&ident,0,sizeof(ident));
+        strlcpy(ident, "ACDBID/", sizeof(ident));
+        strlcat(ident, mCurTxUCMDevice, sizeof(ident));
+        tx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
+
+       /* Get rx acdb id */
+        memset(&ident,0,sizeof(ident));
+        strlcpy(ident, "ACDBID/", sizeof(ident));
+        strlcat(ident, mCurRxUCMDevice, sizeof(ident));
+        rx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
+
+        if (rx_dev_id == DEVICE_SPEAKER_RX_ACDB_ID && tx_dev_id == DEVICE_HANDSET_TX_ACDB_ID) {
+            tx_dev_id = DEVICE_SPEAKER_TX_ACDB_ID;
+        }
+
+        /* Parallelize codec configuration on APQ with CSD voice call
+         * sequence on MDM. This will reduce in call device switch delay
+         */
+        if (csd_enable_device_config == NULL) {
+            ALOGE("csd_enable_device_config is NULL");
+        } else {
+            err = csd_enable_device_config(rx_dev_id, tx_dev_id);
+            if (err < 0) {
+                ALOGE("csd_enable_device_config failed, error %d", err);
+            }
+        }
+    }
+#endif
     for(ALSAUseCaseList::iterator it = mUseCaseList.begin(); it != mUseCaseList.end(); ++it) {
         ALOGD("Route use case %s\n", it->useCase);
         if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
@@ -702,8 +770,7 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
     }
 #ifdef QCOM_FM_ENABLED
     if (rxDevice != NULL) {
-        if (devices & AudioSystem::DEVICE_OUT_FM)
-            setFmVolume(mFmVolume);
+        setFmVolume(mFmVolume);
     }
 #endif
     ALOGD("switchDevice: mCurTxUCMDevivce %s mCurRxDevDevice %s", mCurTxUCMDevice, mCurRxUCMDevice);
@@ -737,8 +804,10 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
         }
     }
 #endif
+#ifdef QCOM_CSDCLIENT_ENABLED
     if (isPlatformFusion3() && (inCallDevSwitch == true)) {
 
+#ifndef NEW_CSDCLIENT
         /* get tx acdb id */
         memset(&ident,0,sizeof(ident));
         strlcpy(ident, "ACDBID/", sizeof(ident));
@@ -750,51 +819,51 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
         strlcpy(ident, "ACDBID/", sizeof(ident));
         strlcat(ident, mCurRxUCMDevice, sizeof(ident));
         rx_dev_id = snd_use_case_get(handle->ucMgr, ident, NULL);
+#endif
 
         if (((rx_dev_id == DEVICE_SPEAKER_MONO_RX_ACDB_ID ) || (rx_dev_id == DEVICE_SPEAKER_STEREO_RX_ACDB_ID ))
          && tx_dev_id == DEVICE_HANDSET_TX_ACDB_ID) {
             tx_dev_id = DEVICE_SPEAKER_TX_ACDB_ID;
         }
-
         ALOGV("rx_dev_id=%d, tx_dev_id=%d\n", rx_dev_id, tx_dev_id);
-#ifdef QCOM_CSDCLIENT_ENABLED
-        if (isPlatformFusion3()) {
-            if (csd_enable_device == NULL) {
-                ALOGE("csd_client_enable_device is NULL");
-            } else {
-                int tmp_tx_id = tx_dev_id;
-                int tmp_rx_id = rx_dev_id;
+
+#ifndef NEW_CSDCLIENT
+        if (csd_enable_device == NULL) {
+            ALOGE("csd_client_enable_device is NULL");
+        } else {
+            int tmp_tx_id = tx_dev_id;
+            int tmp_rx_id = rx_dev_id;
 
 #ifdef USE_ES325_2MIC
-                if (tx_dev_id == 4) {
-                    tmp_tx_id = 34;
-                    setMixerControl("VEQ Enable", 1, 0);
-                    setMixerControl("ES325 2Mic Enable", 1, 0);
-                } else {
-                    setMixerControl("ES325 2Mic Enable", 0, 0);
-                }
+            if (tx_dev_id == 4) {
+                tmp_tx_id = 34;
+                setMixerControl("VEQ Enable", 1, 0);
+                setMixerControl("ES325 2Mic Enable", 1, 0);
+            } else {
+                setMixerControl("ES325 2Mic Enable", 0, 0);
+            }
 #endif
 #ifdef HTC_CSDCLIENT
-                if (tx_dev_id == DEVICE_BT_SCO_TX_ACDB_ID)
-                {
-                    tmp_tx_id = 1027;
-                }
-                if (rx_dev_id == DEVICE_BT_SCO_RX_ACDB_ID)
-                {
-                    tmp_rx_id = 1127;
-                }
+            if (tx_dev_id == DEVICE_BT_SCO_TX_ACDB_ID)
+            {
+                tmp_tx_id = 1027;
+            }
+            if (rx_dev_id == DEVICE_BT_SCO_RX_ACDB_ID)
+            {
+                tmp_rx_id = 1127;
+            }
 #endif
-                int adjustedFlags = adjustFlagsForCsd(mDevSettingsFlag,
-                        mCurRxUCMDevice);
-                err = csd_enable_device(tmp_rx_id, tmp_tx_id, adjustedFlags);
-                if (err < 0)
-                {
-                    ALOGE("csd_client_disable_device failed, error %d", err);
-                }
+            int adjustedFlags = adjustFlagsForCsd(mDevSettingsFlag,
+                    mCurRxUCMDevice);
+            err = csd_enable_device(tmp_rx_id, tmp_tx_id, adjustedFlags);
+            if (err < 0)
+            {
+                ALOGE("csd_client_disable_device failed, error %d", err);
             }
         }
-#endif
     }
+#endif
+#endif
 
 #ifdef USE_A2220
     ALOGI("a2220: txDevice=%s rxDevice=%s", txDevice, rxDevice);
@@ -836,7 +905,7 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     unsigned flags = 0, maxTries = ADSP_UP_CHK_TRIES;
     int err = NO_ERROR;
 
-    if(handle->devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+    if(mCurDevice & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
         err = setHDMIChannelCount();
         if(err != OK) {
             ALOGE("setHDMIChannelCount err = %d", err);
@@ -1305,7 +1374,7 @@ status_t ALSADevice::startFm(alsa_handle_t *handle)
         goto Error;
     }
 
-
+    mIsFmEnabled = true;
     setFmVolume(mFmVolume);
     if (devName) {
         free(devName);
@@ -1325,6 +1394,9 @@ Error:
 status_t ALSADevice::setFmVolume(int value)
 {
     status_t err = NO_ERROR;
+    if (!mIsFmEnabled) {
+        return INVALID_OPERATION;
+    }
 
     setMixerControl("Internal FM RX Volume",value,0);
     mFmVolume = value;
@@ -1386,6 +1458,12 @@ status_t ALSADevice::close(alsa_handle_t *handle, uint32_t vsid)
             }
         }
 #endif
+
+        if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
+            (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_FM))) {
+            mIsFmEnabled = false;
+        }
+
         ALOGV("close rxHandle\n");
         err = pcm_close(h);
         if(err != NO_ERROR) {
@@ -1586,7 +1664,7 @@ char *ALSADevice::getUCMDeviceFromAcdbId(int acdb_id)
         case DEVICE_HANDSET_RX_ACDB_ID:
              return strdup(SND_USE_CASE_DEV_HANDSET);
         case DEVICE_SPEAKER_MONO_RX_ACDB_ID:
-        case DEVICE_SPEAKER_STEREO_RX_ACDB_ID:
+        case DEVICE_SPEAKER_RX_ACDB_ID:
              return strdup(SND_USE_CASE_DEV_SPEAKER);
         case DEVICE_HEADSET_RX_ACDB_ID:
              return strdup(SND_USE_CASE_DEV_HEADPHONES);
@@ -2231,8 +2309,10 @@ void ALSADevice::enableFENS(bool flag, uint32_t vsid)
     ALOGD("enableFENS: flag %d", flag);
     if(flag == true) {
         setMixerControl("FENS Enable", 1, 0);
+        setMixerControl("FENS_VOIP Enable", 1 , 0);
     } else {
         setMixerControl("FENS Enable", 0, 0);
+        setMixerControl("FENS_VOIP Enable", 0 , 0);
     }
 
 #ifdef QCOM_CSDCLIENT_ENABLED
@@ -2709,7 +2789,7 @@ status_t ALSADevice::openProxyDevice()
            mProxyParams.mProxyPcmHandle->period_size/2
            : mProxyParams.mProxyPcmHandle->period_size/4;
    sparams->start_threshold = 1;
-   sparams->stop_threshold = mProxyParams.mProxyPcmHandle->buffer_size;
+   sparams->stop_threshold = INT_MAX;
    sparams->xfer_align = (mProxyParams.mProxyPcmHandle->flags & PCM_MONO) ?
            mProxyParams.mProxyPcmHandle->period_size/2
            : mProxyParams.mProxyPcmHandle->period_size/4; /* needed for old kernels */
@@ -2870,6 +2950,8 @@ void  ALSADevice::setCsdHandle(void* handle)
     csd_enable_device = (int (*)(int,int,uint32_t))::dlsym(mcsd_handle,
                                                     "csd_client_enable_device");
 #ifdef NEW_CSDCLIENT
+    csd_enable_device_config = (int (*)(int,int))::dlsym(mcsd_handle,
+                                                    "csd_client_enable_device_config");
     csd_start_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
                                                  "csd_client_start_voice");
     csd_stop_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,

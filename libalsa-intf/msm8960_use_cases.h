@@ -121,6 +121,7 @@ typedef struct card_mctrl {
     int acdb_id;
     int capability;
     char *effects_mixer_ctl;
+    char *volume_mixer_ctl;
     char *ec_ref_rx_mixer_ctl;
 }card_mctrl_t;
 
@@ -262,14 +263,14 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_DEV_TTY_HANDSET_ANALOG_TX  "TTY Handset Analog Tx"
 #define SND_USE_CASE_DEV_DUAL_MIC_BROADSIDE "DMIC Broadside"
 #define SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE "DMIC Endfire"
-#define SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE_SGLTE "DMIC Endfire SGLTE"
+#define SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE_SGLTE "DMIC Endfire Voice2"
 #define SND_USE_CASE_DEV_DUAL_MIC_HANDSET_STEREO "Handset DMIC Stereo"
-#define SND_USE_CASE_DEV_DUAL_MIC_HANDSET_STEREO_SGLTE "Handset DMIC Stereo SGLTE"
+#define SND_USE_CASE_DEV_DUAL_MIC_HANDSET_STEREO_SGLTE "Handset DMIC Stereo Voice2"
 #define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_BROADSIDE "Speaker DMIC Broadside"
 #define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE "Speaker DMIC Endfire"
-#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE_SGLTE "Speaker DMIC Endfire SGLTE"
+#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE_SGLTE "Speaker DMIC Endfire Voice2"
 #define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_STEREO "Speaker DMIC Stereo"
-#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_STEREO_SGLTE "Speaker DMIC Stereo SGLTE"
+#define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_STEREO_SGLTE "Speaker DMIC Stereo Voice2"
 #define SND_USE_CASE_DEV_HDMI_TX             "HDMI Tx"
 #define SND_USE_CASE_DEV_HDMI_SPDIF          "HDMI SPDIF"
 #define SND_USE_CASE_DEV_HDMI_SPDIF_SPEAKER   "HDMI SPDIF Speaker"
@@ -361,6 +362,7 @@ static int snd_ucm_extract_effects_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_extract_ec_ref_rx_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_extract_dev_name(char *buf, char **dev_name);
 static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int count);
+static int snd_ucm_extract_volume_mixer_ctl(char *buf, char **mixer_name);
 static int snd_ucm_print(snd_use_case_mgr_t *uc_mgr);
 static void snd_ucm_free_mixer_list(snd_use_case_mgr_t **uc_mgr);
 #ifdef __cplusplus

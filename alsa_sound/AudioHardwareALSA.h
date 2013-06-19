@@ -325,6 +325,8 @@ public:
 #endif
 
     int mADSPState;
+    bool mSSRComplete;
+    int mCurDevice;
 protected:
     friend class AudioHardwareALSA;
 private:
@@ -371,6 +373,7 @@ private:
     struct mixer*  mMixer;
     int mInChannels;
     bool mIsSglte;
+    bool mIsFmEnabled;
 #ifdef SEPERATED_AUDIO_INPUT
     int mInputSource;
 #endif
@@ -581,6 +584,7 @@ public:
     status_t            resume_l();
 
     void updateMetaData(size_t bytes);
+    status_t setMetaDataMode();
 
 private:
     Mutex               mLock;
@@ -891,6 +895,7 @@ protected:
                                          uint32_t vsid = 0);
     void                enableVoiceCall(char* verb, char* modifier, int mode, int device,
                                         uint32_t vsid = 0);
+    bool                isAnyCallActive();
     bool                routeVoiceCall(int device, int newMode);
     bool                routeVoLTECall(int device, int newMode);
     bool                routeVoice2Call(int device, int newMode);
@@ -916,7 +921,8 @@ protected:
     /* The flag holds all the audio related device settings from
      * Settings and Qualcomm Settings applications */
     uint32_t            mDevSettingsFlag;
-    uint32_t            mVoipStreamCount;
+    uint32_t            mVoipInStreamCount;
+    uint32_t            mVoipOutStreamCount;
     bool                mVoipMicMute;
     uint32_t            mVoipBitRate;
     uint32_t            mIncallMode;

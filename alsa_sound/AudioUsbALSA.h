@@ -1,6 +1,6 @@
 /* AudioUsbALSA.h
 
-  Copyright (c) 2012, The Linux Foundation. All rights reserved.
+  Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -70,6 +70,8 @@ class AudioUsbALSA
 private:
     int mproxypfdPlayback;
     int musbpfdPlayback;
+    int musbpfdRecording;
+    int mProxypfdRecording;
     int mnfdsPlayback;
     int mnfdsRecording;
     int mtimeOut;
@@ -86,12 +88,15 @@ private:
     pthread_t mRecordingUsb;
     snd_use_case_mgr_t *mUcMgr;
     Mutex    mLock;
+    Mutex mRecordLock;
+
     enum UsbAudioPCMModes {
         USB_PLAYBACK = 0,
         USB_RECORDING,
         PROXY_PLAYBACK,
         PROXY_RECORDING,
     };
+
     //Helper functions
     struct pcm * configureDevice(unsigned flags, char* hw, int sampleRate, int channelCount, int periodSize, UsbAudioPCMModes usbAudioPCMModes);
     status_t syncPtr(struct pcm *handle, bool *killThread);
@@ -111,6 +116,8 @@ private:
 
     void RecordingThreadEntry();
     static void *RecordingThreadWrapper(void *me);
+
+    void initPlaybackVolume();
 
     status_t setHardwareParams(pcm *local_handle, uint32_t sampleRate, uint32_t channels, int periodSize, UsbAudioPCMModes usbAudioPCMModes);
 
