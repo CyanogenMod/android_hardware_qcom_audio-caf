@@ -444,9 +444,12 @@ status_t AudioHardwareALSA::setVoiceVolume(float v)
     vol = 100 - vol;
 
     if (mALSADevice) {
-        if(newMode == AUDIO_MODE_IN_COMMUNICATION) {
-            mALSADevice->setVoipVolume(vol);
-        } else if (newMode == AUDIO_MODE_IN_CALL){
+        /* Check for MODE_IN_COMMUNICATION is removed as Direct Output is used
+	 * for voicemail cases where stream is opened without any mode set or
+	 * mode set to IN_CALL and user still expect volume to be updated for
+	 * direct output stream */
+        mALSADevice->setVoipVolume(vol);
+        if (newMode == AUDIO_MODE_IN_CALL) {
                if (mCSCallActive == CS_ACTIVE)
                    mALSADevice->setVoiceVolume(vol);
                else if (mVoice2CallActive == CS_ACTIVE_SESSION2)
