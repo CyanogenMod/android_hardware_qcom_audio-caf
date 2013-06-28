@@ -24,6 +24,10 @@
 #include <system/audio.h>
 #include <hardware/audio.h>
 
+#ifdef USES_AUDIO_AMPLIFIER
+#include <audio_amplifier.h>
+#endif
+
 #include <hardware_legacy/AudioHardwareInterface.h>
 #include <hardware_legacy/AudioSystemLegacy.h>
 
@@ -592,6 +596,12 @@ static int adev_set_fm_volume(struct audio_hw_device *dev, float volume)
 static int adev_set_mode(struct audio_hw_device *dev, audio_mode_t mode)
 {
     struct qcom_audio_device *qadev = to_ladev(dev);
+
+#ifdef USES_AUDIO_AMPLIFIER
+    if (amplifier_set_mode(mode) != 0)
+        ALOGE("Failed setting amplifier mode");
+#endif
+
     return qadev->hwif->setMode(mode);
 }
 
