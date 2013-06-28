@@ -959,6 +959,10 @@ status_t AudioHardwareALSA::doRouting(int device)
         return NO_ERROR;
     }
     ALOGV("device = 0x%x,mCurDevice 0x%x", device, mCurDevice);
+    if (device == mCurDevice) {
+        ALOGV("New device is current device, no need to route");
+        return NO_ERROR;
+    }
     if (device == 0)
         device = mCurDevice;
     ALOGV("doRouting: device %#x newMode %d mCSCallActive %d mVolteCallActive %d"
