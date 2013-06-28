@@ -905,12 +905,13 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     alsa_handle.session     = this;
     strlcpy(alsa_handle.useCase, useCase, sizeof(alsa_handle.useCase));
 
-    mAlsaDevice->route(&alsa_handle, devices, mParent->mode());
     if (bIsUseCase) {
-        snd_use_case_set(mUcMgr, "_verb", useCase);
+       snd_use_case_set(mUcMgr, "_verb", useCase);
     } else {
-        snd_use_case_set(mUcMgr, "_enamod", useCase);
+       snd_use_case_set(mUcMgr, "_enamod", useCase);
     }
+    mAlsaDevice->route(&alsa_handle, devices, mParent->mode());
+
 #ifdef QCOM_USBAUDIO_ENABLED
     //Set Tunnel or LPA bit if the playback over usb is tunnel or Lpa
     if((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
