@@ -116,7 +116,7 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
                             //Routing to  BTA2DP,  USB device ,  Proxy(WFD) will take time, increasing latency time
                             if((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) || (desc->mFlags & AUDIO_OUTPUT_FLAG_TUNNEL)
                                 || (device & AUDIO_DEVICE_OUT_USB_DEVICE) || (device & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP)
-                                || (device & AUDIO_DEVICE_OUT_PROXY) )
+                                || (device & AUDIO_DEVICE_OUT_PROXY) || (device & AUDIO_DEVICE_OUT_FM))
                             {
                                setStrategyMute((routing_strategy)i, false, curOutput,desc->latency()*4 ,device);
                             }
