@@ -25,6 +25,7 @@
 #include "AudioHardwareALSA.h"
 #include <media/AudioRecord.h>
 #include <dlfcn.h>
+#include <math.h>
 #ifdef USE_A2220
 #include <sound/a2220.h>
 #endif
@@ -103,6 +104,8 @@ ALSADevice::ALSADevice() {
 #ifdef MOTOROLA_EMU_AUDIO
     mIsEmuAntipopOn = false;
 #endif
+    //Initialize fm volume to value corresponding to unity volume	92
+    mFmVolume = lrint((0.0 * 0x2000) + 0.5);
     char value[128], platform[128], baseband[128];
 
     property_get("persist.audio.handset.mic",value,"0");
@@ -1425,6 +1428,7 @@ status_t ALSADevice::setFmVolume(int value, alsa_handle_t *handle)
     int ret = 0;
     char val_str[100], *volMixerCTL;
 
+    mFmVolume = value;
     if (!mIsFmEnabled) {
         return INVALID_OPERATION;
     }
@@ -1441,7 +1445,6 @@ status_t ALSADevice::setFmVolume(int value, alsa_handle_t *handle)
     }
 
     setMixerControl(volMixerCTL,value,0);
-    mFmVolume = value;
 
     return err;
 }
