@@ -111,9 +111,17 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
                             ALOGD("avoid tempmute on curOutput %d as device is same", curOutput);
                         } else {
                             setStrategyMute((routing_strategy)i, true, curOutput);
-                            setStrategyMute((routing_strategy)i, false, curOutput,
-                                         desc->latency() * ((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) ? 4 : 2),
-                                         device);
+
+                            //Change latency for tunnel/LPA player to make sure no noise on device switch
+                            //Routing to  BTA2DP,  USB device ,  Proxy(WFD) will take time, increasing latency time
+                            if((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) || (desc->mFlags & AUDIO_OUTPUT_FLAG_TUNNEL)
+                                || (device & AUDIO_DEVICE_OUT_USB_DEVICE) || (device & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP)
+                                || (device & AUDIO_DEVICE_OUT_PROXY) )
+                            {
+                               setStrategyMute((routing_strategy)i, false, curOutput,desc->latency()*4 ,device);
+                            }
+                            else
+                               setStrategyMute((routing_strategy)i, false, curOutput,desc->latency()*2 ,device);
                         }
                     }
                     if (tempMute || mute) {
