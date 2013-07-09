@@ -304,7 +304,12 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         mSkipWrite = false;
         ALOGD("mSkipWrite is false now write bytes %d", bytes);
         ALOGD("skipping buffer in write");
-        return 0;
+
+        /* returning the bytes itself as we are skipping write.
+         * This is considered as successfull write.
+         * Skipping write could be because of a flush.
+         */
+        return bytes;
     }
 
     ALOGV("not skipping buffer in write since mSkipWrite = %d, "
@@ -337,6 +342,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
             if (mFilledQueue.empty()) {
                 mFilledQueue.push_back(buf);
             }
+            return bytes;
         }
 
         return err;
@@ -365,7 +371,13 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     int32_t * Buf = (int32_t *) buf.memBuf;
     ALOGV(" buf.memBuf [0] = %x , buf.memBuf [1] = %x",  Buf[0], Buf[1]);
     mFilledQueue.push_back(buf);
-    return err;
+    if(!err) {
+       //return the bytes written to HAL if write is successful.
+       return bytes;
+    } else {
+       //else condition return err value returned
+       return err;
+    }
 }
 
 void AudioSessionOutALSA::bufferAlloc(alsa_handle_t *handle) {
