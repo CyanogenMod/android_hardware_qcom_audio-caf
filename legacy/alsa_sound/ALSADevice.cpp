@@ -2673,9 +2673,27 @@ ssize_t  ALSADevice::readFromProxy(void **captureBuffer , ssize_t *bufferSize) {
 
     //Copy only if we have data
     if(mProxyParams.mAvail > 0) {
+        /* if we have reached high watermark, flush data */
+        if(mProxyParams.mAvail > AFE_PROXY_HIGH_WATER_MARK_FRAME_COUNT) {
+            /* throw out everything over here */
+            ALOGE("available buffers in proxy %d has reached high water mark %d, throw it out ", mProxyParams.mAvail, AFE_PROXY_HIGH_WATER_MARK_FRAME_COUNT);
+            capture_handle->sync_ptr->c.control.appl_ptr += mProxyParams.mAvail;
+            capture_handle->sync_ptr->flags = 0;
+            err = sync_ptr(capture_handle);
+            if(err == EPIPE) {
+                ALOGV("Failed in sync_ptr \n");
+                capture_handle->running = 0;
+                err = sync_ptr(capture_handle);
+            }
+            err = FAILED_TRANSACTION;
+            *captureBuffer = NULL;
+            *bufferSize = 0;
+            return err;
+        }
         if(mProxyParams.mX.frames > mProxyParams.mAvail) {
             mProxyParams.mFrames = mProxyParams.mAvail;
             ALOGE("Error mProxyParams.mFrames = %d", mProxyParams.mFrames);
+            /* Always copy only the data thats available */
             /* case when we wake up with lesser no of bytes than 1 period */
         }
         else {
@@ -2701,7 +2719,6 @@ ssize_t  ALSADevice::readFromProxy(void **captureBuffer , ssize_t *bufferSize) {
             capture_handle->running = 0;
             err = sync_ptr(capture_handle);
         }
-
         if(err != NO_ERROR ) {
             ALOGE("Error: Sync ptr end returned %d", err);
             *captureBuffer = NULL;
@@ -2713,7 +2730,7 @@ ssize_t  ALSADevice::readFromProxy(void **captureBuffer , ssize_t *bufferSize) {
         /* If we dont have data to copy just return 0 */
         *captureBuffer = NULL;
         *bufferSize = 0;
-        err = -1;
+        err = FAILED_TRANSACTION;
         ALOGE("Error Nothing copied from Proxy");
     }
     return err;
