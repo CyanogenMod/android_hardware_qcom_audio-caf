@@ -869,8 +869,8 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
                 ALOGE("csd_client_disable_device failed, error %d", err);
             }
         }
-    }
 #endif
+    }
 #endif
 
 #ifdef USE_A2220
