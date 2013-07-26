@@ -921,7 +921,7 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
         }
         param.remove(key);
     }
-    key = String8(AudioParameter::keyADSPStatus);
+    key = String8(AUDIO_PARAMETER_KEY_ADSP_STATUS);
     if (param.get(key, value) == NO_ERROR) {
        if (value == "ONLINE"){
            mReachedEOS = true;
