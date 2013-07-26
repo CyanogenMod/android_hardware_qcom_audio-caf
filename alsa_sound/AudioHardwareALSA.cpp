@@ -351,7 +351,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
     String8 value;
 
     //Set default AudioParameter for fluencetype
-    key  = String8(AudioParameter::keyFluenceType);
+    key  = String8(AUDIO_PARAMETER_KEY_FLUENCE_TYPE);
     property_get("ro.qc.sdk.audio.fluencetype",mFluenceKey,"0");
     if (0 == strncmp("fluencepro", mFluenceKey, sizeof("fluencepro"))) {
         mDevSettingsFlag |= QMIC_FLAG;
@@ -377,10 +377,10 @@ AudioHardwareALSA::AudioHardwareALSA() :
     property_get("ro.qc.sdk.audio.ssr",ssr_enabled,"0");
     if (!strncmp("true", ssr_enabled, 4)) {
         ALOGD("surround sound recording is supported");
-        param.add(String8(AudioParameter::keySSR), String8("true"));
+        param.add(String8(AUDIO_PARAMETER_KEY_SSR), String8("true"));
     } else {
         ALOGD("surround sound recording is not supported");
-        param.add(String8(AudioParameter::keySSR), String8("false"));
+        param.add(String8(AUDIO_PARAMETER_KEY_SSR), String8("false"));
     }
 
     mStatus = OK;
@@ -542,7 +542,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
 
     ALOGV("setParameters() %s", keyValuePairs.string());
 
-    key = String8(AudioParameter::keyADSPStatus);
+    key = String8(AUDIO_PARAMETER_KEY_ADSP_STATUS);
     if (param.get(key, value) == NO_ERROR) {
        if (value == "ONLINE") {
            ALOGV("ADSP online set SSRcomplete");
@@ -582,7 +582,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         param.remove(key);
     }
 
-    key = String8(AudioParameter::keyFluenceType);
+    key = String8(AUDIO_PARAMETER_KEY_FLUENCE_TYPE);
     if (param.get(key, value) == NO_ERROR) {
         if (value == "quadmic") {
             //Allow changing fluence type to "quadmic" only when fluence type is fluencepro
@@ -810,7 +810,7 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
         param.add(key, value);
     }
 
-    key = String8(AudioParameter::keyFluenceType);
+    key = String8(AUDIO_PARAMETER_KEY_FLUENCE_TYPE);
     if (param.get(key, value) == NO_ERROR) {
     if ((mDevSettingsFlag & QMIC_FLAG) &&
                                (mDevSettingsFlag & ~DMIC_FLAG))
@@ -845,7 +845,7 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
            param.addInt(String8("isVGS"), true);
     }
 #ifdef QCOM_SSR_ENABLED
-    key = String8(AudioParameter::keySSR);
+    key = String8(AUDIO_PARAMETER_KEY_SSR);
     if (param.get(key, value) == NO_ERROR) {
         char ssr_enabled[6] = "false";
         property_get("ro.qc.sdk.audio.ssr",ssr_enabled,"0");
