@@ -2894,7 +2894,7 @@ void AudioHardwareALSA::extOutThreadFunc() {
     uint32_t bytesAvailInBuffer = 0;
     uint32_t proxyBufferTime = 0;
     void  *data;
-    int err = NO_ERROR;
+    status_t err = NO_ERROR;
     ssize_t size = 0;
     void * outbuffer= malloc(AFE_PROXY_PERIOD_SIZE);
 
@@ -2924,7 +2924,12 @@ void AudioHardwareALSA::extOutThreadFunc() {
             }
         }
         err = mALSADevice->readFromProxy(&data, &size);
-        if(err < 0 || size <= 0) {
+        if(err == (status_t) FAILED_TRANSACTION) {
+            ALOGE("readFromProxy returned an error, mostly a flush or an under run continuing");
+            err = NO_ERROR;
+            continue;
+        }
+        if(err < 0) {
            ALOGE("ALSADevice readFromProxy returned err = %d,data = %p,\
                     size = %ld", err, data, size);
            continue;
