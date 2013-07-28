@@ -2885,7 +2885,7 @@ void AudioHardwareALSA::extOutThreadFunc() {
     }
 
     pid_t tid  = gettid();
-    androidSetThreadPriority(tid, ANDROID_PRIORITY_AUDIO);
+    androidSetThreadPriority(tid, ANDROID_PRIORITY_URGENT_AUDIO);
     prctl(PR_SET_NAME, (unsigned long)"ExtOutThread", 0, 0, 0);
 
     int ionBufCount = 0;
