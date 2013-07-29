@@ -550,12 +550,10 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
                     }
                     else
                     {
-                        if (mParent->mALSADevice->mADSPState == ADSP_UP_AFTER_SSR) {
+                        if (mParent->mALSADevice->mSSRComplete) {
                             ALOGD("SSR Case: Call device switch to apply AMIX controls.");
                             mHandle->module->route(mHandle, mDevices , mParent->mode());
-                            // In-case of multiple streams only one stream will be resumed
-                            // after resetting mADSPState to ADSP_UP with output device routed
-                            mParent->mALSADevice->mADSPState = ADSP_UP;
+                            mParent->mALSADevice->mSSRComplete = false;
                         }
                         mHandle->module->open(mHandle);
                     }

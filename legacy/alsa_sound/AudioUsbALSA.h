@@ -47,6 +47,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 #define SIGNAL_EVENT_TIMEOUT 1
 #define SIGNAL_EVENT_KILLTHREAD 2
 
+#define PROXY_OPEN_RETRY_COUNT 100
+#define PROXY_OPEN_WAIT_TIME 20
 #define BUFFSIZE 1000000
 
 #define PATH "/proc/asound/card1/stream0"
@@ -68,6 +70,7 @@ class AudioUsbALSA;
 class AudioUsbALSA
 {
 private:
+    int mProxySoundCard;
     int mproxypfdPlayback;
     int musbpfdPlayback;
     int musbpfdRecording;

@@ -1,5 +1,9 @@
 LOCAL_PATH:= $(call my-dir)
 
+ifeq ($(TARGET_USES_QCOM_COMPRESSED_AUDIO),true)
+    common_flags += -DQCOM_COMPRESSED_AUDIO_ENABLED
+endif
+
 ifeq ($(strip $(BOARD_USES_ALSA_AUDIO)),true)
 
 $(shell mkdir -p $(OUT)/obj/SHARED_LIBRARIES/libalsa-intf_intermediates)

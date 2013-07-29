@@ -2,9 +2,7 @@
  **
  ** Copyright 2008-2009 Wind River Systems
  ** Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
- **
- ** Not a Contribution, Apache license notifications and license are
- ** retained for attribution purposes only.
+ ** Not a Contribution.
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -30,6 +28,7 @@
 
 #define LOG_TAG "AudioSessionOutALSA"
 //#define LOG_NDEBUG 0
+//#define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include <utils/String8.h>
 
@@ -304,7 +303,12 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         mSkipWrite = false;
         ALOGD("mSkipWrite is false now write bytes %d", bytes);
         ALOGD("skipping buffer in write");
-        return 0;
+
+        /* returning the bytes itself as we are skipping write.
+         * This is considered as successfull write.
+         * Skipping write could be because of a flush.
+         */
+        return bytes;
     }
 
     ALOGV("not skipping buffer in write since mSkipWrite = %d, "
@@ -337,6 +341,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
             if (mFilledQueue.empty()) {
                 mFilledQueue.push_back(buf);
             }
+            return bytes;
         }
 
         return err;
@@ -365,7 +370,13 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     int32_t * Buf = (int32_t *) buf.memBuf;
     ALOGV(" buf.memBuf [0] = %x , buf.memBuf [1] = %x",  Buf[0], Buf[1]);
     mFilledQueue.push_back(buf);
-    return err;
+    if(!err) {
+       //return the bytes written to HAL if write is successful.
+       return bytes;
+    } else {
+       //else condition return err value returned
+       return err;
+    }
 }
 
 void AudioSessionOutALSA::bufferAlloc(alsa_handle_t *handle) {
@@ -863,7 +874,7 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     } else {
         snd_use_case_set(mUcMgr, "_enamod", useCase);
     }
-
+#ifdef QCOM_USBAUDIO_ENABLED
     //Set Tunnel or LPA bit if the playback over usb is tunnel or Lpa
     if((devices & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)||
         (devices & AudioSystem::DEVICE_OUT_DGTL_DOCK_HEADSET)){
@@ -879,7 +890,7 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
             mParent->musbPlaybackState |= USBPLAYBACKBIT_TUNNEL;
         }
    }
-
+#endif
     status = mAlsaDevice->open(&alsa_handle);
     if(status != NO_ERROR) {
         ALOGE("Could not open the ALSA device for use case %s", alsa_handle.useCase);
@@ -921,7 +932,8 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
         }
         param.remove(key);
     }
-    key = String8(AUDIO_PARAMETER_KEY_ADSP_STATUS);
+#ifdef QCOM_ADSP_SSR_ENABLED
+    key = String8(AudioParameter::keyADSPStatus);
     if (param.get(key, value) == NO_ERROR) {
        if (value == "ONLINE"){
            mReachedEOS = true;
@@ -935,9 +947,11 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
            mParent->mLock.unlock();
        }
     } else {
+#endif
         mParent->setParameters(keyValuePairs);
+#ifdef QCOM_ADSP_SSR_ENABLED
     }
-
+#endif
     return NO_ERROR;
 }
 

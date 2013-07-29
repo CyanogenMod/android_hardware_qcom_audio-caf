@@ -215,6 +215,7 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
         goto fail;
     }
 
+#ifdef QCOM_COMPRESSED_AUDIO_ENABLED
     if (compressed) {
        struct snd_compr_caps compr_cap;
        struct snd_compr_params compr_params;
@@ -249,6 +250,7 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
           return -errno;
        }
     }
+#endif
     pcm->channels = channels;
     pcm->rate = rate;
     pcm->flags = flags;

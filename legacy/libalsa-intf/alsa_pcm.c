@@ -135,6 +135,8 @@ const char *formats_list[][2] = {
         {"U18_3LE", "Unsigned 18 bit Little Endian in 3bytes"},
         {"U18_3BE", "Unsigned 18 bit Big Endian in 3bytes"},
 };
+
+#ifdef QCOM_COMPRESSED_AUDIO_ENABLED
 enum decoder_alias {
     FORMAT_MP3              = SND_AUDIOCODEC_MP3,
     FORMAT_AAC              = SND_AUDIOCODEC_AAC,
@@ -187,6 +189,7 @@ int get_compressed_format(const char *format)
         }
         return 0;
 }
+#endif
 
 int get_format(const char* name)
 {

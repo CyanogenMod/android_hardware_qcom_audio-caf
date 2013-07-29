@@ -59,6 +59,8 @@ class AudioHardwareALSA;
 #define ALSA_HARDWARE_MODULE_ID "alsa"
 #define ALSA_HARDWARE_NAME      "alsa"
 
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #define DEFAULT_SAMPLING_RATE 48000
 #define DEFAULT_CHANNEL_MODE  2
 #define VOICE_SAMPLING_RATE   8000
@@ -116,7 +118,10 @@ class AudioHardwareALSA;
 #define FENS_KEY            "fens_enable"
 #define ST_KEY              "st_enable"
 #define INCALLMUSIC_KEY     "incall_music_enabled"
+#define AUDIO_PARAMETER_KEY_FM_VOLUME "fm_volume"
 #define ECHO_SUPRESSION     "ec_supported"
+#define VSID_KEY            "vsid"
+#define CALL_STATE_KEY      "call_state"
 
 #define ANC_FLAG        0x00000001
 #define DMIC_FLAG       0x00000002
@@ -133,6 +138,9 @@ class AudioHardwareALSA;
 
 #define LPA_SESSION_ID 1
 #define TUNNEL_SESSION_ID 2
+#define PROXY_OPEN_WAIT_TIME  20
+#define PROXY_OPEN_RETRY_COUNT 100
+
 #ifdef QCOM_USBAUDIO_ENABLED
 static int USBPLAYBACKBIT_MUSIC = (1 << 0);
 static int USBPLAYBACKBIT_VOICECALL = (1 << 1);
@@ -208,10 +216,10 @@ static int USBRECBIT_FM = (1 << 3);
 #define SOUND_CARD_SLEEP_RETRY 5  /*  Will check 5 times before continuing */
 #define SOUND_CARD_SLEEP_WAIT 100 /* 100 ms */
 
-#define VOICE_SESSION_VSID   0x01
-#define VOLTE_SESSION_VSID   0x02
-#define VOICE2_SESSION_VSID  0x03
-#define ALL_SESSION_VSID     0x04
+#define VOICE_SESSION_VSID  0x10C01000
+#define VOICE2_SESSION_VSID 0x10DC1000
+#define VOLTE_SESSION_VSID  0x10C02000
+#define ALL_SESSION_VSID    0xFFFFFFFF
 
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
@@ -222,48 +230,14 @@ enum {
     INCALL_REC_STEREO,
 };
 
-/* ADSP States */
-enum {
-    ADSP_UP = 0x0,
-    ADSP_DOWN = 0x1,
-    ADSP_UP_AFTER_SSR = 0x2,
+/* Call States */
+enum call_state {
+    CALL_INVALID,
+    CALL_INACTIVE,
+    CALL_ACTIVE,
+    CALL_HOLD,
+    CALL_LOCAL_HOLD
 };
-
-enum audio_call_mode {
-    CS_INACTIVE   = 0x0,
-    CS_ACTIVE     = 0x1,
-    CS_HOLD       = 0x2,
-    CS_INACTIVE_SESSION2   = 0x0,
-    CS_ACTIVE_SESSION2     = 0x100,
-    CS_HOLD_SESSION2       = 0x200,
-    IMS_INACTIVE  = 0x0,
-    IMS_ACTIVE    = 0x10,
-    IMS_HOLD      = 0x20
-};
-
-
-//Audio parameter definitions
-
-/* Query handle fm parameter*/
-#define AUDIO_PARAMETER_KEY_HANDLE_FM "handle_fm"
-
-/* Query voip flag */
-#define AUDIO_PARAMETER_KEY_VOIP_CHECK "voip_flag"
-
-/* Query Fluence type */
-#define AUDIO_PARAMETER_KEY_FLUENCE_TYPE "fluence"
-
-/* Query if surround sound recording is supported */
-#define AUDIO_PARAMETER_KEY_SSR "ssr"
-
-/* Query if a2dp  is supported */
-#define AUDIO_PARAMETER_KEY_HANDLE_A2DP_DEVICE "isA2dpDeviceSupported"
-
-/* Query ADSP Status */
-#define AUDIO_PARAMETER_KEY_ADSP_STATUS "ADSP_STATUS"
-
-/* Query if Proxy can be Opend */
-#define AUDIO_CAN_OPEN_PROXY "can_open_proxy"
 
 class AudioSessionOutALSA;
 struct alsa_handle_t {
@@ -281,7 +255,9 @@ struct alsa_handle_t {
     bool                isFastOutput;
     struct pcm *        rxHandle;
     snd_use_case_mgr_t  *ucMgr;
+#ifdef QCOM_TUNNEL_LPA_ENABLED
     AudioSessionOutALSA *session;
+#endif
 };
 
 struct output_metadata_handle_t {
@@ -319,7 +295,7 @@ public:
     void     setMicMute(int state);
     void     setVoipMicMute(int state);
     void     setVoipConfig(int mode, int rate);
-    status_t setFmVolume(int vol, alsa_handle_t *handle);
+    status_t setFmVolume(int vol);
     void     setBtscoRate(int rate);
     status_t setLpaVolume(int vol);
     void     enableWideVoice(bool flag, uint32_t vsid = 0);
@@ -349,7 +325,6 @@ public:
     void     setACDBHandle(void*);
 #endif
 
-    int mADSPState;
     bool mSSRComplete;
     int mCurDevice;
 protected:
@@ -542,7 +517,7 @@ protected:
 };
 
 // ----------------------------------------------------------------------------
-
+#ifdef QCOM_TUNNEL_LPA_ENABLED
 class AudioSessionOutALSA : public AudioStreamOut
 {
 public:
@@ -689,7 +664,7 @@ private:
 public:
     bool mRouteAudioToA2dp;
 };
-
+#endif //QCOM_TUNNEL_LPA_ENABLED
 
 class AudioStreamInALSA : public AudioStreamIn, public ALSAStreamOps
 {
@@ -807,9 +782,6 @@ public:
      * the software mixer will emulate this capability.
      */
     virtual status_t    setMasterVolume(float volume);
-#ifdef QCOM_FM_ENABLED
-    virtual status_t    setFmVolume(float volume);
-#endif
     /**
      * setMode is called when the audio mode changes. NORMAL mode is for
      * standard audio playback, RINGTONE when a ringtone is playing, and IN_CALL
@@ -863,6 +835,7 @@ public:
 
     status_t    startPlaybackOnExtOut(uint32_t activeUsecase);
     status_t    stopPlaybackOnExtOut(uint32_t activeUsecase);
+    status_t    setProxyProperty(uint32_t value);
     bool        suspendPlaybackOnExtOut(uint32_t activeUsecase);
 
     status_t    startPlaybackOnExtOut_l(uint32_t activeUsecase);
@@ -898,6 +871,12 @@ private:
     void         clearExtOutActiveUseCases_l(uint32_t activeUsecase);
     uint32_t     useCaseStringToEnum(const char *usecase);
     void         switchExtOut(int device);
+    int          getmCallState(uint32_t vsid, enum call_state state);
+    bool         isAnyCallActive();
+    int*         getCallStateForVSID(uint32_t vsid);
+    char*        getUcmVerbForVSID(uint32_t vsid);
+    char*        getUcmModForVSID(uint32_t vsid);
+    alsa_handle_t* getALSADeviceHandleForVSID(uint32_t vsid);
 
 protected:
     virtual status_t    dump(int fd, const Vector<String16>& args);
@@ -915,15 +894,9 @@ protected:
     void                startUsbRecordingIfNotStarted();
 #endif
     void                setInChannels(int device);
-
-    void                disableVoiceCall(char* verb, char* modifier, int mode, int device,
-                                         uint32_t vsid = 0);
-    bool                isAnyCallActive();
-    status_t            enableVoiceCall(char* verb, char* modifier, int mode, int device,
-                                        uint32_t vsid = 0);
-    bool                routeVoiceCall(int device, int newMode);
-    bool                routeVoLTECall(int device, int newMode);
-    bool                routeVoice2Call(int device, int newMode);
+    void                disableVoiceCall(int mode, int device, uint32_t vsid = 0);
+    status_t            enableVoiceCall(int mode, int device, uint32_t vsid = 0);
+    bool                routeCall(int device, int newMode, uint32_t vsid);
     friend class AudioSessionOutALSA;
     friend class AudioStreamOutALSA;
     friend class AudioStreamInALSA;
@@ -943,6 +916,7 @@ protected:
 
     int32_t            mCurRxDevice;
     int32_t            mCurDevice;
+    int32_t            mCanOpenProxy;
     /* The flag holds all the audio related device settings from
      * Settings and Qualcomm Settings applications */
     uint32_t            mDevSettingsFlag;
@@ -953,10 +927,11 @@ protected:
     uint32_t            mIncallMode;
 
     bool                mMicMute;
-    int mCSCallActive;
-    int mVolteCallActive;
-    int mVoice2CallActive;
+    int mVoiceCallState;
+    int mVolteCallState;
+    int mVoice2CallState;
     int mCallState;
+    uint32_t mVSID;
     int mIsFmActive;
     bool mBluetoothVGS;
     bool mFusion3Platform;

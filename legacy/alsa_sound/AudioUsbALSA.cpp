@@ -28,7 +28,8 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 
 #define LOG_TAG "AudioUsbALSA"
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
+#define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include <utils/String8.h>
 
@@ -75,8 +76,6 @@ struct pollfd pfdUsbRecording[2];
     static int rNumber = 0;
 #endif
 #define USB_CARDCONTROL_PATH "/dev/snd/controlC1"
-#define index_to_percent(per, min, max) \
-        ((per - ((min) + .5)) / (((max) - (min)) * 0.01))
 
 namespace android_audio_legacy
 {
@@ -90,6 +89,7 @@ AudioUsbALSA::AudioUsbALSA()
     mproxyRecordingHandle = NULL;
     musbPlaybackHandle  = NULL;
     mproxyPlaybackHandle = NULL;
+    mProxySoundCard = 0;
 }
 
 AudioUsbALSA::~AudioUsbALSA()
@@ -975,7 +975,7 @@ void AudioUsbALSA::pollForUsbData(){
 }
 
 // Some USB audio accessories have a really low default volume set. Look for a suitable
-// volume control and set the volume to 80% of the reported maximum.
+// volume control and set the volume to default volume level.
 void AudioUsbALSA::initPlaybackVolume() {
     ALOGD("initPlaybackVolume");
     struct mixer *usbMixer = mixer_open(USB_CARDCONTROL_PATH);
@@ -983,7 +983,6 @@ void AudioUsbALSA::initPlaybackVolume() {
     if (usbMixer) {
          struct mixer_ctl *ctl = NULL;
          unsigned int usbPlaybackVolume;
-         unsigned percent = 0;
          int i;
 
          // Look for the first control named ".*Playback Volume" that isn't for a microphone
@@ -998,12 +997,7 @@ void AudioUsbALSA::initPlaybackVolume() {
             ALOGD("Found a volume control for USB: %s", usbMixer->info[i].id.name);
             mixer_ctl_get(ctl, &usbPlaybackVolume);
             ALOGD("Value got from mixer_ctl_get is:%u", usbPlaybackVolume);
-            ALOGD ("Min= %u Max= %u\n", ctl->info->value.integer.min, ctl->info->value.integer.max);
-            percent = index_to_percent(usbPlaybackVolume,
-                                       ctl->info->value.integer.min,
-                                       ctl->info->value.integer.max);
-            ALOGD("Percent after conversion is: %u", percent);
-            if (mixer_ctl_set(ctl,percent) < 0) {
+            if (mixer_ctl_set(ctl,usbPlaybackVolume) < 0) {
                ALOGE("Failed to set volume; default volume might be used");
             }
          } else {
@@ -1014,7 +1008,6 @@ void AudioUsbALSA::initPlaybackVolume() {
          ALOGE("Failed to open mixer for card 1");
     }
 }
-
 
 void AudioUsbALSA::PlaybackThreadEntry() {
     ALOGD("PlaybackThreadEntry");
@@ -1031,6 +1024,8 @@ void AudioUsbALSA::PlaybackThreadEntry() {
     unsigned int tmp;
     int numOfBytesWritten;
     int err;
+    char proxyDeviceName[10];
+
     mdstUsb_addr = NULL;
     msrcProxy_addr = NULL;
 
@@ -1074,8 +1069,21 @@ void AudioUsbALSA::PlaybackThreadEntry() {
             pfdUsbPlayback[1].events = (POLLIN | POLLOUT | POLLERR | POLLNVAL | POLLHUP);
         }
 
-        mproxyPlaybackHandle = configureDevice(PCM_IN|PCM_STEREO|PCM_MMAP, (char *)"hw:0,8",
+        snprintf(proxyDeviceName, sizeof(proxyDeviceName), "hw:%u,8", mProxySoundCard);
+        ALOGD("Configuring Proxy capture device %s", proxyDeviceName);
+        int ProxyOpenRetryCount=PROXY_OPEN_RETRY_COUNT;
+        while(ProxyOpenRetryCount){
+                mproxyPlaybackHandle = configureDevice(PCM_IN|PCM_STEREO|PCM_MMAP, proxyDeviceName,
                                msampleRatePlayback, mchannelsPlayback, PROXY_PERIOD_SIZE, PROXY_RECORDING);
+                if(!mproxyPlaybackHandle){
+                     ProxyOpenRetryCount --;
+                     usleep(PROXY_OPEN_WAIT_TIME * 1000);
+                     ALOGD("openProxyDevice failed retrying = %d", ProxyOpenRetryCount);
+                }
+                else{
+                  break;
+                }
+        }
         if (!mproxyPlaybackHandle || mkillPlayBackThread) {
            ALOGE("ERROR: Could not configure Proxy, returning");
            err = closeDevice(musbPlaybackHandle);
