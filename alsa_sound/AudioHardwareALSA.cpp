@@ -1749,6 +1749,20 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
                                     sizeof(alsa_handle.useCase));
                         }
                     }
+                } else if (*channels & AUDIO_CHANNEL_IN_VOICE_UPLINK) {
+                    if (mFusion3Platform) {
+                        mALSADevice->setVocRecMode(INCALL_REC_MONO);
+                        strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_VOICE,
+                                sizeof(alsa_handle.useCase));
+                    } else {
+                        if (*format == AUDIO_FORMAT_AMR_WB) {
+                            strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED,
+                                    sizeof(alsa_handle.useCase));
+                        } else {
+                            strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC,
+                                    sizeof(alsa_handle.useCase));
+                        }
+                    }
                 }
 #if defined(QCOM_FM_ENABLED) || defined(STE_FM)
             } else if((devices == AudioSystem::DEVICE_IN_FM_RX)) {
