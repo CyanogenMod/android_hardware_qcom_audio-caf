@@ -499,7 +499,11 @@ status_t AudioHardwareALSA::setMode(int mode)
             ALOGV("%s no op",__func__);
         }
     } else if (mode == AUDIO_MODE_NORMAL) {
-        mCallState = CALL_INACTIVE;
+        if (mCallState != CALL_INACTIVE) {
+            // Immediate routing update on mode transition to normal
+            mCallState = CALL_INACTIVE;
+            doRouting(0);
+        }
     }
 
     return status;
