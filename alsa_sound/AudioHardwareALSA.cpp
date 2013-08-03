@@ -527,7 +527,11 @@ status_t AudioHardwareALSA::setMode(int mode)
         if (mCallState == CS_INACTIVE)
             mCallState = CS_ACTIVE;
     }else if (mode == AUDIO_MODE_NORMAL) {
-        mCallState = 0;
+        if (mCallState != 0) {
+            // Immediate routing update on mode transition to normal
+            mCallState = 0;
+            doRouting(0);
+        }
     }
 
     return status;
