@@ -75,8 +75,6 @@ struct pollfd pfdUsbRecording[2];
     static int rNumber = 0;
 #endif
 #define USB_CARDCONTROL_PATH "/dev/snd/controlC1"
-#define index_to_percent(per, min, max) \
-        ((per - ((min) + .5)) / (((max) - (min)) * 0.01))
 
 namespace android_audio_legacy
 {
@@ -975,7 +973,7 @@ void AudioUsbALSA::pollForUsbData(){
 }
 
 // Some USB audio accessories have a really low default volume set. Look for a suitable
-// volume control and set the volume to 80% of the reported maximum.
+// volume control and set the volume to default volume level.
 void AudioUsbALSA::initPlaybackVolume() {
     ALOGD("initPlaybackVolume");
     struct mixer *usbMixer = mixer_open(USB_CARDCONTROL_PATH);
@@ -983,7 +981,6 @@ void AudioUsbALSA::initPlaybackVolume() {
     if (usbMixer) {
          struct mixer_ctl *ctl = NULL;
          unsigned int usbPlaybackVolume;
-         unsigned percent = 0;
          int i;
 
          // Look for the first control named ".*Playback Volume" that isn't for a microphone
@@ -998,12 +995,7 @@ void AudioUsbALSA::initPlaybackVolume() {
             ALOGD("Found a volume control for USB: %s", usbMixer->info[i].id.name);
             mixer_ctl_get(ctl, &usbPlaybackVolume);
             ALOGD("Value got from mixer_ctl_get is:%u", usbPlaybackVolume);
-            ALOGD ("Min= %u Max= %u\n", ctl->info->value.integer.min, ctl->info->value.integer.max);
-            percent = index_to_percent(usbPlaybackVolume,
-                                       ctl->info->value.integer.min,
-                                       ctl->info->value.integer.max);
-            ALOGD("Percent after conversion is: %u", percent);
-            if (mixer_ctl_set(ctl,percent) < 0) {
+            if (mixer_ctl_set(ctl,usbPlaybackVolume) < 0) {
                ALOGE("Failed to set volume; default volume might be used");
             }
          } else {
@@ -1014,7 +1006,6 @@ void AudioUsbALSA::initPlaybackVolume() {
          ALOGE("Failed to open mixer for card 1");
     }
 }
-
 
 void AudioUsbALSA::PlaybackThreadEntry() {
     ALOGD("PlaybackThreadEntry");
