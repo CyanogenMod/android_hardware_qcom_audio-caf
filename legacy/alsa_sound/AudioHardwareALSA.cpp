@@ -94,7 +94,7 @@ AudioHardwareInterface *AudioHardwareALSA::create() {
 
 AudioHardwareALSA::AudioHardwareALSA() :
     mALSADevice(0),mVoipInStreamCount(0),mVoipOutStreamCount(0),mVoipMicMute(false),
-    mVoipBitRate(0),mCallState(0),mAcdbHandle(NULL),mCsdHandle(NULL),mMicMute(0)
+    mVoipBitRate(0),mMicMute(0),mCallState(0),mAcdbHandle(NULL),mCsdHandle(NULL)
 {
     FILE *fp;
     char soundCardInfo[200];

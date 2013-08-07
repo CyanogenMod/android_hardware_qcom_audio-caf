@@ -51,9 +51,9 @@ static const int DEFAULT_SAMPLE_RATE = ALSA_DEFAULT_SAMPLE_RATE;
 
 AudioStreamOutALSA::AudioStreamOutALSA(AudioHardwareALSA *parent, alsa_handle_t *handle) :
     ALSAStreamOps(parent, handle),
-    mParent(parent),
     mFrameCount(0),
-    mUseCase(AudioHardwareALSA::USECASE_NONE)
+    mUseCase(AudioHardwareALSA::USECASE_NONE),
+    mParent(parent)
 {
 }
 
