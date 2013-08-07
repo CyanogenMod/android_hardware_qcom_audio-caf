@@ -265,7 +265,7 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
         if (n < 0) {
             mParent->mLock.lock();
             if (mHandle->handle != NULL) {
-                ALOGE("pcm_write returned error %d, trying to recover\n", n);
+                ALOGE("pcm_write returned error %ld, trying to recover\n", n);
                 pcm_close(mHandle->handle);
                 mHandle->handle = NULL;
                 if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL, strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||

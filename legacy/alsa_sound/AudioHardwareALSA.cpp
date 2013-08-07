@@ -158,7 +158,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
         ALOGD("AudioHardware: DLOPEN successful for ACDBLOADER");
         acdb_init = (int (*)())::dlsym(mAcdbHandle,"acdb_loader_init_ACDB");
         if (acdb_init == NULL) {
-            ALOGE("dlsym:Error:%s Loading acdb_loader_init_ACDB");
+            ALOGE("dlsym:Error Loading acdb_loader_init_ACDB");
         }else {
            acdb_init();
            acdb_deallocate = (void (*)())::dlsym(mAcdbHandle,"acdb_loader_deallocate_ACDB");
@@ -1269,7 +1269,7 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
             it != mDeviceList.end(); ++it) {
                 if((!strcmp(it->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
                    (!strcmp(it->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-                    ALOGD("openOutput:  it->rxHandle %d it->handle %d",it->rxHandle,it->handle);
+                    ALOGD("openOutput:  it->rxHandle %p it->handle %p",it->rxHandle,it->handle);
                     voipstream_active = true;
                     if(mVoipOutStreamCount >= 2)
                     {
@@ -2990,7 +2990,7 @@ void AudioHardwareALSA::extOutThreadFunc() {
         err = mALSADevice->readFromProxy(&data, &size);
         if (err < 0) {
             ALOGE("ALSADevice readFromProxy returned err = %d,data = %p,\
-                    size = %ld", err, data, size);
+                    size = %d", err, data, size);
             continue;
         }
 
