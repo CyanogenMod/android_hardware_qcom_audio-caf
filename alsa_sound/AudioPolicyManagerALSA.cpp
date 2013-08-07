@@ -66,6 +66,46 @@ void AudioPolicyManager::setStrategyMute(routing_strategy strategy,
     }
 }
 
+void AudioPolicyManager::releaseOutput(audio_io_handle_t output)
+{
+    ALOGV("releaseOutput() %d", output);
+    ssize_t index = mOutputs.indexOfKey(output);
+    if (index < 0) {
+        ALOGW("releaseOutput() releasing unknown output %d", output);
+        return;
+    }
+
+#ifdef AUDIO_POLICY_TEST
+    int testIndex = testOutputIndex(output);
+    if (testIndex != 0) {
+        AudioOutputDescriptor *outputDesc = mOutputs.valueAt(index);
+        if (outputDesc->isActive()) {
+            mpClientInterface->closeOutput(output);
+            delete mOutputs.valueAt(index);
+            mOutputs.removeItem(output);
+            mTestOutputs[testIndex] = 0;
+        }
+        return;
+    }
+#endif //AUDIO_POLICY_TEST
+
+    AudioOutputDescriptor *desc = mOutputs.valueAt(index);
+    if (desc->mFlags & AudioSystem::OUTPUT_FLAG_DIRECT) {
+        if ((desc->mDirectOpenCount <= 0) && !(desc->mFlags & AUDIO_OUTPUT_FLAG_LPA || desc->mFlags & AUDIO_OUTPUT_FLAG_TUNNEL ||
+                desc->mFlags & AUDIO_OUTPUT_FLAG_VOIP_RX)) {
+            ALOGW("releaseOutput() invalid open count %d for output %d",
+                                                              desc->mDirectOpenCount, output);
+            return;
+        }
+        if ((--desc->mDirectOpenCount == 0) || ((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA || desc->mFlags & AUDIO_OUTPUT_FLAG_TUNNEL ||
+                desc->mFlags & AUDIO_OUTPUT_FLAG_VOIP_RX))) {
+            ALOGV("releaseOutput() closing output");
+            closeOutput(output);
+        }
+    }
+
+}
+
 uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *outputDesc,
                                                        audio_devices_t prevDevice,
                                                        uint32_t delayMs)
@@ -107,30 +147,16 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
                 audio_io_handle_t curOutput = mOutputs.keyAt(j);
                 ALOGVV("checkDeviceMuteStrategies() %s strategy %d (curDevice %04x) on output %d",
                       mute ? "muting" : "unmuting", i, curDevice, curOutput);
-                setStrategyMute((routing_strategy)i, mute, curOutput, mute ? 0 : delayMs * 4);
+                setStrategyMute((routing_strategy)i, mute, curOutput, mute ? 0 : delayMs);
                 if (desc->isStrategyActive((routing_strategy)i)) {
-                    if (tempMute) {
-                        if ((desc != outputDesc) && (desc->device() == device)) {
-                            ALOGD("avoid tempmute on curOutput %d as device is same", curOutput);
-                        } else {
-                            setStrategyMute((routing_strategy)i, true, curOutput);
-
-                            //Change latency for tunnel/LPA player to make sure no noise on device switch
-                            //Routing to  BTA2DP,  USB device ,  Proxy(WFD) will take time, increasing latency time
-                            if((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) || (desc->mFlags & AUDIO_OUTPUT_FLAG_TUNNEL)
-                                || (device & AUDIO_DEVICE_OUT_USB_DEVICE) || (device & AUDIO_DEVICE_OUT_BLUETOOTH_A2DP)
-#ifdef QCOM_FM_ENABLED
-                                || (device & AUDIO_DEVICE_OUT_FM)
-#endif
-                                || (device & AUDIO_DEVICE_OUT_PROXY)) {
-                            
-                               setStrategyMute((routing_strategy)i, false, curOutput,desc->latency()*4 ,device);
-                            }
-                            else
-                               setStrategyMute((routing_strategy)i, false, curOutput,desc->latency()*2 ,device);
-                        }
+                    // do tempMute only for current output
+                    if (tempMute && (desc == outputDesc)) {
+                        setStrategyMute((routing_strategy)i, true, curOutput);
+                        setStrategyMute((routing_strategy)i, false, curOutput,
+                                            desc->latency() * ((desc->mFlags & AUDIO_OUTPUT_FLAG_LPA) ? 4 : 2),
+                                            device);
                     }
-                    if (tempMute || mute) {
+                    if ((tempMute && (desc == outputDesc)) || mute) {
                         if (muteWaitMs < desc->latency()) {
                             muteWaitMs = desc->latency();
                         }
@@ -753,25 +779,25 @@ audio_io_handle_t AudioPolicyManager::getOutput(AudioSystem::stream_type stream,
                                                    (audio_output_flags_t)flags);
     if (profile != NULL) {
         AudioOutputDescriptor *outputDesc = NULL;
-        if(!((flags & AUDIO_OUTPUT_FLAG_LPA) || (flags & AUDIO_OUTPUT_FLAG_TUNNEL))) {
-            for (size_t i = 0; i < mOutputs.size(); i++) {
-                AudioOutputDescriptor *desc = mOutputs.valueAt(i);
-                if (!desc->isDuplicated() && (profile == desc->mProfile)) {
-                    outputDesc = desc;
-                    // reuse direct output if currently open and configured with same parameters
-                    if ((samplingRate == outputDesc->mSamplingRate) &&
-                            (format == outputDesc->mFormat) &&
-                            (channelMask == outputDesc->mChannelMask)) {
-                        outputDesc->mDirectOpenCount++;
-                        ALOGV("getOutput() reusing direct output %d", output);
-                        return mOutputs.keyAt(i);
-                    }
+
+        for (size_t i = 0; i < mOutputs.size(); i++) {
+            AudioOutputDescriptor *desc = mOutputs.valueAt(i);
+            if (!desc->isDuplicated() && (profile == desc->mProfile)) {
+                outputDesc = desc;
+                // reuse direct output if currently open and configured with same parameters
+                if ((samplingRate == outputDesc->mSamplingRate) &&
+                        (format == outputDesc->mFormat) &&
+                        (channelMask == outputDesc->mChannelMask)) {
+                    outputDesc->mDirectOpenCount++;
+                    ALOGV("getOutput() reusing direct output %d", output);
+                    return mOutputs.keyAt(i);
                 }
             }
-            // close direct output if currently open and configured with different parameters
-            if (outputDesc != NULL) {
-                closeOutput(outputDesc->mId);
-            }
+        }
+
+        // close direct output if currently open and configured with different parameters
+        if (outputDesc != NULL) {
+            closeOutput(outputDesc->mId);
         }
         outputDesc = new AudioOutputDescriptor(profile);
         outputDesc->mDevice = device;
@@ -1248,7 +1274,7 @@ status_t AudioPolicyManager::checkOutputsForDevice(audio_devices_t device,
                                   reply.string());
                         value = strpbrk((char *)reply.string(), "=");
                         if (value != NULL) {
-                            loadSamplingRates(value + 1, profile);
+                            loadSamplingRates(value, profile);
                         }
                     }
                     if (profile->mFormats[0] == 0) {
@@ -1258,7 +1284,7 @@ status_t AudioPolicyManager::checkOutputsForDevice(audio_devices_t device,
                                   reply.string());
                         value = strpbrk((char *)reply.string(), "=");
                         if (value != NULL) {
-                            loadFormats(value + 1, profile);
+                            loadFormats(value, profile);
                         }
                     }
                     if (profile->mChannelMasks[0] == 0) {
@@ -1395,8 +1421,7 @@ audio_devices_t AudioPolicyManager::getNewDevice(audio_io_handle_t output, bool 
     } else if (isInCall() ||
                     outputDesc->isStrategyActive(STRATEGY_PHONE)) {
         device = getDeviceForStrategy(STRATEGY_PHONE, fromCache);
-    } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION) ||
-               primaryOutputDesc->isStrategyActive(STRATEGY_SONIFICATION)) {
+    } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION)) {
         device = getDeviceForStrategy(STRATEGY_SONIFICATION, fromCache);
     } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION_RESPECTFUL)) {
         device = getDeviceForStrategy(STRATEGY_SONIFICATION_RESPECTFUL, fromCache);

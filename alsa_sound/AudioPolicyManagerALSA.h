@@ -70,6 +70,7 @@ public:
         virtual status_t stopOutput(audio_io_handle_t output,
                                     AudioSystem::stream_type stream,
                                     int session = 0);
+        virtual void releaseOutput(audio_io_handle_t output);
         virtual audio_io_handle_t getInput(int inputSource,
                                             uint32_t samplingRate,
                                             uint32_t format,
