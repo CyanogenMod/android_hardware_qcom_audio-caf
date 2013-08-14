@@ -3,9 +3,6 @@ ifneq ($(filter msm8960 msm8660 msm7x30,$(TARGET_BOARD_PLATFORM)),)
 AUDIO_HW_ROOT := $(call my-dir)
 
 ifeq ($(TARGET_QCOM_AUDIO_VARIANT),caf)
-ifeq ($(TARGET_USES_QCOM_COMPRESSED_AUDIO),true)
-    common_flags += -DQCOM_COMPRESSED_AUDIO_ENABLED
-endif
 
 ifeq ($(strip $(BOARD_USES_ALSA_AUDIO)),true)
     include $(AUDIO_HW_ROOT)/alsa_sound/Android.mk
