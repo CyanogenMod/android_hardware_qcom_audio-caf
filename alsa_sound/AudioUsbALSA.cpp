@@ -127,6 +127,7 @@ status_t AudioUsbALSA::getCap(char * type, int &channels, int &sampleRate)
     struct stat st;
     memset(&st, 0x0, sizeof(struct stat));
     sampleRate = 0;
+
     fd = open(PATH, O_RDONLY);
     if (fd <0) {
         ALOGE("ERROR: failed to open config file %s error: %d\n", PATH, errno);
@@ -264,6 +265,11 @@ status_t AudioUsbALSA::getCap(char * type, int &channels, int &sampleRate)
         }
     }
     ALOGD("sampleRate: %d", sampleRate);
+    if (sampleRate == 0 ) {
+        sampleRate = ratesSupported[0];
+        ALOGE("Device sampleRate:%d doesn't match with PROXY supported rate\n", sampleRate);
+        return BAD_VALUE;
+    }
 
     close(fd);
     free(ratesStrForVal);
@@ -487,6 +493,7 @@ void AudioUsbALSA::RecordingThreadEntry() {
     uint32_t channels;
     u_int8_t *srcUsb_addr = NULL;
     u_int8_t *dstProxy_addr = NULL;
+    int proxy_sample_rate = PROXY_SUPPORTED_RATE_48000;
     int err;
     pfdProxyRecording[0].fd = -1;
     pfdProxyRecording[1].fd = -1;
@@ -501,9 +508,15 @@ void AudioUsbALSA::RecordingThreadEntry() {
     {
         Mutex::Autolock autoRecordLock(mRecordLock);
         err = getCap((char *)"Capture:", mchannelsCapture, msampleRateCapture);
-        if (err) {
-            ALOGE("ERROR: Could not get capture capabilities from usb device");
+        if (err && (err != BAD_VALUE)) {
+            ALOGE("ERROR: Could not get Capture capabilities from usb device");
             return;
+        } else if (err == BAD_VALUE) {
+            ALOGE("Sample rate match error\n");
+            proxy_sample_rate = PROXY_SUPPORTED_RATE_48000;
+        } else {
+            ALOGE("Sample rate matched");
+            proxy_sample_rate = msampleRateCapture;
         }
         int channelFlag = PCM_MONO;
         if (mchannelsCapture >= 2) {
@@ -529,7 +542,7 @@ void AudioUsbALSA::RecordingThreadEntry() {
         }
 
         mproxyRecordingHandle = configureDevice(PCM_OUT|channelFlag|PCM_MMAP, (char *)"hw:0,7",
-                                            msampleRateCapture, mchannelsCapture,2048,PROXY_PLAYBACK);
+                                            proxy_sample_rate, mchannelsCapture,2048,PROXY_PLAYBACK);
         if (!mproxyRecordingHandle) {
             ALOGE("ERROR: Could not configure Proxy for recording");
             err = closeDevice(musbRecordingHandle);
@@ -1030,7 +1043,7 @@ void AudioUsbALSA::PlaybackThreadEntry() {
     int usbframes = 0;
     u_int8_t *proxybuf = NULL;
     u_int8_t *usbbuf = NULL;
-
+    int proxy_sample_rate = PROXY_SUPPORTED_RATE_48000;
     pid_t tid  = gettid();
     androidSetThreadPriority(tid, ANDROID_PRIORITY_URGENT_AUDIO);
 #ifdef OUTPUT_PROXY_BUFFER_LOG
@@ -1043,10 +1056,17 @@ void AudioUsbALSA::PlaybackThreadEntry() {
         Mutex::Autolock autoLock(mLock);
 
         err = getCap((char *)"Playback:", mchannelsPlayback, msampleRatePlayback);
-        if (err) {
+        if (err && (err != BAD_VALUE)) {
             ALOGE("ERROR: Could not get playback capabilities from usb device");
             return;
+        } else if (err == BAD_VALUE) {
+            ALOGE("Sample rate match error\n");
+            proxy_sample_rate = PROXY_SUPPORTED_RATE_48000;
+        } else {
+            ALOGE("Sample rate matched");
+            proxy_sample_rate = msampleRatePlayback;
         }
+
         musbPlaybackHandle = configureDevice(PCM_OUT|PCM_STEREO|PCM_MMAP, (char *)"hw:1,0",
                                          msampleRatePlayback, mchannelsPlayback,
                                          USB_PERIOD_SIZE, USB_PLAYBACK);
@@ -1057,6 +1077,7 @@ void AudioUsbALSA::PlaybackThreadEntry() {
            ALOGD("USB Configured for playback");
         }
 
+
         if (!mkillPlayBackThread) {
             pfdUsbPlayback[0].fd = musbPlaybackHandle->timer_fd;
             pfdUsbPlayback[0].events = POLLIN;
@@ -1066,7 +1087,7 @@ void AudioUsbALSA::PlaybackThreadEntry() {
         }
 
         mproxyPlaybackHandle = configureDevice(PCM_IN|PCM_STEREO|PCM_MMAP, (char *)"hw:0,8",
-                               msampleRatePlayback, mchannelsPlayback, PROXY_PERIOD_SIZE, PROXY_RECORDING);
+                               proxy_sample_rate, mchannelsPlayback, PROXY_PERIOD_SIZE, PROXY_RECORDING);
         if (!mproxyPlaybackHandle || mkillPlayBackThread) {
            ALOGE("ERROR: Could not configure Proxy, returning");
            err = closeDevice(musbPlaybackHandle);
@@ -1077,6 +1098,7 @@ void AudioUsbALSA::PlaybackThreadEntry() {
         } else {
             ALOGD("Proxy Configured for playback");
         }
+
         ALOGV("Init USB volume");
         initPlaybackVolume();
 
