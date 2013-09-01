@@ -751,7 +751,23 @@ status_t AudioSessionOutALSA::standby()
 uint32_t AudioSessionOutALSA::latency() const
 {
     // Android wants latency in milliseconds.
-    return USEC_TO_MSEC (mAlsaHandle->latency);
+    uint32_t latency = mAlsaHandle->latency;
+    if ( ((mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ALL_A2DP) &&
+         (mParent->mExtOutStream == mParent->mA2dpStream))
+         && (mParent->mA2dpStream != NULL) ) {
+        uint32_t bt_latency = mParent->mA2dpStream->get_latency(mParent->mA2dpStream);
+        uint32_t proxy_latency = mParent->mALSADevice->mAvailInMs;
+        latency += bt_latency*1000 + proxy_latency*1000;
+        ALOGV("latency = %d, bt_latency = %d, proxy_latency = %d", latency, bt_latency, proxy_latency);
+    }
+    else if ( ((mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ALL_USB) &&
+         (mParent->mExtOutStream == mParent->mUsbStream))
+         && (mParent->mUsbStream != NULL) ) {
+        uint32_t usb_latency = mParent->mUsbStream->get_latency(mParent->mUsbStream);
+        latency += usb_latency*1000;
+    }
+
+    return USEC_TO_MSEC (latency);
 }
 
 status_t AudioSessionOutALSA::setObserver(void *observer)
