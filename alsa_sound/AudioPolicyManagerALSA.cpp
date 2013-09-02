@@ -1909,7 +1909,7 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream,
             fmVolume = computeVolume(stream, index, output, device);
             if (fmVolume >= 0) {
                 if(output == mPrimaryOutput)
-                    mpClientInterface->setFmVolume(fmVolume, delayMs);
+                    mpClientInterface->setFmVolume(fmVolume, delayMs*2);
                 else if(mHasA2dp && output == getA2dpOutput())
                     mpClientInterface->setStreamVolume((AudioSystem::stream_type)stream, volume, output, delayMs);
             }
