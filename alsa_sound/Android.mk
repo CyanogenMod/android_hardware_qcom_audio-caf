@@ -121,6 +121,9 @@ ifneq ($(TARGET_USES_QCOM_COMPRESSED_AUDIO),false)
     common_cflags += -DQCOM_COMPRESSED_AUDIO_ENABLED
 endif
 
+ifeq ($(BOARD_USES_MOTOROLA_EMU_AUDIO),true)
+    common_cflags += -DMOTOROLA_EMU_AUDIO
+endif
 
 include $(CLEAR_VARS)
 

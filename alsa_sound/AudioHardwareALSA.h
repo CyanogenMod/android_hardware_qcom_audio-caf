@@ -359,6 +359,9 @@ private:
     int      getUseCaseType(const char *useCase);
     status_t setHDMIChannelCount();
     void     setChannelAlloc(int channelAlloc);
+#ifdef MOTOROLA_EMU_AUDIO
+    void     setEmuAntipop(int emuAntipop);
+#endif
     status_t setHardwareParams(alsa_handle_t *handle);
     int      deviceName(alsa_handle_t *handle, unsigned flags, char **value);
     status_t setSoftwareParams(alsa_handle_t *handle);
@@ -401,6 +404,9 @@ private:
     bool mIsFmEnabled;
 #ifdef SEPERATED_AUDIO_INPUT
     int mInputSource;
+#endif
+#ifdef MOTOROLA_EMU_AUDIO
+    bool mIsEmuAntipopOn;
 #endif
 //   ALSAHandleList  *mDeviceList;
 
