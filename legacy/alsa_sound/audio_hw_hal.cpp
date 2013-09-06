@@ -792,6 +792,11 @@ static int qcom_adev_close(hw_device_t* device)
                         reinterpret_cast<struct audio_hw_device *>(device);
     struct qcom_audio_device *qadev = to_ladev(hwdev);
 
+#ifdef USES_AUDIO_AMPLIFIER
+    if (amplifier_close() != 0)
+        ALOGE("Amplifier close failed");
+#endif
+
     if (!qadev)
         return 0;
 
@@ -844,6 +849,11 @@ static int qcom_adev_open(const hw_module_t* module, const char* name,
     }
 
     *device = &qadev->device.common;
+
+#ifdef USES_AUDIO_AMPLIFIER
+    if (amplifier_open() != 0)
+        ALOGE("Amplifier initialization failed");
+#endif
 
     return 0;
 
