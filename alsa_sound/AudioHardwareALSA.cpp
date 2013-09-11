@@ -3078,6 +3078,10 @@ uint32_t AudioHardwareALSA::useCaseStringToEnum(const char *usecase)
 {
    ALOGV("useCaseStringToEnum usecase:%s",usecase);
    uint32_t activeUsecase = USECASE_NONE;
+   if (usecase == NULL) {
+       ALOGE("useCaseStringToEnum: invalid input usecase return USECASE_NONE");
+       return USECASE_NONE;
+   }
 
    if ((!strncmp(usecase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
                     strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER))) ||
