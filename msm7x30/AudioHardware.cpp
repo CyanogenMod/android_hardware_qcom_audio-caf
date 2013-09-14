@@ -588,9 +588,9 @@ free(device_list);
 // ----------------------------------------------------------------------------
 
 AudioHardware::AudioHardware() :
-    mInit(false), mMicMute(true), mBluetoothNrec(true), mBluetoothId(0),
-    mOutput(0), mBluetoothVGS(false), mCurSndDevice(SND_DEVICE_CURRENT),
-    mVoiceVolume(1), mTtyMode(TTY_OFF), mDualMicEnabled(false), mFmFd(-1)
+    mInit(false), mMicMute(true), mFmFd(-1), mBluetoothNrec(true),
+    mBluetoothVGS(false), mBluetoothId(0), mVoiceVolume(1), mOutput(0),
+    mCurSndDevice(SND_DEVICE_CURRENT), mDualMicEnabled(false), mTtyMode(TTY_OFF)
 #ifdef HTC_AUDIO
     , mHACSetting(false), mBluetoothIdTx(0), mBluetoothIdRx(0),
     mRecordState(false), mEffectEnabled(false)
