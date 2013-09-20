@@ -111,6 +111,9 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mVoice2CallActive = 0;
     mIsFmActive = 0;
     mDevSettingsFlag = 0;
+    mCSMicMute = false;
+    mVoice2MicMute = false;
+    mVoLTEMicMute = false;
     bool audio_init_done = false;
     int sleep_retry = 0;
 #ifdef QCOM_USBAUDIO_ENABLED
@@ -398,9 +401,9 @@ AudioHardwareALSA::~AudioHardwareALSA()
         delete mALSADevice;
     }
     for(ALSAHandleList::iterator it = mDeviceList.begin();
-            it != mDeviceList.end(); ++it) {
+            it != mDeviceList.end();) {
         it->useCase[0] = 0;
-        mDeviceList.erase(it);
+        it = mDeviceList.erase(it);
     }
     if (mResampler) {
         release_resampler(mResampler);
@@ -1942,15 +1945,22 @@ status_t AudioHardwareALSA::setMicMute(bool state)
             }
         }
     } else {
-        if (mMicMute != state) {
+        if (mALSADevice) {
               mMicMute = state;
               ALOGD("setMicMute: mMicMute %d", mMicMute);
-              if(mALSADevice) {
-                 if(mCSCallActive == CS_ACTIVE)
+              if(mCSCallActive == CS_ACTIVE &&
+                 (mCSMicMute != state)) {
+                    mCSMicMute = state;
                     mALSADevice->setMicMute(state);
-                 else if(mVoice2CallActive == CS_ACTIVE_SESSION2)
+              }
+              if(mVoice2CallActive == CS_ACTIVE_SESSION2 &&
+                 (mVoice2MicMute != state)) {
+                    mVoice2MicMute = state;
                     mALSADevice->setVoice2MicMute(state);
-                 if(mVolteCallActive == IMS_ACTIVE)
+              }
+              if(mVolteCallActive == IMS_ACTIVE &&
+                 (mVoLTEMicMute != state)) {
+                    mVoLTEMicMute = state;
                     mALSADevice->setVoLTEMicMute(state);
               }
         }

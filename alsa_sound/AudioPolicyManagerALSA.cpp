@@ -1421,7 +1421,8 @@ audio_devices_t AudioPolicyManager::getNewDevice(audio_io_handle_t output, bool 
     } else if (isInCall() ||
                     outputDesc->isStrategyActive(STRATEGY_PHONE)) {
         device = getDeviceForStrategy(STRATEGY_PHONE, fromCache);
-    } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION)) {
+    } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION)||
+                (primaryOutputDesc->isStrategyActive(STRATEGY_SONIFICATION)&& !primaryOutputDesc->isStrategyActive(STRATEGY_MEDIA))){
         device = getDeviceForStrategy(STRATEGY_SONIFICATION, fromCache);
     } else if (outputDesc->isStrategyActive(STRATEGY_SONIFICATION_RESPECTFUL)) {
         device = getDeviceForStrategy(STRATEGY_SONIFICATION_RESPECTFUL, fromCache);
@@ -1974,7 +1975,7 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream,
             fmVolume = computeVolume(stream, index, output, device);
             if (fmVolume >= 0) {
                 if(output == mPrimaryOutput)
-                    mpClientInterface->setFmVolume(fmVolume, delayMs);
+                    mpClientInterface->setFmVolume(fmVolume, delayMs*2);
                 else if(mHasA2dp && output == getA2dpOutput())
                     mpClientInterface->setStreamVolume((AudioSystem::stream_type)stream, volume, output, delayMs);
             }
