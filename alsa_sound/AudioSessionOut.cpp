@@ -762,7 +762,12 @@ uint32_t AudioSessionOutALSA::latency() const
         uint32_t proxy_latency = mParent->mALSADevice->avail_in_ms;
         latency += bt_latency*1000 + proxy_latency*1000;
         ALOGV("latency = %d, bt_latency = %d, proxy_latency = %d", latency, bt_latency, proxy_latency);
+    } else if( mParent->mCurRxDevice & AudioSystem::DEVICE_OUT_ANLG_DOCK_HEADSET)
+               {
+        // Offsetting latency contributed by USB HAL. The value is based on headset I've tested.
+        latency += 500000;
     }
+
     return USEC_TO_MSEC (latency);
 }
 
