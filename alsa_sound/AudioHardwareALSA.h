@@ -995,6 +995,7 @@ protected:
     volatile bool       mExtOutThreadAlive;
     pthread_t           mExtOutThread;
     Mutex               mExtOutMutex;
+    Mutex               mExtOutMutexWrite;
     Condition           mExtOutCv;
     volatile bool       mIsExtOutEnabled;
 
