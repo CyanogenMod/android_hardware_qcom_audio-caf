@@ -2673,7 +2673,6 @@ ssize_t  ALSADevice::readFromProxy(void **captureBuffer , ssize_t *bufferSize) {
         }
 
         mProxyParams.mAvail = pcm_avail(capture_handle);
-        mAvailInMs = (mProxyParams.mAvail*1000)/(AFE_PROXY_SAMPLE_RATE);
         ALOGV("avail is = %d frames = %ld, avai_min = %d\n",\
                       mProxyParams.mAvail,  mProxyParams.mFrames,(int)capture_handle->sw_p->avail_min);
         if (mProxyParams.mAvail < capture_handle->sw_p->avail_min) {
