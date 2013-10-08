@@ -1,4 +1,4 @@
-ifneq ($(filter msm8960 msm8660 msm7x30,$(TARGET_BOARD_PLATFORM)),)
+ifneq ($(filter msm8974 msm8960 msm8660 msm7x30,$(TARGET_BOARD_PLATFORM)),)
 
 AUDIO_HW_ROOT := $(call my-dir)
 
