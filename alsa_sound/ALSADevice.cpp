@@ -2057,11 +2057,6 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
                     return strdup(SND_USE_CASE_DEV_VOICE_RECOGNITION ); /* VOICE RECOGNITION TX */
                 }
 #endif
-#ifdef SEPERATED_CAMCORDER
-                if (mInputSource == AUDIO_SOURCE_CAMCORDER) {
-                    return strdup(SND_USE_CASE_DEV_CAMCORDER_TX); /* CAMCORDER TX */
-                }
-#endif
 #ifdef SEPERATED_VOIP
                 if (mCallMode == AUDIO_MODE_IN_COMMUNICATION) {
                     if (!strncmp(rxDevice, SND_USE_CASE_DEV_VOIP_EARPIECE,
@@ -2156,6 +2151,8 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input, char *rxDevice)
 #ifdef SEPERATED_AUDIO_INPUT
                 if (mCallMode == AUDIO_MODE_IN_CALL) {
                     return strdup(SND_USE_CASE_DEV_VOC_LINE); /* Voice BUILTIN-MIC TX */
+                } else if(mInputSource == AUDIO_SOURCE_CAMCORDER) {
+                    return strdup(SND_USE_CASE_DEV_CAMCORDER_TX ); /* CAMCORDER TX */
                 } else
 #endif
                     return strdup(SND_USE_CASE_DEV_LINE); /* BUILTIN-MIC TX */

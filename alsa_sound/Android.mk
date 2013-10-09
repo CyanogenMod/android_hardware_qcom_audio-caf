@@ -73,10 +73,6 @@ ifeq ($(strip $(BOARD_USES_SEPERATED_AUDIO_INPUT)),true)
     common_cflags += -DSEPERATED_AUDIO_INPUT
 endif
 
-ifeq ($(strip $(BOARD_USES_SEPERATED_CAMCORDER)),true)
-    common_cflags += -DSEPERATED_CAMCORDER
-endif
-
 ifeq ($(strip $(BOARD_USES_SEPERATED_VOICE_SPEAKER)),true)
     common_cflags += -DSEPERATED_VOICE_SPEAKER
 endif
