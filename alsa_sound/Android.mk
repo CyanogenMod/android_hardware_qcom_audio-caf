@@ -81,6 +81,10 @@ ifeq ($(strip $(BOARD_USES_SEPERATED_VOICE_SPEAKER)),true)
     common_cflags += -DSEPERATED_VOICE_SPEAKER
 endif
 
+ifeq ($(strip $(BOARD_USES_SEPERATED_VOICE_SPEAKER_MIC)),true)
+    common_cflags += -DSEPERATED_VOICE_SPEAKER_MIC
+endif
+
 ifeq ($(strip $(BOARD_USES_SEPERATED_HEADSET_MIC)),true)
     common_cflags += -DSEPERATED_HEADSET_MIC
 endif
