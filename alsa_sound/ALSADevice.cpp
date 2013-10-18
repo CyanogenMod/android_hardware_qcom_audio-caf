@@ -38,8 +38,10 @@ extern "C" {
 #ifdef QCOM_CSDCLIENT_ENABLED
 static int (*csd_disable_device)();
 static int (*csd_enable_device)(int, int, uint32_t);
-#ifdef NEW_CSDCLIENT
+#ifdef CSD_FAST_CALL_SWITCH
 static int (*csd_enable_device_config)(int, int);
+#endif
+#ifdef NEW_CSDCLIENT
 static int (*csd_volume)(uint32_t, int);
 static int (*csd_mic_mute)(uint32_t, int);
 static int (*csd_wide_voice)(uint32_t, uint8_t);
@@ -740,7 +742,7 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
        strlcpy(mCurTxUCMDevice, txDevice, sizeof(mCurTxUCMDevice));
     }
 
-#if defined(QCOM_CSDCLIENT_ENABLED) && defined (NEW_CSDCLIENT)
+#if defined(QCOM_CSDCLIENT_ENABLED) && defined (CSD_FAST_CALL_SWITCH)
     if (isPlatformFusion3() && (inCallDevSwitch == true)) {
 
         /* Get tx acdb id */
@@ -830,7 +832,7 @@ ALOGD("switchDevice: mCurTxUCMDevivce %s mCurRxDevDevice %s", mCurTxUCMDevice, m
 #ifdef QCOM_CSDCLIENT_ENABLED
     if (isPlatformFusion3() && (inCallDevSwitch == true)) {
 
-#ifndef NEW_CSDCLIENT
+#ifndef CSD_FAST_CALL_SWITCH
         /* get tx acdb id */
         memset(&ident,0,sizeof(ident));
         strlcpy(ident, "ACDBID/", sizeof(ident));
@@ -850,7 +852,7 @@ ALOGD("switchDevice: mCurTxUCMDevivce %s mCurRxDevDevice %s", mCurTxUCMDevice, m
         }
         ALOGV("rx_dev_id=%d, tx_dev_id=%d\n", rx_dev_id, tx_dev_id);
 
-#ifndef NEW_CSDCLIENT
+#ifndef CSD_FAST_CALL_SWITCH
         if (csd_enable_device == NULL) {
             ALOGE("csd_client_enable_device is NULL");
         } else {
@@ -3056,9 +3058,11 @@ void  ALSADevice::setCsdHandle(void* handle)
                                             "csd_client_disable_device");
     csd_enable_device = (int (*)(int,int,uint32_t))::dlsym(mcsd_handle,
                                                     "csd_client_enable_device");
-#ifdef NEW_CSDCLIENT
+#ifdef CSD_FAST_CALL_SWITCH
     csd_enable_device_config = (int (*)(int,int))::dlsym(mcsd_handle,
                                                     "csd_client_enable_device_config");
+#endif
+#ifdef NEW_CSDCLIENT
     csd_start_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
                                                  "csd_client_start_voice");
     csd_stop_voice = (int (*)(uint32_t))::dlsym(mcsd_handle,
