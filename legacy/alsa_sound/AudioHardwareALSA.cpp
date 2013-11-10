@@ -69,10 +69,15 @@ extern "C"
 #ifdef QCOM_CSDCLIENT_ENABLED
     static int (*csd_client_init)();
     static int (*csd_client_deinit)();
+#ifdef NEW_CSDCLIENT
     static int (*csd_start_playback)(uint32_t);
     static int (*csd_stop_playback)(uint32_t);
     static int (*csd_standby_voice)(uint32_t);
     static int (*csd_resume_voice)(uint32_t);
+#else
+    static int (*csd_start_playback)();
+    static int (*csd_stop_playback)();
+#endif
 #endif
 }         // extern "C"
 
@@ -311,6 +316,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
             csd_client_init = (int (*)())::dlsym(mCsdHandle, "csd_client_init");
             csd_client_deinit = (int (*)())::dlsym(mCsdHandle,
                                                    "csd_client_deinit");
+#ifdef NEW_CSDCLIENT
             csd_start_playback = (int (*)(uint32_t))::dlsym(mCsdHandle,
                                                    "csd_client_start_playback");
             csd_stop_playback = (int (*)(uint32_t))::dlsym(mCsdHandle,
@@ -319,6 +325,12 @@ AudioHardwareALSA::AudioHardwareALSA() :
                                                     "csd_client_standby_voice");
             csd_resume_voice = (int (*)(uint32_t))::dlsym(mCsdHandle,
                                                      "csd_client_resume_voice");
+#else
+            csd_start_playback = (int (*)())::dlsym(mCsdHandle,
+                                                   "csd_client_start_playback");
+            csd_stop_playback = (int (*)())::dlsym(mCsdHandle,
+                                                    "csd_client_stop_playback");
+#endif
 
             if (csd_client_init == NULL) {
                 ALOGE("csd_client_init is NULL");
@@ -628,14 +640,22 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
                 if (csd_start_playback == NULL) {
                     ALOGE("csd_client_start_playback is NULL");
                     } else {
+#ifdef NEW_CSDCLIENT
                         csd_start_playback(ALL_SESSION_VSID);
+#else
+                        csd_start_playback();
+#endif
                     }
             } else {
                 ALOGV("Disabling Incall Music setting in the setparameter\n");
                 if (csd_stop_playback == NULL) {
                     ALOGE("csd_client_stop_playback is NULL");
                 } else {
+#ifdef NEW_CSDCLIENT
                     csd_stop_playback(ALL_SESSION_VSID);
+#else
+                    csd_stop_playback();
+#endif
                 }
             }
             param.remove(key);
