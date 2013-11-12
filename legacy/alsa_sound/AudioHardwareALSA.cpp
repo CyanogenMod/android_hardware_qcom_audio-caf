@@ -432,7 +432,7 @@ AudioHardwareALSA::~AudioHardwareALSA()
     delete mAudioUsbALSA;
 #endif
 
-#ifdef QCOM_CSDCLEINT_ENABLED
+#ifdef QCOM_CSDCLIENT_ENABLED
     if (mFusion3Platform) {
         if (mCsdHandle) {
             if (csd_client_deinit == NULL) {
