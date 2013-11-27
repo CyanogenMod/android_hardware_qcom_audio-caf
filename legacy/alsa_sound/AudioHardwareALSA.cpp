@@ -99,7 +99,7 @@ AudioHardwareInterface *AudioHardwareALSA::create() {
 
 AudioHardwareALSA::AudioHardwareALSA() :
     mALSADevice(0),mVoipInStreamCount(0),mVoipOutStreamCount(0),mVoipMicMute(false),
-    mVoipBitRate(0),mMicMute(0),mCallState(0),mAcdbHandle(NULL),mCsdHandle(NULL)
+    mVoipBitRate(0),mCallState(CALL_INACTIVE),mAcdbHandle(NULL),mCsdHandle(NULL),mMicMute(0)
 {
     FILE *fp;
     char soundCardInfo[200];
@@ -508,16 +508,20 @@ status_t AudioHardwareALSA::setMode(int mode)
 
     if (mode == AUDIO_MODE_IN_CALL) {
         if (mCallState <= CALL_INACTIVE) {
+#ifndef QCOM_MULTI_VOICE_SESSION_ENABLED
             ALOGV("%s() defaulting vsid and call state",__func__);
             mCallState = CALL_ACTIVE;
             mVSID = VOICE_SESSION_VSID;
+#endif
         } else {
             ALOGV("%s no op",__func__);
         }
     } else if (mode == AUDIO_MODE_NORMAL) {
         if (mCallState != CALL_INACTIVE) {
             // Immediate routing update on mode transition to normal
+#ifndef QCOM_MULTI_VOICE_SESSION_ENABLED
             mCallState = CALL_INACTIVE;
+#endif
             doRouting(0);
         }
     }
@@ -599,7 +603,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         if(mMode != AUDIO_MODE_IN_CALL){
            return NO_ERROR;
         }
-        doRouting(0);
+        doRouting(0,NULL);
         param.remove(key);
     }
 #ifdef QCOM_FLUENCE_ENABLED
@@ -626,7 +630,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
             ALOGV("Fluence feature Disabled");
         }
         mALSADevice->setFlags(mDevSettingsFlag);
-        doRouting(0);
+        doRouting(0,NULL);
         param.remove(key);
     }
 #endif
@@ -674,7 +678,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
             mDevSettingsFlag &= (~ANC_FLAG);
         }
         mALSADevice->setFlags(mDevSettingsFlag);
-        doRouting(0);
+        doRouting(0,NULL);
         param.remove(key);
     }
 #endif
@@ -683,7 +687,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
         if(device) {
-            doRouting(device);
+            doRouting(device,NULL);
         }
         param.remove(key);
     }
@@ -828,16 +832,21 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
 
     key = String8(VSID_KEY);
     if (param.getInt(key, (int &)vsid) == NO_ERROR) {
-        mVSID = vsid;
         param.remove(key);
         key = String8(CALL_STATE_KEY);
         if (param.getInt(key, (int &)call_state) == NO_ERROR) {
             param.remove(key);
-            mCallState = call_state;
-            ALOGV("%s() vsid:%x, callstate:%x", __func__, mVSID, call_state);
-
-            if(isAnyCallActive())
-                doRouting(0);
+            if (isAnyCallActive() || (call_state == CALL_ACTIVE)) {
+                mVSID = vsid;
+                mCallState = call_state;
+                ALOGD("%s() vsid:%x, callstate:%x", __func__, mVSID, call_state);
+            }
+            if(isAnyCallActive()
+#ifdef QCOM_MULTI_VOICE_SESSION_ENABLED
+               || mMode == AUDIO_MODE_IN_CALL
+#endif
+              )
+               doRouting(0,NULL);
         }
         param.remove(key);
     }
@@ -993,7 +1002,7 @@ void AudioHardwareALSA::startUsbRecordingIfNotStarted(){
 }
 #endif
 
-status_t AudioHardwareALSA::doRouting(int device)
+status_t AudioHardwareALSA::doRouting(int device, char* useCase)
 {
     Mutex::Autolock autoLock(mLock);
     int newMode = mode();
@@ -1020,7 +1029,8 @@ status_t AudioHardwareALSA::doRouting(int device)
           device, newMode, mVoiceCallState,
           mVolteCallState, mVoice2CallState, mIsFmActive);
 
-    isRouted = routeCall(device, newMode, mVSID);
+    if (mVSID)
+        isRouted = routeCall(device, newMode, mVSID);
 
     if ((isAnyCallActive())&&
        (mFusion3Platform == true) &&
@@ -1121,11 +1131,23 @@ status_t AudioHardwareALSA::doRouting(int device)
             it--;
             status_t err = NO_ERROR;
             uint32_t activeUsecase = useCaseStringToEnum(it->useCase);
+
+            //If required usecase is not null, go through mDeviceList to find last matching alsa_handle_t.
+            //For FM we don't open an output stream. Hence required usecase shouldn't be considered.
+            if ( (useCase != NULL) && (activeUsecase != USECASE_FM) ) {
+                for(ALSAHandleList::iterator it2 = mDeviceList.begin(); it2 != mDeviceList.end(); it2++) {
+                    if (!strncmp(useCase, it2->useCase,sizeof(useCase))) {
+                            it = it2;
+                            ALOGV("found matching required usecase:%s device:%x",it->useCase,it->devices);
+                            activeUsecase = useCaseStringToEnum(it->useCase);
+                            break;
+                        }
+                }
+            }
+            ALOGV("Dorouting updated usecase:%s device:%x activeUsecase",it->useCase, it->devices, activeUsecase);
             if (!((device & AudioSystem::DEVICE_OUT_ALL_A2DP) &&
                   (mCurRxDevice & AUDIO_DEVICE_OUT_ALL_USB))) {
-                if ((activeUsecase == USECASE_HIFI_LOW_POWER) ||
-                    (activeUsecase == USECASE_HIFI_TUNNEL)) {
-                    if (device != mCurRxDevice) {
+                   if (device != mCurRxDevice) {
                         if((isExtOutDevice(mCurRxDevice)) &&
                            (isExtOutDevice(device))) {
                             activeUsecase = getExtOutActiveUseCases_l();
@@ -1135,24 +1157,6 @@ status_t AudioHardwareALSA::doRouting(int device)
                         mALSADevice->route(&(*it),(uint32_t)device, newMode);
                     }
                     err = startPlaybackOnExtOut_l(activeUsecase);
-                } else {
-                    //WHY NO check for prev device here?
-                    if (device != mCurRxDevice) {
-                        if((isExtOutDevice(mCurRxDevice)) &&
-                            (isExtOutDevice(device))) {
-                            activeUsecase = getExtOutActiveUseCases_l();
-                            stopPlaybackOnExtOut_l(activeUsecase);
-                            mALSADevice->route(&(*it),(uint32_t)device, newMode);
-                            mRouteAudioToExtOut = true;
-                            startPlaybackOnExtOut_l(activeUsecase);
-                        } else {
-                           mALSADevice->route(&(*it),(uint32_t)device, newMode);
-                        }
-                    }
-                    if (activeUsecase == USECASE_FM){
-                        err = startPlaybackOnExtOut_l(activeUsecase);
-                    }
-                }
                 if(err) {
                     ALOGW("startPlaybackOnExtOut_l for hardware output failed err = %d", err);
                     stopPlaybackOnExtOut_l(activeUsecase);
@@ -2764,6 +2768,7 @@ status_t AudioHardwareALSA::closeExtOutput(int device) {
     ALOGV("closeExtOutput");
     status_t err = NO_ERROR;
     Mutex::Autolock autolock1(mExtOutMutex);
+    Mutex::Autolock autolock2(mExtOutMutexWrite);
     if (device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
         if(mExtOutStream == mA2dpStream)
             mExtOutStream = NULL;
@@ -2973,7 +2978,7 @@ void AudioHardwareALSA::extOutThreadFunc() {
     }
 
     pid_t tid  = gettid();
-    androidSetThreadPriority(tid, ANDROID_PRIORITY_AUDIO);
+    androidSetThreadPriority(tid, ANDROID_PRIORITY_URGENT_AUDIO);
     prctl(PR_SET_NAME, (unsigned long)"ExtOutThread", 0, 0, 0);
 
     int ionBufCount = 0;
@@ -2982,7 +2987,7 @@ void AudioHardwareALSA::extOutThreadFunc() {
     uint32_t bytesAvailInBuffer = 0;
     uint32_t proxyBufferTime = 0;
     void  *data;
-    int err = NO_ERROR;
+    status_t err = NO_ERROR;
     ssize_t size = 0;
     void * outbuffer= malloc(AFE_PROXY_PERIOD_SIZE);
 
@@ -3012,7 +3017,12 @@ void AudioHardwareALSA::extOutThreadFunc() {
             }
         }
         err = mALSADevice->readFromProxy(&data, &size);
-        if (err < 0) {
+        if(err == (status_t) FAILED_TRANSACTION) {
+            ALOGE("readFromProxy returned an error, mostly a flush or an under run continuing");
+            err = NO_ERROR;
+            continue;
+        }
+        if(err < 0  || size <= 0) {
             ALOGE("ALSADevice readFromProxy returned err = %d,data = %p,\
                     size = %d", err, data, size);
             continue;
@@ -3045,14 +3055,17 @@ void AudioHardwareALSA::extOutThreadFunc() {
         while (err == OK && (numBytesRemaining  > 0) && !mKillExtOutThread
                 && mIsExtOutEnabled ) {
             {
-                Mutex::Autolock autolock1(mExtOutMutex);
+                mExtOutMutexWrite.lock();
                 if(mExtOutStream != NULL ) {
                     bytesAvailInBuffer = mExtOutStream->common.get_buffer_size(&mExtOutStream->common);
                     uint32_t writeLen = bytesAvailInBuffer > numBytesRemaining ?
                                     numBytesRemaining : bytesAvailInBuffer;
                     ALOGV("Writing %d bytes to External Output ", writeLen);
                     bytesWritten = mExtOutStream->write(mExtOutStream,copyBuffer, writeLen);
+                    mExtOutMutexWrite.unlock();
                 } else {
+                    //unlock the mutex before sleep
+                    mExtOutMutexWrite.unlock();
                     ALOGV(" No External output to write  ");
                     usleep(proxyBufferTime*1000);
                     bytesWritten = numBytesRemaining;
@@ -3060,8 +3073,8 @@ void AudioHardwareALSA::extOutThreadFunc() {
             }
             //If the write fails make this thread sleep and let other
             //thread (eg: stopA2DP) to acquire lock to prevent a deadlock.
-            if(bytesWritten == -1) {
-                ALOGV("bytesWritten = %d",bytesWritten);
+            if(bytesWritten < 0 || bytesWritten == 0) {
+                ALOGE("bytesWritten = %d",bytesWritten);
                 usleep(10000);
                 break;
             }
