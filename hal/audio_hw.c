@@ -753,6 +753,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
 
     enable_audio_route(adev, usecase, true);
 
+#ifndef PLATFORM_MSM8960
     /* Applicable only on the targets that has external modem.
      * Enable device command should be sent to modem only after
      * enabling voice call mixer controls
@@ -761,6 +762,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         status = platform_switch_voice_call_usecase_route_post(adev->platform,
                                                                out_snd_device,
                                                                in_snd_device);
+#endif
 
     return status;
 }
@@ -782,8 +784,10 @@ static int stop_input_stream(struct stream_in *in)
         return -EINVAL;
     }
 
+#ifdef MULTI_VOICE_SESSION_ENABLED
     /* Close in-call recording streams */
     voice_check_and_stop_incall_rec_usecase(adev, in);
+#endif
 
     /* 1. Disable stream specific mixer controls */
     disable_audio_route(adev, uc_info, true);
@@ -808,12 +812,14 @@ int start_input_stream(struct stream_in *in)
     in->usecase = platform_update_usecase_from_source(in->source,in->usecase);
     ALOGV("%s: enter: usecase(%d)", __func__, in->usecase);
 
+#ifdef MULTI_VOICE_SESSION_ENABLED
     /* Check if source matches incall recording usecase criteria */
     ret = voice_check_and_set_incall_rec_usecase(adev, in);
     if (ret)
         goto error_config;
     else
         ALOGV("%s: usecase(%d)", __func__, in->usecase);
+#endif
 
     in->pcm_device_id = platform_get_pcm_device_id(in->usecase, PCM_CAPTURE);
     if (in->pcm_device_id < 0) {
@@ -1954,7 +1960,9 @@ static char* in_get_parameters(const struct audio_stream *stream,
     struct str_parms *reply = str_parms_create();
     ALOGV("%s: enter: keys - %s", __func__, keys);
 
+#ifdef MULTI_VOICE_SESSION_ENABLED
     voice_extn_in_get_parameters(in, query, reply);
+#endif
 
     str = str_parms_to_str(reply);
     str_parms_destroy(query);
@@ -1979,9 +1987,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     pthread_mutex_lock(&in->lock);
     if (in->standby) {
         pthread_mutex_lock(&adev->lock);
+#ifdef MULTI_VOICE_SESSION_ENABLED
         if (in->usecase == USECASE_COMPRESS_VOIP_CALL)
             ret = voice_extn_compress_voip_start_input_stream(in);
         else
+#endif
             ret = start_input_stream(in);
         pthread_mutex_unlock(&adev->lock);
         if (ret != 0) {
@@ -2132,6 +2142,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->config.rate = config->sample_rate;
         out->config.channels = popcount(out->channel_mask);
         out->config.period_size = HDMI_MULTI_PERIOD_BYTES / (out->config.channels * 2);
+#ifdef COMPRESS_VOIP_ENABLED
     } else if ((out->dev->mode == AUDIO_MODE_IN_COMMUNICATION) &&
                (out->flags == (AUDIO_OUTPUT_FLAG_DIRECT | AUDIO_OUTPUT_FLAG_VOIP_RX)) &&
                (voice_extn_compress_voip_is_config_supported(config))) {
@@ -2141,6 +2152,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
                   __func__, ret);
             goto error_open;
         }
+#endif
     } else if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) {
         if (config->offload_info.version != AUDIO_INFO_INITIALIZER.version ||
             config->offload_info.size != AUDIO_INFO_INITIALIZER.size) {
@@ -2148,8 +2160,11 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             ret = -EINVAL;
             goto error_open;
         }
-        if (!is_supported_format(config->offload_info.format) &&
-                !audio_extn_is_dolby_format(config->offload_info.format)) {
+        if (!is_supported_format(config->offload_info.format) 
+#ifdef DS1_DOLBY_DAP_ENABLED
+                && !audio_extn_is_dolby_format(config->offload_info.format)
+#endif
+           ) {
             ALOGE("%s: Unsupported audio format", __func__);
             ret = -EINVAL;
             goto error_open;
@@ -2172,11 +2187,13 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->stream.drain = out_drain;
         out->stream.flush = out_flush;
 
+#ifdef DS1_DOLBY_DAP_ENABLED
         if (audio_extn_is_dolby_format(config->offload_info.format))
             out->compr_config.codec->id =
                 audio_extn_dolby_get_snd_codec_id(adev, out,
                                                   config->offload_info.format);
         else
+#endif
             out->compr_config.codec->id =
                 get_snd_codec_id(config->offload_info.format);
         out->compr_config.fragment_size = get_offload_buffer_size(&config->offload_info);
@@ -2204,6 +2221,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         //Decide if we need to use gapless mode by default
         check_and_set_gapless_mode(adev);
 
+#ifdef MULTI_VOICE_SESSION_ENABLED
     } else if (out->flags & AUDIO_OUTPUT_FLAG_INCALL_MUSIC) {
         ret = voice_check_and_set_incall_music_usecase(adev, out);
         if (ret != 0) {
@@ -2211,6 +2229,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
                   __func__, ret);
             goto error_open;
         }
+#endif
     } else if (out->flags & AUDIO_OUTPUT_FLAG_FAST) {
         out->usecase = USECASE_AUDIO_PLAYBACK_LOW_LATENCY;
         out->config = pcm_config_low_latency;
@@ -2290,6 +2309,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     int ret = 0;
 
     ALOGV("%s: enter", __func__);
+#ifdef COMPRESS_VOIP_ENABLED
     if (out->usecase == USECASE_COMPRESS_VOIP_CALL) {
         ret = voice_extn_compress_voip_close_output_stream(&stream->common);
         if(ret != 0)
@@ -2297,6 +2317,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
                   __func__, ret);
     }
     else
+#endif
         out_standby(&stream->common);
 
     if (out->usecase == USECASE_AUDIO_PLAYBACK_OFFLOAD) {
@@ -2577,12 +2598,14 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
     struct stream_in *in = (struct stream_in *)stream;
     ALOGV("%s", __func__);
 
+#ifdef COMPRESS_VOIP_ENABLED
     if (in->usecase == USECASE_COMPRESS_VOIP_CALL) {
         ret = voice_extn_compress_voip_close_input_stream(&stream->common);
         if (ret != 0)
             ALOGE("%s: Compress voip input cannot be closed, error:%d",
                   __func__, ret);
     } else
+#endif
         in_standby(&stream->common);
 
     if (audio_extn_ssr_get_enabled() && (popcount(in->channel_mask) == 6)) {
