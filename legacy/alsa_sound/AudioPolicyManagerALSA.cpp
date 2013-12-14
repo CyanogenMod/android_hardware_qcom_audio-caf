@@ -395,7 +395,7 @@ status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
 #endif
 
         audio_devices_t newDevice = getNewDevice(mPrimaryOutput, false /*fromCache*/);
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         if(device == AUDIO_DEVICE_OUT_FM) {
             if (state == AudioSystem::DEVICE_STATE_AVAILABLE) {
                 ALOGV("setDeviceConnectionState() changeRefCount Inc");
@@ -952,7 +952,7 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
             }
         }
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         if(stream == AudioSystem::MUSIC && output == getA2dpOutput()) {
             muteWaitMs = setOutputDevice(output, newDevice, true);
         } else
@@ -1659,7 +1659,7 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             }
             break;
         }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         if (mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM) {
             if (mForceUse[AudioSystem::FOR_MEDIA] == AudioSystem::FORCE_SPEAKER) {
                 device &= ~(AUDIO_DEVICE_OUT_WIRED_HEADSET);
@@ -1747,7 +1747,7 @@ audio_devices_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strate
             if (device2 == AUDIO_DEVICE_NONE) {
                 device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET;
             }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
             if (device2 == AUDIO_DEVICE_NONE) {
                 device2 = mAvailableOutputDevices & AUDIO_DEVICE_OUT_FM_TX;
             }
@@ -1910,7 +1910,7 @@ audio_devices_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
             device = AUDIO_DEVICE_IN_REMOTE_SUBMIX;
         }
         break;
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
    case AUDIO_SOURCE_FM_RX:
         device = AUDIO_DEVICE_IN_FM_RX;
         break;
@@ -1974,7 +1974,7 @@ AudioPolicyManager::device_category AudioPolicyManager::getDeviceCategory(audio_
         case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET:
         case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP:
         case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES:
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         case AUDIO_DEVICE_OUT_FM:
 #endif
             return DEVICE_CATEGORY_HEADSET;
@@ -2038,7 +2038,7 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream,
         // enabled
         if (stream == AudioSystem::BLUETOOTH_SCO) {
             mpClientInterface->setStreamVolume(AudioSystem::VOICE_CALL, volume, output, delayMs);
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         } else if (stream == AudioSystem::MUSIC) {
             float fmVolume = -1.0;
             fmVolume = computeVolume(stream, index, output, device);

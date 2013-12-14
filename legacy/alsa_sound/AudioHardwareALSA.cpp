@@ -807,7 +807,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         param.remove(key);
     }
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
     key = String8(AudioParameter::keyHandleFm);
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore if device is 0
@@ -885,7 +885,7 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
     }
 #endif
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
 
     key = String8(AudioParameter::keyHandleA2dpDevice);
     if ( param.get(key,value) == NO_ERROR ) {
@@ -1011,7 +1011,7 @@ status_t AudioHardwareALSA::doRouting(int device, char* useCase)
     if(device)
         mALSADevice->mCurDevice = device;
     if ((device == AudioSystem::DEVICE_IN_VOICE_CALL)
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         || (device == AudioSystem::DEVICE_IN_FM_RX)
         || (device == AudioSystem::DEVICE_IN_FM_RX_A2DP)
 #endif
@@ -1869,7 +1869,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
                                sizeof(SND_USE_CASE_MOD_CAPTURE_VOICE_UL));
                    }
                }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
             } else if((devices == AudioSystem::DEVICE_IN_FM_RX)) {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_FM, sizeof(alsa_handle.useCase));
             } else if(devices == AudioSystem::DEVICE_IN_FM_RX_A2DP) {
@@ -1930,7 +1930,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
                                sizeof(SND_USE_CASE_VERB_UL_REC));
                    }
                 }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
             } else if(devices == AudioSystem::DEVICE_IN_FM_RX) {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_FM_REC, sizeof(alsa_handle.useCase));
             } else if (devices == AudioSystem::DEVICE_IN_FM_RX_A2DP) {
@@ -2128,7 +2128,7 @@ size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, in
     return bufferSize;
 }
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
 void AudioHardwareALSA::handleFm(int device)
 {
     int newMode = mode();

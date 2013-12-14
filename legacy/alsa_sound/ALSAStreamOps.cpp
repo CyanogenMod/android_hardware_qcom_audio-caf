@@ -253,7 +253,7 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
         }
         param.remove(key);
     }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
     else {
         key = String8(AudioParameter::keyHandleFm);
         if (param.getInt(key, device) == NO_ERROR) {
