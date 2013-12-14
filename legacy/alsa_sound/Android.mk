@@ -93,6 +93,10 @@ ifeq ($(strip $(BOARD_USES_SEPERATED_VOIP)),true)
     common_cflags += -DSEPERATED_VOIP
 endif
 
+ifeq ($(strip $(BOARD_USES_SEPERATED_FM)),true)
+    common_cflags += -DSEPERATED_FM
+endif
+
 ifeq ($(BOARD_AUDIO_EXPECTS_MIN_BUFFERSIZE),true)
     common_cflags += -DSET_MIN_PERIOD_BYTES
 endif
