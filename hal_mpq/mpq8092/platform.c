@@ -29,8 +29,6 @@
 #include <audio_hw.h>
 #include <platform_api.h>
 #include "platform.h"
-#include "audio_extn.h"
-#include "voice_extn.h"
 
 #define MIXER_XML_PATH "/system/etc/mixer_paths.xml"
 #define MIXER_XML_PATH_AUXPCM "/system/etc/mixer_paths_auxpcm.xml"
@@ -109,7 +107,6 @@ static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
     [USECASE_AUDIO_RECORD_FM_VIRTUAL] = {MULTIMEDIA2_PCM_DEVICE,
                                   MULTIMEDIA2_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_FM] = {FM_PLAYBACK_PCM_DEVICE, FM_CAPTURE_PCM_DEVICE},
-    [USECASE_AUDIO_HFP_SCO] = {HFP_PCM_RX, HFP_SCO_RX},
     [USECASE_VOICE_CALL] = {VOICE_CALL_PCM_DEVICE, VOICE_CALL_PCM_DEVICE},
     [USECASE_VOICE2_CALL] = {VOICE2_CALL_PCM_DEVICE, VOICE2_CALL_PCM_DEVICE},
     [USECASE_VOLTE_CALL] = {VOLTE_CALL_PCM_DEVICE, VOLTE_CALL_PCM_DEVICE},
@@ -121,12 +118,6 @@ static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
                                      AUDIO_RECORD_PCM_DEVICE},
     [USECASE_INCALL_REC_UPLINK_AND_DOWNLINK] = {AUDIO_RECORD_PCM_DEVICE,
                                                 AUDIO_RECORD_PCM_DEVICE},
-    [USECASE_INCALL_REC_UPLINK_COMPRESS] = {COMPRESS_CAPTURE_DEVICE,
-                                            COMPRESS_CAPTURE_DEVICE},
-    [USECASE_INCALL_REC_DOWNLINK_COMPRESS] = {COMPRESS_CAPTURE_DEVICE,
-                                              COMPRESS_CAPTURE_DEVICE},
-    [USECASE_INCALL_REC_UPLINK_AND_DOWNLINK_COMPRESS] = {COMPRESS_CAPTURE_DEVICE,
-                                                         COMPRESS_CAPTURE_DEVICE},
     [USECASE_INCALL_MUSIC_UPLINK] = {INCALL_MUSIC_UPLINK_PCM_DEVICE,
                                      INCALL_MUSIC_UPLINK_PCM_DEVICE},
     [USECASE_INCALL_MUSIC_UPLINK2] = {INCALL_MUSIC_UPLINK2_PCM_DEVICE,
@@ -445,9 +436,7 @@ void *platform_init(struct audio_device *adev)
         return NULL;
     }
 
-    if (audio_extn_read_xml(adev, MIXER_CARD, MIXER_XML_PATH,
-                            MIXER_XML_PATH_AUXPCM) == -ENOSYS)
-        adev->audio_route = audio_route_init(MIXER_CARD, MIXER_XML_PATH);
+    adev->audio_route = audio_route_init(MIXER_CARD, MIXER_XML_PATH);
 
     if (!adev->audio_route) {
         ALOGE("%s: Failed to init audio route controls, aborting.", __func__);
@@ -534,12 +523,6 @@ void *platform_init(struct audio_device *adev)
          my_data->csd = open_csd_client();
     }
 
-    /* init usb */
-    audio_extn_usb_init(adev);
-
-    /* Read one time ssr property */
-    audio_extn_ssr_update_enabled(adev);
-    audio_extn_spkr_prot_init(adev);
     return my_data;
 }
 
@@ -551,8 +534,6 @@ void platform_deinit(void *platform)
     close_csd_client(my_data->csd);
 
     free(platform);
-    /* deinit usb */
-    audio_extn_usb_deinit();
 }
 
 const char *platform_get_snd_device_name(snd_device_t snd_device)
@@ -592,7 +573,7 @@ void platform_add_backend_name(char *mixer_path, snd_device_t snd_device)
     else if (snd_device == SND_DEVICE_OUT_HDMI)
         strlcat(mixer_path, " hdmi", MIXER_PATH_MAX_LENGTH);
     else if (snd_device == SND_DEVICE_OUT_SPEAKER_AND_HDMI)
-        strcat(mixer_path, " speaker-and-hdmi");
+        strlcat(mixer_path, " speaker-and-hdmi", MIXER_PATH_MAX_LENGTH);
     else if (snd_device == SND_DEVICE_OUT_AFE_PROXY)
         strlcat(mixer_path, " afe-proxy", MIXER_PATH_MAX_LENGTH);
     else if (snd_device == SND_DEVICE_OUT_USB_HEADSET)
@@ -820,67 +801,13 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
         goto exit;
     }
 
-    if ((mode == AUDIO_MODE_IN_CALL) ||
-        voice_extn_compress_voip_is_active(adev)) {
-        if (devices & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
-            devices & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
-            if ((adev->voice.tty_mode != TTY_MODE_OFF) &&
-                !voice_extn_compress_voip_is_active(adev)) {
-                switch (adev->voice.tty_mode) {
-                case TTY_MODE_FULL:
-                    snd_device = SND_DEVICE_OUT_VOICE_TTY_FULL_HEADPHONES;
-                    break;
-                case TTY_MODE_VCO:
-                    snd_device = SND_DEVICE_OUT_VOICE_TTY_VCO_HEADPHONES;
-                    break;
-                case TTY_MODE_HCO:
-                    snd_device = SND_DEVICE_OUT_VOICE_TTY_HCO_HANDSET;
-                    break;
-                default:
-                    ALOGE("%s: Invalid TTY mode (%#x)",
-                          __func__, adev->voice.tty_mode);
-                }
-            } else if (audio_extn_get_anc_enabled()) {
-                if (audio_extn_should_use_fb_anc())
-                    snd_device = SND_DEVICE_OUT_VOICE_ANC_FB_HEADSET;
-                else
-                    snd_device = SND_DEVICE_OUT_VOICE_ANC_HEADSET;
-            } else {
-                snd_device = SND_DEVICE_OUT_VOICE_HEADPHONES;
-            }
-        } else if (devices & AUDIO_DEVICE_OUT_ALL_SCO) {
-            if (my_data->btsco_sample_rate == SAMPLE_RATE_16KHZ)
-                snd_device = SND_DEVICE_OUT_BT_SCO_WB;
-            else
-                snd_device = SND_DEVICE_OUT_BT_SCO;
-        } else if (devices & AUDIO_DEVICE_OUT_SPEAKER) {
-            snd_device = SND_DEVICE_OUT_VOICE_SPEAKER;
-        } else if (devices & AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET ||
-                   devices & AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET) {
-            snd_device = SND_DEVICE_OUT_USB_HEADSET;
-        } else if (devices & AUDIO_DEVICE_OUT_FM_TX) {
-            snd_device = SND_DEVICE_OUT_TRANSMISSION_FM;
-        } else if (devices & AUDIO_DEVICE_OUT_EARPIECE) {
-            if (audio_extn_should_use_handset_anc(channel_count))
-                snd_device = SND_DEVICE_OUT_ANC_HANDSET;
-            else
-                snd_device = SND_DEVICE_OUT_VOICE_HANDSET;
-        }
-        if (snd_device != SND_DEVICE_NONE) {
-            goto exit;
-        }
-    }
-
     if (popcount(devices) == 2) {
         if (devices == (AUDIO_DEVICE_OUT_WIRED_HEADPHONE |
                         AUDIO_DEVICE_OUT_SPEAKER)) {
             snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
         } else if (devices == (AUDIO_DEVICE_OUT_WIRED_HEADSET |
                                AUDIO_DEVICE_OUT_SPEAKER)) {
-            if (audio_extn_get_anc_enabled())
-                snd_device = SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET;
-            else
-                snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
+            snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
         } else if (devices == (AUDIO_DEVICE_OUT_AUX_DIGITAL |
                                AUDIO_DEVICE_OUT_SPEAKER)) {
             snd_device = SND_DEVICE_OUT_SPEAKER_AND_HDMI;
@@ -903,15 +830,7 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
 
     if (devices & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
         devices & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
-        if (devices & AUDIO_DEVICE_OUT_WIRED_HEADSET
-            && audio_extn_get_anc_enabled()) {
-            if (audio_extn_should_use_fb_anc())
-                snd_device = SND_DEVICE_OUT_ANC_FB_HEADSET;
-            else
-                snd_device = SND_DEVICE_OUT_ANC_HEADSET;
-        }
-        else
-            snd_device = SND_DEVICE_OUT_HEADPHONES;
+        snd_device = SND_DEVICE_OUT_HEADPHONES;
     } else if (devices & AUDIO_DEVICE_OUT_SPEAKER) {
         if (adev->speaker_lr_swap)
             snd_device = SND_DEVICE_OUT_SPEAKER_REVERSE;
@@ -931,10 +850,6 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
         snd_device = SND_DEVICE_OUT_TRANSMISSION_FM;
     } else if (devices & AUDIO_DEVICE_OUT_EARPIECE) {
         snd_device = SND_DEVICE_OUT_HANDSET;
-    } else if (devices & AUDIO_DEVICE_OUT_PROXY) {
-        ALOGD("%s: setting sink capability for Proxy", __func__);
-        audio_extn_set_afe_proxy_channel_mixer(adev);
-        snd_device = SND_DEVICE_OUT_AFE_PROXY;
     } else {
         ALOGE("%s: Unknown device(s) %#x", __func__, devices);
     }
@@ -961,65 +876,7 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
 
     ALOGV("%s: enter: out_device(%#x) in_device(%#x)",
           __func__, out_device, in_device);
-    if ((out_device != AUDIO_DEVICE_NONE) && ((mode == AUDIO_MODE_IN_CALL) ||
-        voice_extn_compress_voip_is_active(adev))) {
-        if ((adev->voice.tty_mode != TTY_MODE_OFF) &&
-            !voice_extn_compress_voip_is_active(adev)) {
-            if (out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
-                out_device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
-                switch (adev->voice.tty_mode) {
-                case TTY_MODE_FULL:
-                    snd_device = SND_DEVICE_IN_VOICE_TTY_FULL_HEADSET_MIC;
-                    break;
-                case TTY_MODE_VCO:
-                    snd_device = SND_DEVICE_IN_VOICE_TTY_VCO_HANDSET_MIC;
-                    break;
-                case TTY_MODE_HCO:
-                    snd_device = SND_DEVICE_IN_VOICE_TTY_HCO_HEADSET_MIC;
-                    break;
-                default:
-                    ALOGE("%s: Invalid TTY mode (%#x)",
-                          __func__, adev->voice.tty_mode);
-                }
-                goto exit;
-            }
-        }
-        if (out_device & AUDIO_DEVICE_OUT_EARPIECE ||
-            out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE) {
-            if (out_device & AUDIO_DEVICE_OUT_EARPIECE &&
-                audio_extn_should_use_handset_anc(channel_count)) {
-                snd_device = SND_DEVICE_IN_AANC_HANDSET_MIC;
-            } else if (my_data->fluence_type == FLUENCE_NONE ||
-                my_data->fluence_in_voice_call == false) {
-                snd_device = SND_DEVICE_IN_HANDSET_MIC;
-                set_echo_reference(adev->mixer, "SLIM_RX");
-            } else {
-                snd_device = SND_DEVICE_IN_VOICE_DMIC;
-                adev->acdb_settings |= DMIC_FLAG;
-            }
-        } else if (out_device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
-            snd_device = SND_DEVICE_IN_VOICE_HEADSET_MIC;
-        } else if (out_device & AUDIO_DEVICE_OUT_ALL_SCO) {
-            if (my_data->btsco_sample_rate == SAMPLE_RATE_16KHZ)
-                snd_device = SND_DEVICE_IN_BT_SCO_MIC_WB;
-            else
-                snd_device = SND_DEVICE_IN_BT_SCO_MIC;
-        } else if (out_device & AUDIO_DEVICE_OUT_SPEAKER) {
-            if (my_data->fluence_type != FLUENCE_NONE &&
-                my_data->fluence_in_voice_call &&
-                my_data->fluence_in_spkr_mode) {
-                if(my_data->fluence_type & FLUENCE_QUAD_MIC) {
-                    adev->acdb_settings |= QMIC_FLAG;
-                    snd_device = SND_DEVICE_IN_VOICE_SPEAKER_QMIC;
-                } else {
-                    adev->acdb_settings |= DMIC_FLAG;
-                    snd_device = SND_DEVICE_IN_VOICE_SPEAKER_DMIC;
-                }
-            } else {
-                snd_device = SND_DEVICE_IN_VOICE_SPEAKER_MIC;
-            }
-        }
-    } else if (source == AUDIO_SOURCE_CAMCORDER) {
+    if (source == AUDIO_SOURCE_CAMCORDER) {
         if (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC ||
             in_device & AUDIO_DEVICE_IN_BACK_MIC) {
             snd_device = SND_DEVICE_IN_CAMCORDER_MIC;
@@ -1122,9 +979,7 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
             !(in_device & AUDIO_DEVICE_IN_VOICE_CALL) &&
             !(in_device & AUDIO_DEVICE_IN_COMMUNICATION)) {
         if (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
-            if (audio_extn_ssr_get_enabled() && channel_count == 6)
-                snd_device = SND_DEVICE_IN_QUAD_MIC;
-            else if (channel_count == 2)
+            if (channel_count == 2)
                 snd_device = SND_DEVICE_IN_HANDSET_STEREO_DMIC;
             else
                 snd_device = SND_DEVICE_IN_HANDSET_MIC;
@@ -1316,11 +1171,6 @@ int platform_set_parameters(void *platform, struct str_parms *parms)
     if (ret >= 0) {
         str_parms_del(parms, AUDIO_PARAMETER_KEY_BTSCO);
         my_data->btsco_sample_rate = val;
-        if (val == SAMPLE_RATE_16KHZ) {
-            audio_route_apply_path(my_data->adev->audio_route,
-                                   "bt-sco-wb-samplerate");
-            audio_route_update_mixer(my_data->adev->audio_route);
-        }
     }
 
     ret = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_SLOWTALK, &val);
@@ -1335,8 +1185,8 @@ int platform_set_parameters(void *platform, struct str_parms *parms)
     return ret;
 }
 
-int platform_set_incall_recording_session_id(void *platform,
-                                             uint32_t session_id, int rec_mode)
+int platform_set_incall_recoding_session_id(void *platform,
+                                            uint32_t session_id)
 {
     int ret = 0;
     struct platform_data *my_data = (struct platform_data *)platform;
@@ -1359,62 +1209,6 @@ int platform_set_incall_recording_session_id(void *platform,
                 ret = -EINVAL;
                 break;
             }
-        }
-    }
-
-    if (my_data->csd != NULL) {
-        ret = my_data->csd->start_record(ALL_SESSION_VSID, rec_mode);
-        if (ret < 0) {
-            ALOGE("%s: csd_client_start_record failed, error %d",
-                  __func__, ret);
-        }
-    }
-
-    return ret;
-}
-
-int platform_stop_incall_recording_usecase(void *platform)
-{
-    int ret = 0;
-    struct platform_data *my_data = (struct platform_data *)platform;
-
-    if (my_data->csd != NULL) {
-        ret = my_data->csd->stop_record(ALL_SESSION_VSID);
-        if (ret < 0) {
-            ALOGE("%s: csd_client_stop_record failed, error %d",
-                  __func__, ret);
-        }
-    }
-
-    return ret;
-}
-
-int platform_start_incall_music_usecase(void *platform)
-{
-    int ret = 0;
-    struct platform_data *my_data = (struct platform_data *)platform;
-
-    if (my_data->csd != NULL) {
-        ret = my_data->csd->start_playback(ALL_SESSION_VSID);
-        if (ret < 0) {
-            ALOGE("%s: csd_client_start_playback failed, error %d",
-                  __func__, ret);
-        }
-    }
-
-    return ret;
-}
-
-int platform_stop_incall_music_usecase(void *platform)
-{
-    int ret = 0;
-    struct platform_data *my_data = (struct platform_data *)platform;
-
-    if (my_data->csd != NULL) {
-        ret = my_data->csd->stop_playback(ALL_SESSION_VSID);
-        if (ret < 0) {
-            ALOGE("%s: csd_client_stop_playback failed, error %d",
-                  __func__, ret);
         }
     }
 
@@ -1475,15 +1269,4 @@ int platform_update_usecase_from_source(int source, int usecase)
     if(source == AUDIO_SOURCE_FM_RX_A2DP)
         usecase = USECASE_AUDIO_RECORD_FM_VIRTUAL;
     return usecase;
-}
-
-bool platform_listen_update_status(snd_device_t snd_device)
-{
-    if ((snd_device >= SND_DEVICE_IN_BEGIN) &&
-        (snd_device < SND_DEVICE_IN_END) &&
-        (snd_device != SND_DEVICE_IN_CAPTURE_FM) &&
-        (snd_device != SND_DEVICE_IN_CAPTURE_VI_FEEDBACK))
-        return true;
-    else
-        return false;
 }

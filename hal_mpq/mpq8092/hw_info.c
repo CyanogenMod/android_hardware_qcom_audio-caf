@@ -56,6 +56,12 @@ struct hardware_info {
             __FILE__ ":" LITERAL_TO_STRING(__LINE__)\
             " ASSERT_FATAL(" #condition ") failed.")
 
+static const snd_device_t tabla_cdp_variant_devices[] = {
+    SND_DEVICE_OUT_SPEAKER,
+    SND_DEVICE_OUT_HEADPHONES,
+    SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES,
+};
+
 static const snd_device_t taiko_fluid_variant_devices[] = {
     SND_DEVICE_OUT_SPEAKER,
     SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES,
@@ -67,10 +73,6 @@ static const snd_device_t taiko_CDP_variant_devices[] = {
     SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES,
     SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET,
     SND_DEVICE_IN_QUAD_MIC,
-};
-
-static const snd_device_t taiko_apq8084_CDP_variant_devices[] = {
-    SND_DEVICE_IN_HANDSET_MIC,
 };
 
 static const snd_device_t taiko_liquid_variant_devices[] = {
@@ -128,6 +130,19 @@ static const snd_device_t helicon_skuab_variant_devices[] = {
     SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET,
 };
 
+static void  update_hardware_info_8092(struct hardware_info *hw_info, const char *snd_card_name)
+{
+    if (!strcmp(snd_card_name, "mpq8092-tabla-cdp-snd-card")) {
+        strlcpy(hw_info->type, "cdp", sizeof(hw_info->type));
+        strlcpy(hw_info->name, "mpq8092", sizeof(hw_info->name));
+        hw_info->snd_devices = NULL;
+        hw_info->num_snd_devices = 0;
+        strlcpy(hw_info->dev_extn, "", sizeof(hw_info->dev_extn));
+    } else {
+        ALOGW("%s: Not an 8084 device", __func__);
+    }
+}
+
 static void  update_hardware_info_8084(struct hardware_info *hw_info, const char *snd_card_name)
 {
     if (!strcmp(snd_card_name, "apq8084-taiko-mtp-snd-card")) {
@@ -139,15 +154,15 @@ static void  update_hardware_info_8084(struct hardware_info *hw_info, const char
     } else if (!strcmp(snd_card_name, "apq8084-taiko-cdp-snd-card")) {
         strlcpy(hw_info->type, " cdp", sizeof(hw_info->type));
         strlcpy(hw_info->name, "apq8084", sizeof(hw_info->name));
-        hw_info->snd_devices = (snd_device_t *)taiko_apq8084_CDP_variant_devices;
-        hw_info->num_snd_devices = ARRAY_SIZE(taiko_apq8084_CDP_variant_devices);
-        strlcpy(hw_info->dev_extn, "-cdp", sizeof(hw_info->dev_extn));
+        hw_info->snd_devices = (snd_device_t *)taiko_CDP_variant_devices;
+        hw_info->num_snd_devices = ARRAY_SIZE(taiko_CDP_variant_devices);
+        strlcpy(hw_info->dev_extn, "", sizeof(hw_info->dev_extn));
     } else if (!strcmp(snd_card_name, "apq8084-taiko-liquid-snd-card")) {
         strlcpy(hw_info->type , " liquid", sizeof(hw_info->type));
         strlcpy(hw_info->name, "apq8084", sizeof(hw_info->type));
         hw_info->snd_devices = (snd_device_t *)taiko_liquid_variant_devices;
         hw_info->num_snd_devices = ARRAY_SIZE(taiko_liquid_variant_devices);
-        strlcpy(hw_info->dev_extn, "-liquid", sizeof(hw_info->dev_extn));
+        strlcpy(hw_info->dev_extn, "", sizeof(hw_info->dev_extn));
     } else {
         ALOGW("%s: Not an 8084 device", __func__);
     }
@@ -252,7 +267,11 @@ void *hw_info_init(const char *snd_card_name)
 
     hw_info = malloc(sizeof(struct hardware_info));
 
-    if(strstr(snd_card_name, "msm8974") ||
+    if(strstr(snd_card_name, "mpq8092") ||
+              strstr(snd_card_name, "mpq8092")) {
+        ALOGV("8092 - variant soundcard");
+        update_hardware_info_8092(hw_info, snd_card_name);
+    } else if(strstr(snd_card_name, "msm8974") ||
               strstr(snd_card_name, "apq8074")) {
         ALOGV("8974 - variant soundcard");
         update_hardware_info_8974(hw_info, snd_card_name);
