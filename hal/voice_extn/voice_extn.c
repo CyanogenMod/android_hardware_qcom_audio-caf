@@ -471,6 +471,7 @@ void voice_extn_in_get_parameters(struct stream_in *in,
     voice_extn_compress_voip_in_get_parameters(in, query, reply);
 }
 
+#ifdef INCALL_MUSIC_ENABLED
 int voice_extn_check_and_set_incall_music_usecase(struct audio_device *adev,
                                                   struct stream_out *out)
 {
@@ -492,4 +493,4 @@ int voice_extn_check_and_set_incall_music_usecase(struct audio_device *adev,
 
     return 0;
 }
-
+#endif
