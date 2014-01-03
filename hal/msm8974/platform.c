@@ -54,9 +54,6 @@
 #define RETRY_NUMBER 10
 #define RETRY_US 500000
 
-#define SAMPLE_RATE_8KHZ  8000
-#define SAMPLE_RATE_16KHZ 16000
-
 #define AUDIO_PARAMETER_KEY_FLUENCE_TYPE  "fluence"
 #define AUDIO_PARAMETER_KEY_BTSCO         "bt_samplerate"
 #define AUDIO_PARAMETER_KEY_SLOWTALK      "st_enable"
@@ -65,32 +62,6 @@ struct audio_block_header
 {
     int reserved;
     int length;
-};
-
-/* Audio calibration related functions */
-typedef void (*acdb_deallocate_t)();
-typedef int  (*acdb_init_t)();
-typedef void (*acdb_send_audio_cal_t)(int, int);
-typedef void (*acdb_send_voice_cal_t)(int, int);
-
-struct platform_data {
-    struct audio_device *adev;
-    bool fluence_in_spkr_mode;
-    bool fluence_in_voice_call;
-    bool fluence_in_voice_rec;
-    bool fluence_in_audio_rec;
-    int  fluence_type;
-    int  btsco_sample_rate;
-    bool slowtalk;
-    /* Audio calibration related functions */
-    void *acdb_handle;
-    acdb_init_t acdb_init;
-    acdb_deallocate_t acdb_deallocate;
-    acdb_send_audio_cal_t acdb_send_audio_cal;
-    acdb_send_voice_cal_t acdb_send_voice_cal;
-
-    void *hw_info;
-    struct csd_data *csd;
 };
 
 static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
@@ -136,7 +107,7 @@ static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
 };
 
 /* Array to store sound devices */
-static const char * const device_table[SND_DEVICE_MAX] = {
+static char * device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_NONE] = "none",
     /* Playback sound devices */
     [SND_DEVICE_OUT_HANDSET] = "handset",
@@ -210,7 +181,7 @@ static const char * const device_table[SND_DEVICE_MAX] = {
 };
 
 /* ACDB IDs (audio DSP path configuration IDs) for each sound device */
-static const int acdb_device_table[SND_DEVICE_MAX] = {
+static int acdb_device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_NONE] = -1,
     [SND_DEVICE_OUT_HANDSET] = 7,
     [SND_DEVICE_OUT_SPEAKER] = 14,
@@ -284,7 +255,7 @@ static const int acdb_device_table[SND_DEVICE_MAX] = {
 #define DEEP_BUFFER_PLATFORM_DELAY (29*1000LL)
 #define LOW_LATENCY_PLATFORM_DELAY (13*1000LL)
 
-static int set_echo_reference(struct mixer *mixer, const char* ec_ref)
+int set_echo_reference(struct mixer *mixer, const char* ec_ref)
 {
     struct mixer_ctl *ctl;
     const char *mixer_ctl_name = "EC_REF_RX";
@@ -425,6 +396,7 @@ void close_csd_client(struct csd_data *csd)
 
 void *platform_init(struct audio_device *adev)
 {
+    custom_init_data();
     char platform[PROPERTY_VALUE_MAX];
     char baseband[PROPERTY_VALUE_MAX];
     char value[PROPERTY_VALUE_MAX];
@@ -945,6 +917,11 @@ exit:
 
 snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_device)
 {
+    snd_device_t customdata = custom_platform_get_input_snd_device(platform, out_device);
+    if (customdata!=-2) {
+        ALOGE("entering custom CM abstraction");
+        return customdata;
+    }
     struct platform_data *my_data = (struct platform_data *)platform;
     struct audio_device *adev = my_data->adev;
     audio_source_t  source = (adev->active_input == NULL) ?
@@ -1486,4 +1463,14 @@ bool platform_listen_update_status(snd_device_t snd_device)
         return true;
     else
         return false;
+}
+void change_acdb_data(int key, int value){
+    //ALOGE("%s: shareefdebug :%d", "acdb_device_table[key]",  acdb_device_table[key]);
+    acdb_device_table[key]=value;
+    // ALOGE("%s: shareefdebug :%d", "acdb_device_table[key]",  acdb_device_table[key]);
+}
+void change_table_data(int key, char value[]){
+    //ALOGE("%s: shareefdebug :%s", "device_table[key]", device_table[key]);
+    device_table[key] = value;
+    //ALOGE("%s: shareefdebug :%s", "device_table[key]", device_table[key]);
 }

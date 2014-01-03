@@ -28,6 +28,12 @@ LOCAL_SRC_FILES := \
 	voice.c \
 	$(AUDIO_PLATFORM)/platform.c
 
+ifneq ($(BOARD_USES_CUSTOM_AUDIO_PLATFORM_PATH),)
+    LOCAL_SRC_FILES += ../../../../$(BOARD_USES_CUSTOM_AUDIO_PLATFORM_PATH)/customplatform.c
+else
+    LOCAL_SRC_FILES += vendor-platform/customplatform.c
+endif
+
 LOCAL_SRC_FILES += audio_extn/audio_extn.c
 
 ifneq ($(strip $(AUDIO_FEATURE_DISABLED_ANC_HEADSET)),true)
@@ -116,7 +122,8 @@ LOCAL_C_INCLUDES += \
 	$(call include-path-for, audio-effects) \
 	$(LOCAL_PATH)/$(AUDIO_PLATFORM) \
 	$(LOCAL_PATH)/audio_extn \
-	$(LOCAL_PATH)/voice_extn
+	$(LOCAL_PATH)/voice_extn \
+	$(LOCAL_PATH)/vendor-platform
 
 ifneq ($(QC_PROP_ROOT),)
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_LISTEN)),true)
