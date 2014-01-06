@@ -75,11 +75,11 @@ ifneq ($(strip $(AUDIO_FEATURE_DISABLED_MULTI_VOICE_SESSIONS)),true)
 ifneq ($(strip $(AUDIO_FEATURE_DISABLED_INCALL_MUSIC)),true)
     LOCAL_CFLAGS += -DINCALL_MUSIC_ENABLED
 endif
+endif
 
 ifneq ($(strip $(AUDIO_FEATURE_DISABLED_COMPRESS_VOIP)),true)
     LOCAL_CFLAGS += -DCOMPRESS_VOIP_ENABLED
     LOCAL_SRC_FILES += voice_extn/compress_voip.c
-endif
 endif
 
 ifneq ($(strip, $(AUDIO_FEATURE_DISABLED_SPKR_PROTECTION)),true)
