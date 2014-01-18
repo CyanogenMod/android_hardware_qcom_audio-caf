@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -128,7 +128,7 @@ int voice_extn_compress_voip_set_volume(struct audio_device *adev, float volume)
 int voice_extn_compress_voip_select_devices(struct audio_device *adev,
                                             snd_device_t *out_snd_device,
                                             snd_device_t *in_snd_device);
-void voice_extn_compress_voip_set_parameters(struct audio_device *adev,
+int voice_extn_compress_voip_set_parameters(struct audio_device *adev,
                                              struct str_parms *parms);
 
 void voice_extn_compress_voip_out_get_parameters(struct stream_out *out,
@@ -210,10 +210,11 @@ static int voice_extn_compress_voip_select_devices(struct audio_device *adev,
     return -ENOSYS;
 }
 
-static void voice_extn_compress_voip_set_parameters(struct audio_device *adev,
+static int voice_extn_compress_voip_set_parameters(struct audio_device *adev,
                                                     struct str_parms *parms)
 {
     ALOGE("%s: COMPRESS_VOIP_ENABLED is not defined", __func__);
+    return -ENOSYS;
 }
 
 static void voice_extn_compress_voip_out_get_parameters(struct stream_out *out,

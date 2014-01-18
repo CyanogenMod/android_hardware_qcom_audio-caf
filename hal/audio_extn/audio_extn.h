@@ -70,14 +70,14 @@ bool audio_extn_usb_is_proxy_inuse();
 #ifndef SSR_ENABLED
 #define audio_extn_ssr_init(adev, in)                 (0)
 #define audio_extn_ssr_deinit()                       (0)
-#define audio_extn_ssr_update_enabled(adev)           (0)
+#define audio_extn_ssr_update_enabled()               (0)
 #define audio_extn_ssr_get_enabled()                  (0)
 #define audio_extn_ssr_read(stream, buffer, bytes)    (0)
 #else
 int32_t audio_extn_ssr_init(struct audio_device *adev,
                             struct stream_in *in);
 int32_t audio_extn_ssr_deinit();
-int32_t audio_extn_ssr_update_enabled(struct audio_device *adev);
+void audio_extn_ssr_update_enabled();
 bool audio_extn_ssr_get_enabled();
 int32_t audio_extn_ssr_read(struct audio_stream_in *stream,
                        void *buffer, size_t bytes);
@@ -96,14 +96,11 @@ void hw_info_append_hw_type(void *hw_info, snd_device_t snd_device,
 #endif
 
 #ifndef AUDIO_LISTEN_ENABLED
-
 #define audio_extn_listen_init(adev, snd_card)                  (0)
 #define audio_extn_listen_deinit(adev)                          (0)
 #define audio_extn_listen_update_status(uc_info, event)         (0)
 #define audio_extn_listen_set_parameters(adev, parms)           (0)
-
 #else
-
 enum listen_event_type {
     LISTEN_EVENT_SND_DEVICE_FREE,
     LISTEN_EVENT_SND_DEVICE_BUSY
@@ -116,11 +113,10 @@ void audio_extn_listen_update_status(snd_device_t snd_device,
                                      listen_event_type_t event);
 void audio_extn_listen_set_parameters(struct audio_device *adev,
                                       struct str_parms *parms);
-
 #endif /* AUDIO_LISTEN_ENABLED */
 
 #ifndef AUXPCM_BT_ENABLED
-#define audio_extn_read_xml(adev, MIXER_CARD, MIXER_XML_PATH, \
+#define audio_extn_read_xml(adev, mixer_card, MIXER_XML_PATH, \
                             MIXER_XML_PATH_AUXPCM)               (-ENOSYS)
 #else
 int32_t audio_extn_read_xml(struct audio_device *adev, uint32_t mixer_card,

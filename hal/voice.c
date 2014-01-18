@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -135,8 +135,8 @@ int start_call(struct audio_device *adev, audio_usecase_t usecase_id)
     }
 
     ALOGV("%s: Opening PCM playback device card_id(%d) device_id(%d)",
-          __func__, SOUND_CARD, pcm_dev_rx_id);
-    session->pcm_rx = pcm_open(SOUND_CARD,
+          __func__, adev->snd_card, pcm_dev_rx_id);
+    session->pcm_rx = pcm_open(adev->snd_card,
                                pcm_dev_rx_id,
                                PCM_OUT, &voice_config);
     if (session->pcm_rx && !pcm_is_ready(session->pcm_rx)) {
@@ -146,8 +146,8 @@ int start_call(struct audio_device *adev, audio_usecase_t usecase_id)
     }
 
     ALOGV("%s: Opening PCM capture device card_id(%d) device_id(%d)",
-          __func__, SOUND_CARD, pcm_dev_tx_id);
-    session->pcm_tx = pcm_open(SOUND_CARD,
+          __func__, adev->snd_card, pcm_dev_tx_id);
+    session->pcm_tx = pcm_open(adev->snd_card,
                                pcm_dev_tx_id,
                                PCM_IN, &voice_config);
     if (session->pcm_tx && !pcm_is_ready(session->pcm_tx)) {
@@ -356,15 +356,20 @@ int voice_set_parameters(struct audio_device *adev, struct str_parms *parms)
     char *str;
     char value[32];
     int val;
-    int ret = 0;
+    int ret = 0, err;
 
     ALOGV("%s: enter: %s", __func__, str_parms_to_str(parms));
 
-    voice_extn_set_parameters(adev, parms);
-    voice_extn_compress_voip_set_parameters(adev, parms);
+    ret = voice_extn_set_parameters(adev, parms);
+    if (ret != 0)
+        goto done;
 
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_TTY_MODE, value, sizeof(value));
-    if (ret >= 0) {
+    ret = voice_extn_compress_voip_set_parameters(adev, parms);
+    if (ret != 0)
+        goto done;
+
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_TTY_MODE, value, sizeof(value));
+    if (err >= 0) {
         int tty_mode;
         str_parms_del(parms, AUDIO_PARAMETER_KEY_TTY_MODE);
         if (strcmp(value, AUDIO_PARAMETER_VALUE_TTY_OFF) == 0)
@@ -389,9 +394,9 @@ int voice_set_parameters(struct audio_device *adev, struct str_parms *parms)
         }
     }
 
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_INCALLMUSIC,
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_INCALLMUSIC,
                             value, sizeof(value));
-    if (ret >= 0) {
+    if (err >= 0) {
         str_parms_del(parms, AUDIO_PARAMETER_KEY_INCALLMUSIC);
         if (strcmp(value, AUDIO_PARAMETER_VALUE_TRUE) == 0)
             platform_start_incall_music_usecase(adev->platform);
