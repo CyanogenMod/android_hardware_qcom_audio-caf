@@ -71,35 +71,6 @@ struct audio_block_header
     int length;
 };
 
-/* Audio calibration related functions */
-typedef void (*acdb_deallocate_t)();
-typedef int  (*acdb_init_t)();
-typedef void (*acdb_send_audio_cal_t)(int, int);
-typedef void (*acdb_send_voice_cal_t)(int, int);
-typedef int (*acdb_reload_vocvoltable_t)(int);
-
-struct platform_data {
-    struct audio_device *adev;
-    bool fluence_in_spkr_mode;
-    bool fluence_in_voice_call;
-    bool fluence_in_voice_rec;
-    bool fluence_in_audio_rec;
-    int  fluence_type;
-    int  btsco_sample_rate;
-    bool slowtalk;
-    /* Audio calibration related functions */
-    void                       *acdb_handle;
-    int                        voice_feature_set;
-    acdb_init_t                acdb_init;
-    acdb_deallocate_t          acdb_deallocate;
-    acdb_send_audio_cal_t      acdb_send_audio_cal;
-    acdb_send_voice_cal_t      acdb_send_voice_cal;
-    acdb_reload_vocvoltable_t  acdb_reload_vocvoltable;
-
-    void *hw_info;
-    struct csd_data *csd;
-};
-
 static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
     [USECASE_AUDIO_PLAYBACK_DEEP_BUFFER] = {DEEP_BUFFER_PCM_DEVICE,
                                             DEEP_BUFFER_PCM_DEVICE},
