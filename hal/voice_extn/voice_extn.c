@@ -34,8 +34,12 @@
 #include "platform_api.h"
 #include "voice_extn.h"
 
-#define AUDIO_PARAMETER_KEY_VSID        "vsid"
-#define AUDIO_PARAMETER_KEY_CALL_STATE  "call_state"
+#define AUDIO_PARAMETER_KEY_VSID                "vsid"
+#define AUDIO_PARAMETER_KEY_CALL_STATE          "call_state"
+#define AUDIO_PARAMETER_KEY_AUDIO_MODE          "audio_mode"
+#define AUDIO_PARAMETER_KEY_ALL_CALL_STATES     "all_call_states"
+
+#define VOICE_EXTN_PARAMETER_VALUE_MAX_LEN 256
 
 #define VOICE2_VSID 0x10DC1000
 #define VOLTE_VSID  0x10C02000
@@ -139,6 +143,7 @@ static int update_calls(struct audio_device *adev)
     struct voice_session *session = NULL;
     int fd = 0;
     int ret = 0;
+    bool is_in_call = false;
 
     ALOGD("%s: enter:", __func__);
 
@@ -198,6 +203,10 @@ static int update_calls(struct audio_device *adev)
                     ALOGE("%s: voice_end_call() failed for usecase: %d\n",
                           __func__, usecase_id);
                 } else {
+                    voice_extn_is_in_call(adev, &is_in_call);
+                    if (!is_in_call) {
+                        adev->voice.voice_device_set = false;
+                    }
                     session->state.current = session->state.new;
                 }
                 break;
@@ -270,6 +279,7 @@ static int update_call_states(struct audio_device *adev,
     struct voice_session *session = NULL;
     int i = 0;
     bool is_in_call;
+    int no_of_calls_active = 0;
 
     for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (vsid == adev->voice.session[i].vsid) {
@@ -278,17 +288,27 @@ static int update_call_states(struct audio_device *adev,
         }
     }
 
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
+        if (CALL_INACTIVE != adev->voice.session[i].state.current)
+            no_of_calls_active++;
+    }
+
+    /* When there is only one call active, wait for audio policy manager to set
+     * the mode to AUDIO_MODE_NORMAL and trigger routing to end the last call.
+     */
+    if (no_of_calls_active == 1 && call_state == CALL_INACTIVE)
+        return 0;
+
     if (session) {
         session->state.new = call_state;
         voice_extn_is_in_call(adev, &is_in_call);
-        ALOGD("%s is_in_call:%d mode:%d\n", __func__, is_in_call, adev->mode);
+        ALOGD("%s is_in_call:%d voice_device_set:%d, mode:%d\n",
+              __func__, is_in_call, adev->voice.voice_device_set, adev->mode);
         /* Dont start voice call before device routing for voice usescases has
          * occured, otherwise voice calls will be started unintendedly on
          * speaker.
          */
-        if (is_in_call ||
-            (adev->mode == AUDIO_MODE_IN_CALL &&
-             adev->primary_output->devices != AUDIO_DEVICE_OUT_SPEAKER)) {
+        if (is_in_call || adev->voice.voice_device_set) {
             /* Device routing is not triggered for voice calls on the subsequent
              * subs, Hence update the call states if voice call is already
              * active on other sub.
@@ -373,6 +393,7 @@ int voice_extn_start_call(struct audio_device *adev)
      * udpated.
      */
     ALOGV("%s: enter:", __func__);
+    adev->voice.voice_device_set = true;
     return update_calls(adev);
 }
 
@@ -432,11 +453,29 @@ int voice_extn_set_parameters(struct audio_device *adev,
             goto done;
         }
     } else {
-        ALOGD("%s: Not handled here", __func__);
+        ALOGV("%s: Not handled here", __func__);
     }
 
 done:
     ALOGV("%s: exit with code(%d)", __func__, ret);
+    return ret;
+}
+
+int get_all_call_states_str(const struct audio_device *adev,
+                            char *value)
+{
+    int ret = 0;
+    char *cur_ptr = value;
+    int i, len=0;
+
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
+        snprintf(cur_ptr, VOICE_EXTN_PARAMETER_VALUE_MAX_LEN - len,
+                 "%d:%d,",adev->voice.session[i].vsid,
+                 adev->voice.session[i].state.current);
+        len = strlen(cur_ptr);
+        cur_ptr = cur_ptr + len;
+    }
+    ALOGV("%s:value=%s", __func__, value);
     return ret;
 }
 
@@ -445,16 +484,30 @@ void voice_extn_get_parameters(const struct audio_device *adev,
                                struct str_parms *reply)
 {
     int ret;
-    char value[32]={0};
+    char value[VOICE_EXTN_PARAMETER_VALUE_MAX_LEN] = {0};
     char *str = NULL;
 
-    ret = str_parms_get_str(query, "audio_mode", value,
+    ALOGV("%s: enter %s", __func__, str_parms_to_str(query));
+
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_AUDIO_MODE, value,
                             sizeof(value));
     if (ret >= 0) {
-        str_parms_add_int(reply, "audio_mode", adev->mode);
+        str_parms_add_int(reply, AUDIO_PARAMETER_KEY_AUDIO_MODE, adev->mode);
     }
 
-    ALOGV("%s: returns %s", __func__, str_parms_to_str(reply));
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_ALL_CALL_STATES,
+                            value, sizeof(value));
+    if (ret >= 0) {
+        ret = get_all_call_states_str(adev, value);
+        if (ret) {
+            ALOGE("%s: Error fetching call states, err:%d", __func__, ret);
+            return;
+        }
+        str_parms_add_str(reply, AUDIO_PARAMETER_KEY_ALL_CALL_STATES, value);
+    }
+    voice_extn_compress_voip_get_parameters(adev, query, reply);
+
+    ALOGV("%s: exit: returns \"%s\"", __func__, str_parms_to_str(reply));
 }
 
 void voice_extn_out_get_parameters(struct stream_out *out,

@@ -88,6 +88,7 @@ static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
                                   MULTIMEDIA2_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_FM] = {FM_PLAYBACK_PCM_DEVICE, FM_CAPTURE_PCM_DEVICE},
     [USECASE_AUDIO_HFP_SCO] = {HFP_PCM_RX, HFP_SCO_RX},
+    [USECASE_AUDIO_HFP_SCO_WB] = {HFP_PCM_RX, HFP_SCO_RX},
     [USECASE_VOICE_CALL] = {VOICE_CALL_PCM_DEVICE, VOICE_CALL_PCM_DEVICE},
     [USECASE_VOICE2_CALL] = {VOICE2_CALL_PCM_DEVICE, VOICE2_CALL_PCM_DEVICE},
     [USECASE_VOLTE_CALL] = {VOLTE_CALL_PCM_DEVICE, VOLTE_CALL_PCM_DEVICE},
@@ -207,7 +208,7 @@ static int acdb_device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_OUT_VOICE_TTY_VCO_HEADPHONES] = 17,
     [SND_DEVICE_OUT_VOICE_TTY_HCO_HANDSET] = 37,
     [SND_DEVICE_OUT_AFE_PROXY] = 0,
-    [SND_DEVICE_OUT_USB_HEADSET] = 0,
+    [SND_DEVICE_OUT_USB_HEADSET] = 45,
     [SND_DEVICE_OUT_SPEAKER_AND_USB_HEADSET] = 14,
     [SND_DEVICE_OUT_TRANSMISSION_FM] = 0,
     [SND_DEVICE_OUT_ANC_HEADSET] = 26,
@@ -259,6 +260,84 @@ static int acdb_device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_IN_HANDSET_STEREO_DMIC] = 34,
     [SND_DEVICE_IN_SPEAKER_STEREO_DMIC] = 35,
     [SND_DEVICE_IN_CAPTURE_VI_FEEDBACK] = 102,
+};
+
+struct snd_device_index {
+    char name[100];
+    unsigned int index;
+};
+
+#define TO_NAME_INDEX(X)   #X, X
+
+/* Used to get index from parsed sting */
+struct snd_device_index snd_device_name_index[SND_DEVICE_MAX] = {
+    {TO_NAME_INDEX(SND_DEVICE_OUT_HANDSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_REVERSE)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_HEADPHONES)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_HANDSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_SPEAKER)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_HEADPHONES)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_HDMI)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_AND_HDMI)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_BT_SCO)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_BT_SCO_WB)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_TTY_FULL_HEADPHONES)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_TTY_VCO_HEADPHONES)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_TTY_HCO_HANDSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_AFE_PROXY)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_USB_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_AND_USB_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_TRANSMISSION_FM)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_ANC_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_ANC_FB_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_ANC_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_VOICE_ANC_FB_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_ANC_HANDSET)},
+    {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_PROTECTED)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_MIC_AEC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_MIC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_MIC_AEC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_DMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_DMIC_AEC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_DMIC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_DMIC_AEC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_MIC_AEC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_MIC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_MIC_AEC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_DMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_DMIC_AEC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_DMIC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_DMIC_AEC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HEADSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HEADSET_MIC_FLUENCE)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_SPEAKER_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_HEADSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HDMI_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_BT_SCO_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_BT_SCO_MIC_WB)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_CAMCORDER_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_DMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_SPEAKER_DMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_SPEAKER_QMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_TTY_FULL_HEADSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_TTY_VCO_HANDSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_TTY_HCO_HEADSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_REC_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_REC_MIC_NS)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_REC_DMIC_STEREO)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_REC_DMIC_FLUENCE)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_USB_HEADSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_CAPTURE_FM)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_AANC_HANDSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_QUAD_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_STEREO_DMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_STEREO_DMIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_CAPTURE_VI_FEEDBACK)},
 };
 
 #define DEEP_BUFFER_PLATFORM_DELAY (29*1000LL)
@@ -540,6 +619,9 @@ void *platform_init(struct audio_device *adev)
             my_data->acdb_init();
     }
 
+    /* Initialize ACDB ID's */
+    platform_info_init();
+
     /* If platform is apq8084 and baseband is MDM, load CSD Client specific
      * symbols. Voice call is handled by MDM and apps processor talks to
      * MDM through CSD Client
@@ -635,6 +717,46 @@ int platform_get_pcm_device_id(audio_usecase_t usecase, int device_type)
     else
         device_id = pcm_device_table[usecase][1];
     return device_id;
+}
+
+int platform_get_snd_device_index(char *snd_device_index_name)
+{
+    int ret = 0;
+    int i;
+
+    if (snd_device_index_name == NULL) {
+        ALOGE("%s: snd_device_index_name is NULL", __func__);
+        ret = -ENODEV;
+        goto done;
+    }
+
+    for (i=0; i < SND_DEVICE_MAX; i++) {
+        if(strcmp(snd_device_name_index[i].name, snd_device_index_name) == 0) {
+            ret = snd_device_name_index[i].index;
+            goto done;
+        }
+    }
+    ALOGE("%s: Could not find index for snd_device_index_name = %s",
+            __func__, snd_device_index_name);
+    ret = -ENODEV;
+done:
+    return ret;
+}
+
+int platform_set_snd_device_acdb_id(snd_device_t snd_device, unsigned int acdb_id)
+{
+    int ret = 0;
+
+    if ((snd_device < SND_DEVICE_MIN) || (snd_device >= SND_DEVICE_MAX)) {
+        ALOGE("%s: Invalid snd_device = %d",
+            __func__, snd_device);
+        ret = -EINVAL;
+        goto done;
+    }
+
+    acdb_device_table[snd_device] = acdb_id;
+done:
+    return ret;
 }
 
 int platform_send_audio_calibration(void *platform, snd_device_t snd_device)
@@ -839,6 +961,36 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
         goto exit;
     }
 
+    if (popcount(devices) == 2) {
+        if (devices == (AUDIO_DEVICE_OUT_WIRED_HEADPHONE |
+                        AUDIO_DEVICE_OUT_SPEAKER)) {
+            snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
+        } else if (devices == (AUDIO_DEVICE_OUT_WIRED_HEADSET |
+                               AUDIO_DEVICE_OUT_SPEAKER)) {
+            if (audio_extn_get_anc_enabled())
+                snd_device = SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET;
+            else
+                snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
+        } else if (devices == (AUDIO_DEVICE_OUT_AUX_DIGITAL |
+                               AUDIO_DEVICE_OUT_SPEAKER)) {
+            snd_device = SND_DEVICE_OUT_SPEAKER_AND_HDMI;
+        } else if (devices == (AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
+                               AUDIO_DEVICE_OUT_SPEAKER)) {
+            snd_device = SND_DEVICE_OUT_SPEAKER_AND_USB_HEADSET;
+        } else {
+            ALOGE("%s: Invalid combo device(%#x)", __func__, devices);
+            goto exit;
+        }
+        if (snd_device != SND_DEVICE_NONE) {
+            goto exit;
+        }
+    }
+
+    if (popcount(devices) != 1) {
+        ALOGE("%s: Invalid output devices(%#x)", __func__, devices);
+        goto exit;
+    }
+
     if ((mode == AUDIO_MODE_IN_CALL) ||
         voice_extn_compress_voip_is_active(adev)) {
         if (devices & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
@@ -888,36 +1040,6 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
         if (snd_device != SND_DEVICE_NONE) {
             goto exit;
         }
-    }
-
-    if (popcount(devices) == 2) {
-        if (devices == (AUDIO_DEVICE_OUT_WIRED_HEADPHONE |
-                        AUDIO_DEVICE_OUT_SPEAKER)) {
-            snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
-        } else if (devices == (AUDIO_DEVICE_OUT_WIRED_HEADSET |
-                               AUDIO_DEVICE_OUT_SPEAKER)) {
-            if (audio_extn_get_anc_enabled())
-                snd_device = SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET;
-            else
-                snd_device = SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES;
-        } else if (devices == (AUDIO_DEVICE_OUT_AUX_DIGITAL |
-                               AUDIO_DEVICE_OUT_SPEAKER)) {
-            snd_device = SND_DEVICE_OUT_SPEAKER_AND_HDMI;
-        } else if (devices == (AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
-                               AUDIO_DEVICE_OUT_SPEAKER)) {
-            snd_device = SND_DEVICE_OUT_SPEAKER_AND_USB_HEADSET;
-        } else {
-            ALOGE("%s: Invalid combo device(%#x)", __func__, devices);
-            goto exit;
-        }
-        if (snd_device != SND_DEVICE_NONE) {
-            goto exit;
-        }
-    }
-
-    if (popcount(devices) != 1) {
-        ALOGE("%s: Invalid output devices(%#x)", __func__, devices);
-        goto exit;
     }
 
     if (devices & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||

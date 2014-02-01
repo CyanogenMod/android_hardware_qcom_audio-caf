@@ -113,6 +113,7 @@ const char * const use_case_table[AUDIO_USECASE_MAX] = {
     [USECASE_AUDIO_RECORD_FM_VIRTUAL] = "fm-virtual-record",
     [USECASE_AUDIO_PLAYBACK_FM] = "play-fm",
     [USECASE_AUDIO_HFP_SCO] = "hfp-sco",
+    [USECASE_AUDIO_HFP_SCO_WB] = "hfp-sco-wb",
     [USECASE_VOICE_CALL] = "voice-call",
     
     [USECASE_VOICE2_CALL] = "voice2-call",
@@ -151,8 +152,55 @@ static pthread_mutex_t adev_init_lock;
 static unsigned int audio_device_ref_count;
 
 static int set_voice_volume_l(struct audio_device *adev, float volume);
-static uint32_t get_offload_buffer_size();
-static int set_gapless_mode(struct audio_device *adev);
+
+/* Read  offload buffer size from a property.
+ * If value is not power of 2  round it to
+ * power of 2.
+ */
+static uint32_t get_offload_buffer_size()
+{
+    char value[PROPERTY_VALUE_MAX] = {0};
+    uint32_t fragment_size = COMPRESS_OFFLOAD_FRAGMENT_SIZE;
+    if((property_get("audio.offload.buffer.size.kb", value, "")) &&
+            atoi(value)) {
+        fragment_size =  atoi(value) * 1024;
+        //ring buffer size needs to be 4k aligned.
+        CHECK(!(fragment_size * COMPRESS_OFFLOAD_NUM_FRAGMENTS % 4096));
+    }
+    if(fragment_size < MIN_COMPRESS_OFFLOAD_FRAGMENT_SIZE)
+        fragment_size = MIN_COMPRESS_OFFLOAD_FRAGMENT_SIZE;
+    else if(fragment_size > MAX_COMPRESS_OFFLOAD_FRAGMENT_SIZE)
+        fragment_size = MAX_COMPRESS_OFFLOAD_FRAGMENT_SIZE;
+    ALOGVV("%s: fragment_size %d", __func__, fragment_size);
+    return fragment_size;
+}
+
+static int check_and_set_gapless_mode(struct audio_device *adev) {
+
+
+    char value[PROPERTY_VALUE_MAX] = {0};
+    bool gapless_enabled = false;
+    const char *mixer_ctl_name = "Compress Gapless Playback";
+    struct mixer_ctl *ctl;
+
+    ALOGV("%s:", __func__);
+    property_get("audio.offload.gapless.enabled", value, NULL);
+    gapless_enabled = atoi(value) || !strncmp("true", value, 4);
+
+    ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
+    if (!ctl) {
+        ALOGE("%s: Could not get ctl for mixer cmd - %s",
+                               __func__, mixer_ctl_name);
+        return -EINVAL;
+    }
+
+    if (mixer_ctl_set_value(ctl, 0, gapless_enabled) < 0) {
+        ALOGE("%s: Could not set gapless mode %d",
+                       __func__, gapless_enabled);
+         return -EINVAL;
+    }
+    return 0;
+}
 
 static bool is_supported_format(audio_format_t format)
 {
@@ -198,6 +246,10 @@ int enable_audio_route(struct audio_device *adev,
     else
         snd_device = usecase->out_snd_device;
 
+#ifdef DS1_DOLBY_DAP_ENABLED
+    audio_extn_dolby_set_dmid(adev);
+    audio_extn_dolby_set_endpoint(adev);
+#endif
     strcpy(mixer_path, use_case_table[usecase->id]);
     platform_add_backend_name(mixer_path, snd_device);
     ALOGV("%s: apply mixer path: %s", __func__, mixer_path);
@@ -369,7 +421,7 @@ static void check_usecases_codec_backend(struct audio_device *adev,
 
     list_for_each(node, &adev->usecase_list) {
         usecase = node_to_item(node, struct audio_usecase, list);
-        if (usecase->type == PCM_PLAYBACK &&
+        if (usecase->type != PCM_CAPTURE &&
                 usecase != uc_info &&
                 usecase->out_snd_device != snd_device &&
                 usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND) {
@@ -413,8 +465,6 @@ static void check_usecases_codec_backend(struct audio_device *adev,
                 enable_audio_route(adev, usecase, false);
             }
         }
-
-        audio_route_update_mixer(adev->audio_route);
     }
 }
 
@@ -442,7 +492,7 @@ static void check_and_route_capture_usecases(struct audio_device *adev,
 
     list_for_each(node, &adev->usecase_list) {
         usecase = node_to_item(node, struct audio_usecase, list);
-        if (usecase->type == PCM_CAPTURE &&
+        if (usecase->type != PCM_PLAYBACK &&
                 usecase != uc_info &&
                 usecase->in_snd_device != snd_device) {
             ALOGV("%s: Usecase (%s) is active on (%s) - disabling ..",
@@ -462,6 +512,12 @@ static void check_and_route_capture_usecases(struct audio_device *adev,
             usecase = node_to_item(node, struct audio_usecase, list);
             if (switch_device[usecase->id]) {
                 disable_snd_device(adev, usecase->in_snd_device, false);
+            }
+        }
+
+        list_for_each(node, &adev->usecase_list) {
+            usecase = node_to_item(node, struct audio_usecase, list);
+            if (switch_device[usecase->id]) {
                 enable_snd_device(adev, snd_device, false);
             }
         }
@@ -479,55 +535,7 @@ static void check_and_route_capture_usecases(struct audio_device *adev,
                 enable_audio_route(adev, usecase, false);
             }
         }
-
-        audio_route_update_mixer(adev->audio_route);
     }
-}
-
-static int disable_all_usecases_of_type(struct audio_device *adev,
-                                        usecase_type_t usecase_type,
-                                        bool update_mixer)
-{
-    struct audio_usecase *usecase;
-    struct listnode *node;
-    int ret = 0;
-
-    list_for_each(node, &adev->usecase_list) {
-        usecase = node_to_item(node, struct audio_usecase, list);
-        if (usecase->type == usecase_type) {
-            ALOGV("%s: usecase id %d", __func__, usecase->id);
-            ret = disable_audio_route(adev, usecase, update_mixer);
-            if (ret) {
-                ALOGE("%s: Failed to disable usecase id %d",
-                      __func__, usecase->id);
-            }
-        }
-    }
-
-    return ret;
-}
-
-static int enable_all_usecases_of_type(struct audio_device *adev,
-                                       usecase_type_t usecase_type,
-                                       bool update_mixer)
-{
-    struct audio_usecase *usecase;
-    struct listnode *node;
-    int ret = 0;
-
-    list_for_each(node, &adev->usecase_list) {
-        usecase = node_to_item(node, struct audio_usecase, list);
-        if (usecase->type == usecase_type) {
-            ALOGV("%s: usecase id %d", __func__, usecase->id);
-            ret = enable_audio_route(adev, usecase, update_mixer);
-            if (ret) {
-                ALOGE("%s: Failed to enable usecase id %d",
-                      __func__, usecase->id);
-            }
-        }
-    }
-
-    return ret;
 }
 
 /* must be called with hw device mutex locked */
@@ -556,6 +564,21 @@ static int read_hdmi_channel_masks(struct stream_out *out)
         break;
     }
     return ret;
+}
+
+static void update_devices_for_all_voice_usecases(struct audio_device *adev)
+{
+    struct listnode *node;
+    struct audio_usecase *usecase;
+
+    list_for_each(node, &adev->usecase_list) {
+        usecase = node_to_item(node, struct audio_usecase, list);
+        if (usecase->type == VOICE_CALL) {
+            ALOGV("%s: updating device for usecase:%s", __func__,
+                  use_case_table[usecase->id]);
+            select_devices(adev, usecase->id);
+        }
+    }
 }
 
 static audio_usecase_t get_voice_usecase_id_from_list(struct audio_device *adev)
@@ -594,6 +617,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
     struct audio_usecase *usecase = NULL;
     struct audio_usecase *vc_usecase = NULL;
     struct audio_usecase *voip_usecase = NULL;
+    struct audio_usecase *hfp_usecase = NULL;
     struct listnode *node;
     int status = 0;
 
@@ -631,6 +655,12 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
             if (voip_usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND) {
                     in_snd_device = voip_usecase->in_snd_device;
                     out_snd_device = voip_usecase->out_snd_device;
+            }
+        } else if (audio_extn_hfp_is_active(adev)) {
+            hfp_usecase = get_usecase_from_list(adev, USECASE_AUDIO_HFP_SCO);
+            if (hfp_usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND) {
+                   in_snd_device = hfp_usecase->in_snd_device;
+                   out_snd_device = hfp_usecase->out_snd_device;
             }
         }
         if (usecase->type == PCM_PLAYBACK) {
@@ -677,7 +707,6 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
      */
     if (usecase->type == VOICE_CALL || usecase->type == VOIP_CALL) {
         status = platform_switch_voice_call_device_pre(adev->platform);
-        disable_all_usecases_of_type(adev, VOICE_CALL, true);
     }
 
     /* Disable current sound devices */
@@ -713,10 +742,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
     usecase->in_snd_device = in_snd_device;
     usecase->out_snd_device = out_snd_device;
 
-    if (usecase->type == VOICE_CALL || usecase->type == VOIP_CALL)
-        enable_all_usecases_of_type(adev, usecase->type, true);
-    else
-        enable_audio_route(adev, usecase, true);
+    enable_audio_route(adev, usecase, true);
 
     /* Applicable only on the targets that has external modem.
      * Enable device command should be sent to modem only after
@@ -856,6 +882,7 @@ static void *offload_thread_loop(void *context)
 {
     struct stream_out *out = (struct stream_out *) context;
     struct listnode *item;
+    int ret = 0;
 
     setpriority(PRIO_PROCESS, 0, ANDROID_PRIORITY_AUDIO);
     set_sched_policy(0, SP_FOREGROUND);
@@ -905,8 +932,14 @@ static void *offload_thread_loop(void *context)
             event = STREAM_CBK_EVENT_WRITE_READY;
             break;
         case OFFLOAD_CMD_PARTIAL_DRAIN:
-            compress_next_track(out->compr);
-            compress_partial_drain(out->compr);
+            ret = compress_next_track(out->compr);
+            if(ret == 0)
+                compress_partial_drain(out->compr);
+            else if(ret == -ETIMEDOUT)
+                compress_drain(out->compr);
+            else
+                ALOGE("%s: Next track returned error %d",__func__, ret);
+
             send_callback = true;
             event = STREAM_CBK_EVENT_DRAIN_READY;
             break;
@@ -1140,6 +1173,11 @@ int start_output_stream(struct stream_out *out)
         }
         if (out->offload_callback)
             compress_nonblock(out->compr, out->non_blocking);
+
+#ifdef DS1_DOLBY_DDP_ENABLED
+        if (audio_extn_is_dolby_format(out->format))
+            audio_extn_dolby_send_ddp_endp_params(adev);
+#endif
 
         if (adev->visualizer_start_output != NULL)
             adev->visualizer_start_output(out->handle, out->pcm_device_id);
@@ -1410,7 +1448,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
             } else if ((adev->mode == AUDIO_MODE_IN_CALL) &&
                             voice_is_in_call(adev) &&
                             (out == adev->primary_output)) {
-                ret = select_devices(adev, get_voice_usecase_id_from_list(adev));
+                update_devices_for_all_voice_usecases(adev);
             }
         }
 
@@ -1851,6 +1889,18 @@ static int in_set_parameters(struct audio_stream *stream, const char *kvpairs)
         /* no audio source uses val == 0 */
         if ((in->source != val) && (val != 0)) {
             in->source = val;
+            if ((in->source == AUDIO_SOURCE_VOICE_COMMUNICATION) &&
+                (in->dev->mode == AUDIO_MODE_IN_COMMUNICATION) &&
+                (voice_extn_compress_voip_is_format_supported(in->format)) &&
+                (in->config.rate == 8000 || in->config.rate == 16000) &&
+                (popcount(in->channel_mask) == 1)) {
+                ret = voice_extn_compress_voip_open_input_stream(in);
+                if (ret != 0) {
+                    ALOGE("%s: Compress voip input cannot be opened, error:%d",
+                          __func__, ret);
+                    goto done;
+                }
+            }
         }
     }
 
@@ -1865,6 +1915,7 @@ static int in_set_parameters(struct audio_stream *stream, const char *kvpairs)
         }
     }
 
+done:
     pthread_mutex_unlock(&adev->lock);
     pthread_mutex_unlock(&in->lock);
 
@@ -2008,7 +2059,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
 {
     struct audio_device *adev = (struct audio_device *)dev;
     struct stream_out *out;
-    int i, ret;
+    int i, ret = 0;
 
     ALOGV("%s: enter: sample_rate(%d) channel_mask(%#x) devices(%#x) flags(%#x)",
           __func__, config->sample_rate, config->channel_mask, devices, flags);
@@ -2078,7 +2129,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             goto error_open;
         }
         if (!is_supported_format(config->offload_info.format) &&
-                !audio_extn_dolby_is_supported_format(config->offload_info.format)) {
+                !audio_extn_is_dolby_format(config->offload_info.format)) {
             ALOGE("%s: Unsupported audio format", __func__);
             ret = -EINVAL;
             goto error_open;
@@ -2101,9 +2152,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->stream.drain = out_drain;
         out->stream.flush = out_flush;
 
-        if (audio_extn_dolby_is_supported_format(config->offload_info.format))
+        if (audio_extn_is_dolby_format(config->offload_info.format))
             out->compr_config.codec->id =
-                audio_extn_dolby_get_snd_codec_id(config->offload_info.format);
+                audio_extn_dolby_get_snd_codec_id(adev, out,
+                                                  config->offload_info.format);
         else
             out->compr_config.codec->id =
                 get_snd_codec_id(config->offload_info.format);
@@ -2128,15 +2180,8 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         ALOGV("%s: offloaded output offload_info version %04x bit rate %d",
                 __func__, config->offload_info.version,
                 config->offload_info.bit_rate);
-
-        if (audio_extn_dolby_is_supported_format(out->format)) {
-            ret = audio_extn_dolby_set_DMID(adev);
-            if (ret != 0) {
-                ALOGE("%s: Dolby DMID cannot be set error:%d",
-                      __func__, ret);
-                goto error_open;
-            }
-        }
+        //Decide if we need to use gapless mode by default
+        check_and_set_gapless_mode(adev);
 
         //Decide if we need to use gapless mode by default
         set_gapless_mode(adev);
@@ -2341,7 +2386,7 @@ static char* adev_get_parameters(const struct audio_hw_device *dev,
     pthread_mutex_lock(&adev->lock);
 
     audio_extn_get_parameters(adev, query, reply);
-    voice_extn_get_parameters(adev, query, reply);
+    voice_get_parameters(adev, query, reply);
     platform_get_parameters(adev->platform, query, reply);
     str = str_parms_to_str(reply);
     str_parms_destroy(query);
@@ -2473,16 +2518,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     in->config.rate = config->sample_rate;
     in->format = config->format;
 
-    if ((in->dev->mode == AUDIO_MODE_IN_COMMUNICATION) &&
-        (voice_extn_compress_voip_is_config_supported(config))) {
-        ret = voice_extn_compress_voip_open_input_stream(in);
-        if (ret != 0)
-        {
-            ALOGE("%s: Compress voip input cannot be opened, error:%d",
-                  __func__, ret);
-            goto err_open;
-        }
-    } else if (channel_count == 6) {
+    if (channel_count == 6) {
         if(audio_extn_ssr_get_enabled()) {
             if(audio_extn_ssr_init(adev, in)) {
                 ALOGE("%s: audio_extn_ssr_init failed", __func__);
@@ -2494,7 +2530,8 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
             goto err_open;
         }
     } else if (audio_extn_compr_cap_enabled() &&
-            audio_extn_compr_cap_format_supported(config->format)) {
+            audio_extn_compr_cap_format_supported(config->format) &&
+            (in->dev->mode != AUDIO_MODE_IN_COMMUNICATION)) {
         audio_extn_compr_cap_init(adev, in);
     } else {
         in->config.channels = channel_count;
@@ -2675,55 +2712,6 @@ static int adev_open(const hw_module_t *module, const char *name,
     return 0;
 }
 
-/* Read  offload buffer size from a property.
- * If value is not power of 2  round it to
- * power of 2.
- */
-static uint32_t get_offload_buffer_size()
-{
-    char value[PROPERTY_VALUE_MAX] = {0};
-    uint32_t fragment_size = COMPRESS_OFFLOAD_FRAGMENT_SIZE;
-    if((property_get("audio.offload.buffer.size.kb", value, "")) &&
-            atoi(value)) {
-        fragment_size =  atoi(value) * 1024;
-        //ring buffer size needs to be 4k aligned.
-        CHECK(!(fragment_size * COMPRESS_OFFLOAD_NUM_FRAGMENTS % 4096));
-    }
-    if(fragment_size < MIN_COMPRESS_OFFLOAD_FRAGMENT_SIZE)
-        fragment_size = MIN_COMPRESS_OFFLOAD_FRAGMENT_SIZE;
-    else if(fragment_size > MAX_COMPRESS_OFFLOAD_FRAGMENT_SIZE)
-        fragment_size = MAX_COMPRESS_OFFLOAD_FRAGMENT_SIZE;
-    ALOGVV("%s: fragment_size %d", __func__, fragment_size);
-    return fragment_size;
-}
-
-static int set_gapless_mode(struct audio_device *adev) {
-
-
-    char value[PROPERTY_VALUE_MAX] = {0};
-    bool gapless_enabled = false;
-    const char *mixer_ctl_name = "Compress Gapless Playback";
-    struct mixer_ctl *ctl;
-
-    ALOGV("%s:", __func__);
-    property_get("audio.offload.gapless.enabled", value, NULL);
-    gapless_enabled = atoi(value) || !strncmp("true", value, 4);
-
-    ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
-    if (!ctl) {
-        ALOGE("%s: Could not get ctl for mixer cmd - %s",
-                               __func__, mixer_ctl_name);
-        return -EINVAL;
-    }
-
-    if (mixer_ctl_set_value(ctl, 0, gapless_enabled) < 0) {
-        ALOGE("%s: Could not set gapless mode %d",
-                       __func__, gapless_enabled);
-         return -EINVAL;
-    }
-    return 0;
-
-}
 static struct hw_module_methods_t hal_module_methods = {
     .open = adev_open,
 };

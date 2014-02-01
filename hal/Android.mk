@@ -26,6 +26,7 @@ endif
 LOCAL_SRC_FILES := \
 	audio_hw.c \
 	voice.c \
+	platform_info.c \
 	$(AUDIO_PLATFORM)/platform.c
 
 ifneq ($(BOARD_USES_CUSTOM_AUDIO_PLATFORM_PATH),)
@@ -105,7 +106,16 @@ ifneq ($(strip $(AUDIO_FEATURE_DISABLED_DS1_DOLBY_DDP)),true)
     LOCAL_CFLAGS += -DDS1_DOLBY_DDP_ENABLED
     LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
     LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+    LOCAL_SRC_FILES += audio_extn/dolby.c
 endif
+
+ifneq ($(strip $(AUDIO_FEATURE_DISABLED_DS1_DOLBY_DAP)),true)
+    LOCAL_CFLAGS += -DDS1_DOLBY_DAP_ENABLED
+ifeq ($(strip $(AUDIO_FEATURE_DISABLED_DS1_DOLBY_DDP)),true)
+    LOCAL_SRC_FILES += audio_extn/dolby.c
+endif
+endif
+
 
 LOCAL_SHARED_LIBRARIES := \
 	liblog \
@@ -113,11 +123,13 @@ LOCAL_SHARED_LIBRARIES := \
 	libtinyalsa \
 	libtinycompress \
 	libaudioroute \
-	libdl
+	libdl \
+	libexpat
 
 LOCAL_C_INCLUDES += \
 	external/tinyalsa/include \
 	external/tinycompress/include \
+	external/expat/lib \
 	$(call include-path-for, audio-route) \
 	$(call include-path-for, audio-effects) \
 	$(LOCAL_PATH)/$(AUDIO_PLATFORM) \
