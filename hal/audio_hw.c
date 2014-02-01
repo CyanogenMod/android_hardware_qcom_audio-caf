@@ -2183,9 +2183,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         //Decide if we need to use gapless mode by default
         check_and_set_gapless_mode(adev);
 
-        //Decide if we need to use gapless mode by default
-        set_gapless_mode(adev);
-
     } else if (out->flags & AUDIO_OUTPUT_FLAG_INCALL_MUSIC) {
         ret = voice_check_and_set_incall_music_usecase(adev, out);
         if (ret != 0) {
