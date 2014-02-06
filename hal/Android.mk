@@ -59,12 +59,10 @@ ifneq ($(strip $(AUDIO_FEATURE_DISABLED_HFP)),true)
     LOCAL_SRC_FILES += audio_extn/hfp.c
 endif
 
-ifneq ($(QC_PROP_ROOT),)
-ifneq ($(strip $(AUDIO_FEATURE_DISABLED_SSR)),true)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_SSR)),true)
     LOCAL_CFLAGS += -DSSR_ENABLED
     LOCAL_SRC_FILES += audio_extn/ssr.c
     LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/surround_sound/
-endif
 endif
 
 ifneq ($(strip $(AUDIO_FEATURE_DISABLED_MULTI_VOICE_SESSIONS)),true)
@@ -137,12 +135,10 @@ LOCAL_C_INCLUDES += \
 	$(LOCAL_PATH)/voice_extn \
 	$(LOCAL_PATH)/vendor-platform
 
-ifneq ($(QC_PROP_ROOT),)
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_LISTEN)),true)
     LOCAL_CFLAGS += -DAUDIO_LISTEN_ENABLED
     LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audio-listen
     LOCAL_SRC_FILES += audio_extn/listen.c
-endif
 endif
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_AUXPCM_BT)),true)
