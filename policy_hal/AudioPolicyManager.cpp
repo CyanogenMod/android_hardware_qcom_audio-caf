@@ -1136,7 +1136,7 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
     //TODO: enable audio offloading with video when ready
     if (offloadInfo.has_video)
     {
-        if(property_get("av.offload.enable", propValue, NULL)) {
+        if(property_get("av.offload.enable", propValue, "false")) {
             bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
             if (!prop_enabled) {
                ALOGW("offload disabled by av.offload.enable = %s ", propValue );
@@ -1144,7 +1144,7 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
             }
         }
         if(offloadInfo.is_streaming &&
-           property_get("av.streaming.offload.enable", propValue, NULL)) {
+           property_get("av.streaming.offload.enable", propValue, "false")) {
             bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
             if (!prop_enabled) {
                ALOGW("offload disabled by av.streaming.offload.enable = %s ", propValue );
