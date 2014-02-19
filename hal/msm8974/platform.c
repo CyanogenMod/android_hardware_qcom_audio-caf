@@ -612,11 +612,11 @@ void *platform_init(struct audio_device *adev)
                   __func__, LIB_ACDB_LOADER);
 
         my_data->acdb_init = (acdb_init_t)dlsym(my_data->acdb_handle,
-                                                    "acdb_loader_init_v2");
+                                                    "acdb_loader_init_ACDB");
         if (my_data->acdb_init == NULL)
-            ALOGE("%s: dlsym error %s for acdb_loader_init_v2", __func__, dlerror());
+            ALOGE("%s: dlsym error %s for acdb_loader_init_ACDB", __func__, dlerror());
         else
-            my_data->acdb_init(snd_card_name);
+            my_data->acdb_init();
     }
 
     /* Initialize ACDB ID's */
