@@ -175,7 +175,7 @@ enum {
 #define INCALL_MUSIC_UPLINK_PCM_DEVICE 1
 #define INCALL_MUSIC_UPLINK2_PCM_DEVICE 16
 #define SPKR_PROT_CALIB_RX_PCM_DEVICE 5
-#define SPKR_PROT_CALIB_TX_PCM_DEVICE 22
+#define SPKR_PROT_CALIB_TX_PCM_DEVICE 25
 #define PLAYBACK_OFFLOAD_DEVICE 9
 #define COMPRESS_VOIP_CALL_PCM_DEVICE 3
 
@@ -250,7 +250,7 @@ struct csd_data {
 
 /* Audio calibration related functions */
 typedef void (*acdb_deallocate_t)();
-typedef int  (*acdb_init_t)();
+typedef int  (*acdb_init_t)(char *);
 typedef void (*acdb_send_audio_cal_t)(int, int);
 typedef void (*acdb_send_voice_cal_t)(int, int);
 typedef int (*acdb_reload_vocvoltable_t)(int);

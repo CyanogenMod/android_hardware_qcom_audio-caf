@@ -612,11 +612,11 @@ void *platform_init(struct audio_device *adev)
                   __func__, LIB_ACDB_LOADER);
 
         my_data->acdb_init = (acdb_init_t)dlsym(my_data->acdb_handle,
-                                                    "acdb_loader_init_ACDB");
+                                                    "acdb_loader_init_v2");
         if (my_data->acdb_init == NULL)
-            ALOGE("%s: dlsym error %s for acdb_loader_init_ACDB", __func__, dlerror());
+            ALOGE("%s: dlsym error %s for acdb_loader_init_v2", __func__, dlerror());
         else
-            my_data->acdb_init();
+            my_data->acdb_init(snd_card_name);
     }
 
     /* Initialize ACDB ID's */
@@ -1270,7 +1270,8 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
         if (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
             if (audio_extn_ssr_get_enabled() && channel_count == 6)
                 snd_device = SND_DEVICE_IN_QUAD_MIC;
-            else if (channel_count == 2)
+            else if (my_data->fluence_type & (FLUENCE_DUAL_MIC | FLUENCE_QUAD_MIC) &&
+                    channel_count == 2)
                 snd_device = SND_DEVICE_IN_HANDSET_STEREO_DMIC;
             else
                 snd_device = SND_DEVICE_IN_HANDSET_MIC;
