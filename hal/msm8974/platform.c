@@ -35,6 +35,11 @@
 
 #define MIXER_XML_PATH "/system/etc/mixer_paths.xml"
 #define MIXER_XML_PATH_AUXPCM "/system/etc/mixer_paths_auxpcm.xml"
+#define MIXER_XML_PATH_I2S "/system/etc/mixer_paths_i2s.xml"
+
+#define PLATFORM_INFO_XML_PATH      "/system/etc/audio_platform_info.xml"
+#define PLATFORM_INFO_XML_PATH_I2S  "/system/etc/audio_platform_info_i2s.xml"
+
 #define LIB_ACDB_LOADER "libacdbloader.so"
 #define AUDIO_DATA_BLOCK_MIXER_CTL "HDMI EDID"
 
@@ -109,6 +114,7 @@ struct platform_data {
     int  fluence_mode;
     int  btsco_sample_rate;
     bool slowtalk;
+    bool is_i2s_ext_modem;
     /* Audio calibration related functions */
     void *acdb_handle;
     int voice_feature_set;
@@ -482,7 +488,7 @@ static void set_echo_reference(struct audio_device *adev, bool enable)
     ALOGV("Setting EC Reference: %d", enable);
 }
 
-static struct csd_data *open_csd_client()
+static struct csd_data *open_csd_client(bool i2s_ext_modem)
 {
     struct csd_data *csd = calloc(1, sizeof(struct csd_data));
 
@@ -589,6 +595,16 @@ static struct csd_data *open_csd_client()
                   __func__, dlerror());
             goto error;
         }
+
+        csd->get_sample_rate = (get_sample_rate_t)dlsym(csd->csd_client,
+                                             "csd_client_get_sample_rate");
+        if (csd->get_sample_rate == NULL) {
+            ALOGE("%s: dlsym error %s for csd_client_get_sample_rate",
+                  __func__, dlerror());
+
+            goto error;
+        }
+
         csd->init = (init_t)dlsym(csd->csd_client, "csd_client_init");
 
         if (csd->init == NULL) {
@@ -596,7 +612,7 @@ static struct csd_data *open_csd_client()
                   __func__, dlerror());
             goto error;
         } else {
-            csd->init();
+            csd->init(i2s_ext_modem);
         }
     }
     return csd;
@@ -639,6 +655,25 @@ static void set_platform_defaults(struct platform_data * my_data)
     backend_table[SND_DEVICE_IN_USB_HEADSET_MIC] = strdup("usb-headset-mic");
     backend_table[SND_DEVICE_IN_CAPTURE_FM] = strdup("capture-fm");
     backend_table[SND_DEVICE_OUT_TRANSMISSION_FM] = strdup("transmission-fm");
+
+    if (mdm_detect_info.num_modems > 0)
+        plat_data->csd = open_csd_client(plat_data->is_i2s_ext_modem);
+}
+
+static bool platform_is_i2s_ext_modem(const char *snd_card_name,
+                                      struct platform_data *plat_data)
+{
+    plat_data->is_i2s_ext_modem = false;
+
+    if (!strncmp(snd_card_name, "apq8084-taiko-i2s-mtp-snd-card",
+                 sizeof("apq8084-taiko-i2s-mtp-snd-card")) ||
+        !strncmp(snd_card_name, "apq8084-taiko-i2s-cdp-snd-card",
+                 sizeof("apq8084-taiko-i2s-cdp-snd-card"))) {
+        plat_data->is_i2s_ext_modem = true;
+    }
+    ALOGV("%s, is_i2s_ext_modem:%d",__func__, plat_data->is_i2s_ext_modem);
+
+    return plat_data->is_i2s_ext_modem;
 }
 
 void *platform_init(struct audio_device *adev)
@@ -681,10 +716,16 @@ void *platform_init(struct audio_device *adev)
         if (!my_data->hw_info) {
             ALOGE("%s: Failed to init hardware info", __func__);
         } else {
-            if (audio_extn_read_xml(adev, snd_card_num, MIXER_XML_PATH,
-                                    MIXER_XML_PATH_AUXPCM) == -ENOSYS)
+            if (platform_is_i2s_ext_modem(snd_card_name, my_data)) {
+                ALOGD("%s: Call MIXER_XML_PATH_I2S", __func__);
+
+                adev->audio_route = audio_route_init(snd_card_num,
+                                                     MIXER_XML_PATH_I2S);
+            } else if (audio_extn_read_xml(adev, snd_card_num, MIXER_XML_PATH,
+                                    MIXER_XML_PATH_AUXPCM) == -ENOSYS) {
                 adev->audio_route = audio_route_init(snd_card_num,
                                                  MIXER_XML_PATH);
+            }
             if (!adev->audio_route) {
                 ALOGE("%s: Failed to init audio route controls, aborting.",
                        __func__);
@@ -791,7 +832,10 @@ void *platform_init(struct audio_device *adev)
     set_platform_defaults(my_data);
 
     /* Initialize ACDB ID's */
-    platform_info_init();
+    if (my_data->is_i2s_ext_modem)
+        platform_info_init(PLATFORM_INFO_XML_PATH_I2S);
+    else
+        platform_info_init(PLATFORM_INFO_XML_PATH);
 
     /* If platform is apq8084 and baseband is MDM, load CSD Client specific
      * symbols. Voice call is handled by MDM and apps processor talks to
@@ -1088,6 +1132,20 @@ int platform_stop_voice_call(void *platform, uint32_t vsid)
         ret = my_data->csd->stop_voice(vsid);
         if (ret < 0) {
             ALOGE("%s: csd_stop_voice error %d\n", __func__, ret);
+        }
+    }
+    return ret;
+}
+
+int platform_get_sample_rate(void *platform, uint32_t *rate)
+{
+    struct platform_data *my_data = (struct platform_data *)platform;
+    int ret = 0;
+
+    if ((my_data->csd != NULL) && my_data->is_i2s_ext_modem) {
+        ret = my_data->csd->get_sample_rate(rate);
+        if (ret < 0) {
+            ALOGE("%s: csd_get_sample_rate error %d\n", __func__, ret);
         }
     }
     return ret;
