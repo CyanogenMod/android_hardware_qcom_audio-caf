@@ -1323,3 +1323,11 @@ int platform_update_usecase_from_source(int source, int usecase)
         usecase = USECASE_AUDIO_RECORD_FM_VIRTUAL;
     return usecase;
 }
+
+bool platform_check_24_bit_support() {
+    return false;
+}
+
+bool platform_check_and_set_codec_backend_cfg(struct audio_device* adev, struct audio_usecase *usecase) {
+    return false;
+}
