@@ -57,7 +57,7 @@ int32_t audio_extn_get_afe_proxy_channel_count();
 #define audio_extn_usb_start_playback(adev)              (0)
 #define audio_extn_usb_stop_playback()                   (0)
 #define audio_extn_usb_start_capture(adev)               (0)
-#define audio_extn_usb_stop_capture()                    (0)
+#define audio_extn_usb_stop_capture(adev)                (0)
 #define audio_extn_usb_set_proxy_sound_card(sndcard_idx) (0)
 #define audio_extn_usb_is_proxy_inuse()                  (0)
 #else
@@ -66,7 +66,7 @@ void audio_extn_usb_deinit();
 void audio_extn_usb_start_playback(void *adev);
 void audio_extn_usb_stop_playback();
 void audio_extn_usb_start_capture(void *adev);
-void audio_extn_usb_stop_capture();
+void audio_extn_usb_stop_capture(void *adev);
 void audio_extn_usb_set_proxy_sound_card(uint32_t sndcard_idx);
 bool audio_extn_usb_is_proxy_inuse();
 #endif
