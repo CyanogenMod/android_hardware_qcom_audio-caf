@@ -703,6 +703,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         disable_snd_device(adev, usecase->in_snd_device, false);
     }
 
+#ifndef PLATFORM_MSM8960
     /* Applicable only on the targets that has external modem.
      * New device information should be sent to modem before enabling
      * the devices to reduce in-call device switch time.
@@ -711,6 +712,7 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         status = platform_switch_voice_call_enable_device_config(adev->platform,
                                                                  out_snd_device,
                                                                  in_snd_device);
+#endif
 
     /* Enable new sound devices */
     if (out_snd_device != SND_DEVICE_NONE) {
