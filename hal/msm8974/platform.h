@@ -286,7 +286,5 @@ struct platform_data {
 };/* Audio calibration related functions */
 #define SAMPLE_RATE_8KHZ  8000
 #define SAMPLE_RATE_16KHZ 16000
-int set_echo_reference(struct mixer *mixer, const char* ec_ref);
-
 
 #endif // QCOM_AUDIO_PLATFORM_H
