@@ -727,6 +727,8 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
                                                                in_snd_device);
 #endif
 
+    ALOGD("%s: done",__func__);
+
     return status;
 }
 
@@ -773,7 +775,8 @@ int start_input_stream(struct stream_in *in)
     struct audio_device *adev = in->dev;
 
     in->usecase = platform_update_usecase_from_source(in->source,in->usecase);
-    ALOGV("%s: enter: usecase(%d)", __func__, in->usecase);
+    ALOGD("%s: enter: stream(%p)usecase(%d: %s)",
+          __func__, &in->stream, in->usecase, use_case_table[in->usecase]);
 
     pthread_mutex_lock(&adev->snd_card_status.lock);
     if (SND_CARD_STATE_OFFLINE == adev->snd_card_status.state) {
@@ -1118,8 +1121,9 @@ int start_output_stream(struct stream_out *out)
     struct audio_usecase *uc_info;
     struct audio_device *adev = out->dev;
 
-    ALOGD("%s: enter: usecase(%d: %s) devices(%#x)",
-          __func__, out->usecase, use_case_table[out->usecase], out->devices);
+    ALOGD("%s: enter: stream(%p)usecase(%d: %s) devices(%#x)",
+          __func__, &out->stream, out->usecase, use_case_table[out->usecase],
+          out->devices);
 
     pthread_mutex_lock(&adev->snd_card_status.lock);
     if (SND_CARD_STATE_OFFLINE == adev->snd_card_status.state) {
@@ -1312,13 +1316,13 @@ static int out_standby(struct audio_stream *stream)
     struct stream_out *out = (struct stream_out *)stream;
     struct audio_device *adev = out->dev;
 
-    ALOGV("%s: enter: usecase(%d: %s)", __func__,
-          out->usecase, use_case_table[out->usecase]);
+    ALOGD("%s: enter: stream (%p) usecase(%d: %s)", __func__,
+          stream, out->usecase, use_case_table[out->usecase]);
     if (out->usecase == USECASE_COMPRESS_VOIP_CALL) {
         /* Ignore standby in case of voip call because the voip output
          * stream is closed in adev_close_output_stream()
          */
-        ALOGV("%s: Ignore Standby in VOIP call", __func__);
+        ALOGD("%s: Ignore Standby in VOIP call", __func__);
         return 0;
     }
 
@@ -1898,7 +1902,9 @@ static int in_standby(struct audio_stream *stream)
     struct stream_in *in = (struct stream_in *)stream;
     struct audio_device *adev = in->dev;
     int status = 0;
-    ALOGV("%s: enter", __func__);
+    ALOGD("%s: enter: stream (%p) usecase(%d: %s)", __func__,
+          stream, in->usecase, use_case_table[in->usecase]);
+
 
     if (in->usecase == USECASE_COMPRESS_VOIP_CALL) {
         /* Ignore standby in case of voip call because the voip input
@@ -1938,7 +1944,7 @@ static int in_set_parameters(struct audio_stream *stream, const char *kvpairs)
     char value[32];
     int ret = 0, val = 0, err;
 
-    ALOGV("%s: enter: kvpairs=%s", __func__, kvpairs);
+    ALOGD("%s: enter: kvpairs=%s", __func__, kvpairs);
     parms = str_parms_create_str(kvpairs);
 
     pthread_mutex_lock(&in->lock);
@@ -2153,10 +2159,13 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     struct stream_out *out;
     int i, ret = 0;
 
-    ALOGV("%s: enter: sample_rate(%d) channel_mask(%#x) devices(%#x) flags(%#x)",
-          __func__, config->sample_rate, config->channel_mask, devices, flags);
     *stream_out = NULL;
     out = (struct stream_out *)calloc(1, sizeof(struct stream_out));
+
+    ALOGD("%s: enter: sample_rate(%d) channel_mask(%#x) devices(%#x) flags(%#x)\
+        stream_handle(%p)",__func__, config->sample_rate, config->channel_mask,
+        devices, flags, &out->stream);
+
 
     if (!out) {
         return -ENOMEM;
@@ -2216,9 +2225,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         }
 #endif
     } else if (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) {
-        ALOGD("%s: copl(%x): sample_rate(%d) channel_mask(%#x) devices(%#x) flags(%#x)",
-              __func__, (unsigned int)out, config->sample_rate, config->channel_mask, devices, flags);
-
         if (config->offload_info.version != AUDIO_INFO_INITIALIZER.version ||
             config->offload_info.size != AUDIO_INFO_INITIALIZER.size) {
             ALOGE("%s: Unsupported Offload information", __func__);
@@ -2374,6 +2380,8 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     config->sample_rate = out->stream.common.get_sample_rate(&out->stream.common);
 
     *stream_out = &out->stream;
+    ALOGD("%s: Stream (%p) picks up usecase (%s)", __func__, &out->stream,
+        use_case_table[out->usecase]);
     ALOGV("%s: exit", __func__);
     return 0;
 
@@ -2391,7 +2399,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     struct audio_device *adev = out->dev;
     int ret = 0;
 
-    ALOGV("%s: enter", __func__);
+    ALOGD("%s: enter:stream_handle(%p)",__func__, out);
 #ifdef COMPRESS_VOIP_ENABLED
     if (out->usecase == USECASE_COMPRESS_VOIP_CALL) {
         ret = voice_extn_compress_voip_close_output_stream(&stream->common);
@@ -2618,12 +2626,15 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     int ret = 0, buffer_size, frame_size;
     int channel_count = popcount(config->channel_mask);
 
-    ALOGV("%s: enter", __func__);
+
     *stream_in = NULL;
     if (check_input_parameters(config->sample_rate, config->format, channel_count) != 0)
         return -EINVAL;
 
     in = (struct stream_in *)calloc(1, sizeof(struct stream_in));
+    ALOGD("%s: enter: sample_rate(%d) channel_mask(%#x) devices(%#x)\
+        stream_handle(%p)",__func__, config->sample_rate, config->channel_mask,
+        devices, &in->stream);
 
     pthread_mutex_init(&in->lock, (const pthread_mutexattr_t *) NULL);
 
@@ -2694,7 +2705,7 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
 {
     int ret;
     struct stream_in *in = (struct stream_in *)stream;
-    ALOGV("%s", __func__);
+    ALOGD("%s: enter:stream_handle(%p)",__func__, in);
 
 #ifdef COMPRESS_VOIP_ENABLED
     if (in->usecase == USECASE_COMPRESS_VOIP_CALL) {
