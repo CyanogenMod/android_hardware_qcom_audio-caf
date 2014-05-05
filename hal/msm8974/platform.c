@@ -744,6 +744,22 @@ void platform_add_backend_name(char *mixer_path, snd_device_t snd_device)
         strlcat(mixer_path, " capture-fm", MIXER_PATH_MAX_LENGTH);
     else if (snd_device == SND_DEVICE_OUT_TRANSMISSION_FM)
         strlcat(mixer_path, " transmission-fm", MIXER_PATH_MAX_LENGTH);
+#ifdef SEPARATE_SPKR_BACKEND
+    else if (snd_device == SND_DEVICE_OUT_SPEAKER)
+        strlcat(mixer_path, " speaker", MIXER_PATH_MAX_LENGTH);
+    else if (snd_device == SND_DEVICE_OUT_SPEAKER_REVERSE)
+        strlcat(mixer_path, " speaker-reverse", MIXER_PATH_MAX_LENGTH);
+    else if (snd_device == SND_DEVICE_OUT_SPEAKER_AND_HEADPHONES)
+        strlcat(mixer_path, " speaker-and-headphones", MIXER_PATH_MAX_LENGTH);
+    else if (snd_device == SND_DEVICE_OUT_VOICE_SPEAKER)
+        strlcat(mixer_path, " voice-speaker", MIXER_PATH_MAX_LENGTH);
+    else if (snd_device == SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET)
+        strlcat(mixer_path, " speaker-and-anc-headphones", MIXER_PATH_MAX_LENGTH);
+    else if (snd_device == SND_DEVICE_OUT_SPEAKER_PROTECTED)
+        strlcat(mixer_path, " speaker-protected", MIXER_PATH_MAX_LENGTH);
+    else if (snd_device == SND_DEVICE_OUT_VOIP_SPEAKER)
+        strlcat(mixer_path, " voip-speaker-comm", MIXER_PATH_MAX_LENGTH);
+#endif
 }
 
 int platform_get_pcm_device_id(audio_usecase_t usecase, int device_type)
