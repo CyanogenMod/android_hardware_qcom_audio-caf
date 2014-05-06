@@ -154,6 +154,7 @@ int bassboost_set_device(effect_context_t *context, uint32_t device)
        (device == AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER) ||
        (device == AUDIO_DEVICE_OUT_PROXY) ||
        (device == AUDIO_DEVICE_OUT_AUX_DIGITAL) ||
+       (device == AUDIO_DEVICE_OUT_USB_ACCESSORY) ||
        (device == AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET) ||
        (device == AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET)) {
         if (offload_bassboost_get_enable_flag(&(bass_ctxt->offload_bass))) {
