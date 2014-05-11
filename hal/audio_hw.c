@@ -775,6 +775,15 @@ int start_input_stream(struct stream_in *in)
     in->usecase = platform_update_usecase_from_source(in->source,in->usecase);
     ALOGV("%s: enter: usecase(%d)", __func__, in->usecase);
 
+    pthread_mutex_lock(&adev->snd_card_status.lock);
+    if (SND_CARD_STATE_OFFLINE == adev->snd_card_status.state) {
+        ALOGE("%s: sound card is not active/SSR returning error", __func__);
+        ret = -ENETRESET;
+        pthread_mutex_unlock(&adev->snd_card_status.lock);
+        goto error_config;
+    }
+    pthread_mutex_unlock(&adev->snd_card_status.lock);
+
 #ifdef MULTI_VOICE_SESSION_ENABLED
     /* Check if source matches incall recording usecase criteria */
     ret = voice_check_and_set_incall_rec_usecase(adev, in);
@@ -814,8 +823,11 @@ int start_input_stream(struct stream_in *in)
         pcm_close(in->pcm);
         in->pcm = NULL;
         ret = -EIO;
+        in->pcm_error_type = PCM_ERROR_EIO;
         goto error_open;
     }
+
+    in->pcm_error_type = PCM_ERROR_NONE;
     ALOGV("%s: exit", __func__);
     return ret;
 
@@ -1108,6 +1120,16 @@ int start_output_stream(struct stream_out *out)
 
     ALOGD("%s: enter: usecase(%d: %s) devices(%#x)",
           __func__, out->usecase, use_case_table[out->usecase], out->devices);
+
+    pthread_mutex_lock(&adev->snd_card_status.lock);
+    if (SND_CARD_STATE_OFFLINE == adev->snd_card_status.state) {
+        ALOGE("%s: sound card is not active/SSR returning error", __func__);
+        ret = -ENETRESET;
+        pthread_mutex_unlock(&adev->snd_card_status.lock);
+        goto error_config;
+    }
+    pthread_mutex_unlock(&adev->snd_card_status.lock);
+
     out->pcm_device_id = platform_get_pcm_device_id(out->usecase, PCM_PLAYBACK);
     if (out->pcm_device_id < 0) {
         ALOGE("%s: Invalid PCM device id(%d) for the usecase(%d)",
@@ -1147,8 +1169,10 @@ int start_output_stream(struct stream_out *out)
             pcm_close(out->pcm);
             out->pcm = NULL;
             ret = -EIO;
+            out->pcm_error_type = PCM_ERROR_EIO;
             goto error_open;
         }
+        out->pcm_error_type = PCM_ERROR_NONE;
     } else {
         out->pcm = NULL;
         out->compr = compress_open(adev->snd_card,
@@ -1574,9 +1598,28 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
 {
     struct stream_out *out = (struct stream_out *)stream;
     struct audio_device *adev = out->dev;
+    int scard_state = SND_CARD_STATE_ONLINE;
     ssize_t ret = 0;
 
     pthread_mutex_lock(&out->lock);
+    pthread_mutex_lock(&adev->snd_card_status.lock);
+    scard_state = adev->snd_card_status.state;
+    pthread_mutex_unlock(&adev->snd_card_status.lock);
+
+    if (out->pcm) {
+        if (SND_CARD_STATE_OFFLINE == scard_state) {
+            ALOGD(" %s: sound card is not active/SSR state", __func__);
+            ret= -ENETRESET;
+            goto exit;
+        } else if (PCM_ERROR_ENETRESET ==  out->pcm_error_type) {
+            ALOGD(" %s restarting pcm session on post SSR", __func__);
+            out->standby = false;
+            pthread_mutex_unlock(&out->lock);
+            out_standby(&out->stream.common);
+            pthread_mutex_lock(&out->lock);
+        }
+    }
+
     if (out->standby) {
         out->standby = false;
         pthread_mutex_lock(&adev->lock);
@@ -1625,6 +1668,15 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
     }
 
 exit:
+
+    if (-ENETRESET == ret) {
+        pthread_mutex_lock(&adev->snd_card_status.lock);
+        adev->snd_card_status.state = SND_CARD_STATE_OFFLINE;
+        out->pcm_error_type = PCM_ERROR_ENETRESET;
+        out->standby = true; /*standby will be called on post SSR */
+        pthread_mutex_unlock(&adev->snd_card_status.lock);
+    }
+
     pthread_mutex_unlock(&out->lock);
 
     if (ret != 0) {
@@ -1632,7 +1684,8 @@ exit:
             ALOGE("%s: error %d - %s", __func__, ret, pcm_get_error(out->pcm));
         out_standby(&out->stream.common);
         usleep(bytes * 1000000 / audio_stream_frame_size(&out->stream.common) /
-               out_get_sample_rate(&out->stream.common));
+                        out_get_sample_rate(&out->stream.common));
+
     }
     return bytes;
 }
@@ -1964,8 +2017,27 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     struct stream_in *in = (struct stream_in *)stream;
     struct audio_device *adev = in->dev;
     int i, ret = -1;
+    int scard_state = SND_CARD_STATE_ONLINE;
 
     pthread_mutex_lock(&in->lock);
+    pthread_mutex_lock(&adev->snd_card_status.lock);
+    scard_state = adev->snd_card_status.state;
+    pthread_mutex_unlock(&adev->snd_card_status.lock);
+
+    if (in->pcm) {
+        if(SND_CARD_STATE_OFFLINE == scard_state) {
+            ALOGD(" %s: sound card is not active/SSR state", __func__);
+            ret= -ENETRESET;
+            goto exit;
+        } else if (PCM_ERROR_ENETRESET ==  in->pcm_error_type) {
+            ALOGD(" %s restarting pcm session on post SSR", __func__);
+            in->standby = false;
+            pthread_mutex_unlock(&in->lock);
+            in_standby(&in->stream.common);
+            pthread_mutex_lock(&in->lock);
+        }
+    }
+
     if (in->standby) {
         pthread_mutex_lock(&adev->lock);
 #ifdef MULTI_VOICE_SESSION_ENABLED
@@ -1998,13 +2070,22 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
         memset(buffer, 0, bytes);
 
 exit:
+
+    if (-ENETRESET == ret) {
+        pthread_mutex_lock(&adev->snd_card_status.lock);
+        adev->snd_card_status.state = SND_CARD_STATE_OFFLINE;
+        in->pcm_error_type = PCM_ERROR_ENETRESET;
+        memset(buffer, 0, bytes);
+        in->standby = true; /*standby will be called on post SSR */
+        pthread_mutex_unlock(&adev->snd_card_status.lock);
+    }
     pthread_mutex_unlock(&in->lock);
 
     if (ret != 0) {
         in_standby(&in->stream.common);
         ALOGV("%s: read failed - sleeping for buffer duration", __func__);
         usleep(bytes * 1000000 / audio_stream_frame_size(&in->stream.common) /
-               in_get_sample_rate(&in->stream.common));
+                                   in_get_sample_rate(&in->stream.common));
     }
     return bytes;
 }
@@ -2344,10 +2425,23 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
     int ret = 0, err;
 
     ALOGD("%s: enter: %s", __func__, kvpairs);
-
-    pthread_mutex_lock(&adev->lock);
     parms = str_parms_create_str(kvpairs);
 
+    err = str_parms_get_str(parms, "SND_CARD_STATUS", value, sizeof(value));
+    if (err >= 0) {
+        char *snd_card_status = value+2;
+        pthread_mutex_lock(&adev->snd_card_status.lock);
+        if (strstr(snd_card_status, "OFFLINE")) {
+            ALOGD("Received sound card OFFLINE status");
+            adev->snd_card_status.state = SND_CARD_STATE_OFFLINE;
+        } else if (strstr(snd_card_status, "ONLINE")) {
+            ALOGD("Received sound card ONLINE status");
+            adev->snd_card_status.state = SND_CARD_STATE_ONLINE;
+        }
+        pthread_mutex_unlock(&adev->snd_card_status.lock);
+    }
+
+    pthread_mutex_lock(&adev->lock);
     ret = voice_set_parameters(adev, parms);
     if (ret != 0)
         goto done;
@@ -2707,6 +2801,8 @@ static int adev_open(const hw_module_t *module, const char *name,
     list_init(&adev->usecase_list);
     adev->cur_wfd_channels = 2;
 
+    pthread_mutex_init(&adev->snd_card_status.lock, (const pthread_mutexattr_t *) NULL);
+    adev->snd_card_status.state = SND_CARD_STATE_OFFLINE;
     /* Loads platform specific libraries dynamically */
     adev->platform = platform_init(adev);
     if (!adev->platform) {
@@ -2717,6 +2813,8 @@ static int adev_open(const hw_module_t *module, const char *name,
         pthread_mutex_unlock(&adev_init_lock);
         return -EINVAL;
     }
+
+    adev->snd_card_status.state = SND_CARD_STATE_ONLINE;
 
     if (access(VISUALIZER_LIBRARY_PATH, R_OK) == 0) {
         adev->visualizer_lib = dlopen(VISUALIZER_LIBRARY_PATH, RTLD_NOW);
