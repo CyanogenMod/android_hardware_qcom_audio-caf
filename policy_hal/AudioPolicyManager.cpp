@@ -1654,8 +1654,8 @@ void AudioPolicyManager::setPhoneState(int state)
                                                   0 /* ignored */);
        }
     }
-    mPrevPhoneState = oldState;
 #endif
+    mPrevPhoneState = oldState;
 
     int delayMs = 0;
     if (isStateInCall(state)) {
@@ -1703,6 +1703,12 @@ void AudioPolicyManager::setPhoneState(int state)
         mLimitRingtoneVolume = false;
     }
     ALOGD(" End of setPhoneState ... mPhoneState: %d ",mPhoneState);
+}
+
+bool AudioPolicyManager::isStateInCall(int state)
+{
+    return ((state == AudioSystem::MODE_IN_CALL) || (state == AudioSystem::MODE_IN_COMMUNICATION) ||
+       ((state == AudioSystem::MODE_RINGTONE) && (mPrevPhoneState == AudioSystem::MODE_IN_CALL)));
 }
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface)
