@@ -844,6 +844,17 @@ AudioPolicyManager::device_category AudioPolicyManager::getDeviceCategory(audio_
     }
 }
 
+bool AudioPolicyManager::isDirectOutput(audio_io_handle_t output) {
+    for (size_t i = 0; i < mOutputs.size(); i++) {
+        audio_io_handle_t curOutput = mOutputs.keyAt(i);
+        AudioOutputDescriptor *desc = mOutputs.valueAt(i);
+        if ((curOutput == output) && (desc->mFlags & AUDIO_OUTPUT_FLAG_DIRECT)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 status_t AudioPolicyManager::checkAndSetVolume(int stream,
                                                int index,
                                                audio_io_handle_t output,
@@ -906,7 +917,8 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream,
             voiceVolume = 1.0;
         }
 
-        if (voiceVolume != mLastVoiceVolume && output == mPrimaryOutput) {
+        if (voiceVolume != mLastVoiceVolume && ((output == mPrimaryOutput) ||
+            isDirectOutput(output))) {
             mpClientInterface->setVoiceVolume(voiceVolume, delayMs);
             mLastVoiceVolume = voiceVolume;
         }
