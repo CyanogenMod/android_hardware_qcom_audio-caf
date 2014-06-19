@@ -1337,6 +1337,16 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
         return false;
     }
 
+    // Check for soundcard status
+    String8 valueStr = mpClientInterface->getParameters((audio_io_handle_t)0,
+                                 String8(AUDIO_PARAMETER_KEY_SND_CARD_STATUS));
+    AudioParameter result = AudioParameter(valueStr);
+    int isonline = 0;
+    if ((result.getInt(String8(AUDIO_PARAMETER_KEY_SND_CARD_STATUS), isonline) == NO_ERROR)
+           && !isonline) {
+        ALOGD("copl: soundcard is offline rejecting offload request");
+        return false;
+    }
     // See if there is a profile to support this.
     // AUDIO_DEVICE_NONE
     IOProfile *profile = getProfileForDirectOutput(AUDIO_DEVICE_NONE /*ignore device */,
