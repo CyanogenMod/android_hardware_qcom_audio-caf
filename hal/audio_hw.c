@@ -366,6 +366,9 @@ int enable_snd_device(struct audio_device *adev,
         return 0;
     }
 
+    if (audio_extn_spkr_prot_is_enabled())
+         audio_extn_spkr_prot_calib_cancel(adev);
+
     /* Set BT sample rate before enabling the devices. Adding sample rate mixer
      * control in use-case does not work because rate update takes place after
      * AFE port open due to the limitation of mixer control order execution.
