@@ -121,6 +121,7 @@ void add_effect_to_output(output_context_t * output, effect_context_t *context)
 {
     struct listnode *fx_node;
 
+    ALOGV("%s: e_ctxt %p, o_ctxt %p", __func__, context, output);
     list_for_each(fx_node, &output->effects_list) {
         effect_context_t *fx_ctxt = node_to_item(fx_node,
                                                  effect_context_t,
@@ -139,6 +140,7 @@ void remove_effect_from_output(output_context_t * output,
 {
     struct listnode *fx_node;
 
+    ALOGV("%s: e_ctxt %p, o_ctxt %p", __func__, context, output);
     list_for_each(fx_node, &output->effects_list) {
         effect_context_t *fx_ctxt = node_to_item(fx_node,
                                                  effect_context_t,
@@ -199,6 +201,11 @@ int offload_effects_bundle_hal_start_output(audio_io_handle_t output, int pcm_id
 
     output_context_t *out_ctxt = (output_context_t *)
                                  malloc(sizeof(output_context_t));
+    if (!out_ctxt) {
+        ALOGE("%s fail to allocate for output context", __func__);
+        ret = -ENOMEM;
+        goto exit;
+    }
     out_ctxt->handle = output;
     out_ctxt->pcm_device_id = pcm_id;
 
@@ -332,6 +339,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
         sizeof(effect_uuid_t)) == 0) {
         equalizer_context_t *eq_ctxt = (equalizer_context_t *)
                                        calloc(1, sizeof(equalizer_context_t));
+        if (eq_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)eq_ctxt;
         context->ops.init = equalizer_init;
         context->ops.reset = equalizer_reset;
@@ -349,6 +359,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
                sizeof(effect_uuid_t)) == 0) {
         bassboost_context_t *bass_ctxt = (bassboost_context_t *)
                                          calloc(1, sizeof(bassboost_context_t));
+        if (bass_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)bass_ctxt;
         context->ops.init = bassboost_init;
         context->ops.reset = bassboost_reset;
@@ -366,6 +379,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
                sizeof(effect_uuid_t)) == 0) {
         virtualizer_context_t *virt_ctxt = (virtualizer_context_t *)
                                            calloc(1, sizeof(virtualizer_context_t));
+        if (virt_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)virt_ctxt;
         context->ops.init = virtualizer_init;
         context->ops.reset = virtualizer_reset;
@@ -389,6 +405,9 @@ int effect_lib_create(const effect_uuid_t *uuid,
                 sizeof(effect_uuid_t)) == 0)) {
         reverb_context_t *reverb_ctxt = (reverb_context_t *)
                                         calloc(1, sizeof(reverb_context_t));
+        if (reverb_ctxt == NULL) {
+            return -ENOMEM;
+        }
         context = (effect_context_t *)reverb_ctxt;
         context->ops.init = reverb_init;
         context->ops.reset = reverb_reset;
@@ -512,7 +531,7 @@ int effect_process(effect_handle_t self,
     effect_context_t * context = (effect_context_t *)self;
     int status = 0;
 
-    ALOGW("%s Called ?????", __func__);
+    ALOGW("%s: ctxt %p, Called ?????", __func__, context);
 
     pthread_mutex_lock(&lock);
     if (!effect_exists(context)) {
@@ -545,6 +564,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         goto exit;
     }
 
+    ALOGV("%s: ctxt %p, cmd %d", __func__, context, cmdCode);
     if (context == NULL || context->state == EFFECT_STATE_UNINITIALIZED) {
         status = -EINVAL;
         goto exit;
@@ -598,7 +618,6 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         context->state = EFFECT_STATE_ACTIVE;
         if (context->ops.enable)
             context->ops.enable(context);
-        ALOGV("%s EFFECT_CMD_ENABLE", __func__);
         *(int *)pReplyData = 0;
         break;
     case EFFECT_CMD_DISABLE:
@@ -613,7 +632,6 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         context->state = EFFECT_STATE_INITIALIZED;
         if (context->ops.disable)
             context->ops.disable(context);
-        ALOGV("%s EFFECT_CMD_DISABLE", __func__);
         *(int *)pReplyData = 0;
         break;
     case EFFECT_CMD_GET_PARAM: {
@@ -623,7 +641,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
             *replySize < (int)(sizeof(effect_param_t) + sizeof(uint32_t) +
                                sizeof(uint16_t))) {
             status = -EINVAL;
-            ALOGV("EFFECT_CMD_GET_PARAM invalid command cmdSize %d *replySize %d",
+            ALOGW("EFFECT_CMD_GET_PARAM invalid command cmdSize %d *replySize %d",
                   cmdSize, *replySize);
             goto exit;
         }
@@ -643,7 +661,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
                             sizeof(uint16_t)) ||
             pReplyData == NULL || *replySize != sizeof(int32_t)) {
             status = -EINVAL;
-            ALOGV("EFFECT_CMD_SET_PARAM invalid command cmdSize %d *replySize %d",
+            ALOGW("EFFECT_CMD_SET_PARAM invalid command cmdSize %d *replySize %d",
                   cmdSize, *replySize);
             goto exit;
         }
@@ -659,7 +677,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
         ALOGV("\t EFFECT_CMD_SET_DEVICE start");
         if (pCmdData == NULL || cmdSize < sizeof(uint32_t)) {
             status = -EINVAL;
-            ALOGV("EFFECT_CMD_SET_DEVICE invalid command cmdSize %d", cmdSize);
+            ALOGW("EFFECT_CMD_SET_DEVICE invalid command cmdSize %d", cmdSize);
             goto exit;
         }
         device = *(uint32_t *)pCmdData;
@@ -675,7 +693,7 @@ int effect_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdSize,
 
         if (cmdSize != sizeof(effect_offload_param_t) || pCmdData == NULL
                 || pReplyData == NULL || *replySize != sizeof(int)) {
-            ALOGV("%s EFFECT_CMD_OFFLOAD bad format", __func__);
+            ALOGW("%s EFFECT_CMD_OFFLOAD bad format", __func__);
             status = -EINVAL;
             break;
         }
