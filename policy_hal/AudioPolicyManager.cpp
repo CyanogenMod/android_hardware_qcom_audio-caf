@@ -1281,49 +1281,47 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
         }
     }
 
-    if (!pcmOffload) {
-        // Check if offload has been disabled
-        if (property_get("audio.offload.disable", propValue, "0")) {
-            if (atoi(propValue) != 0) {
-                ALOGD("copl: offload disabled by audio.offload.disable=%s", propValue );
+    // Check if offload has been disabled
+    if (property_get("audio.offload.disable", propValue, "0")) {
+        if (atoi(propValue) != 0) {
+            ALOGD("copl: offload disabled by audio.offload.disable=%s", propValue );
+            return false;
+        }
+    }
+
+    //check if it's multi-channel AAC format
+    if (AudioSystem::popCount(offloadInfo.channel_mask) > 2
+          && offloadInfo.format == AUDIO_FORMAT_AAC) {
+        ALOGD("copl: offload disabled for multi-channel AAC format");
+        return false;
+    }
+
+    if (offloadInfo.has_video)
+    {
+        if(property_get("av.offload.enable", propValue, "false")) {
+            bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+            if (!prop_enabled) {
+                ALOGW("offload disabled by av.offload.enable = %s ", propValue );
                 return false;
             }
-        }
-
-        //check if it's multi-channel AAC format
-        if (AudioSystem::popCount(offloadInfo.channel_mask) > 2
-              && offloadInfo.format == AUDIO_FORMAT_AAC) {
-            ALOGD("copl: offload disabled for multi-channel AAC format");
+        } else {
             return false;
         }
 
-        if (offloadInfo.has_video)
-        {
-            if(property_get("av.offload.enable", propValue, "false")) {
+        if(offloadInfo.is_streaming) {
+            if (property_get("av.streaming.offload.enable", propValue, "false")) {
                 bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
                 if (!prop_enabled) {
-                    ALOGW("offload disabled by av.offload.enable = %s ", propValue );
-                    return false;
+                   ALOGW("offload disabled by av.streaming.offload.enable = %s ", propValue );
+                   return false;
                 }
             } else {
+                //Do not offload AV streamnig if the property is not defined
                 return false;
             }
-
-            if(offloadInfo.is_streaming) {
-                if (property_get("av.streaming.offload.enable", propValue, "false")) {
-                    bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
-                    if (!prop_enabled) {
-                       ALOGW("offload disabled by av.streaming.offload.enable = %s ", propValue );
-                       return false;
-                    }
-                } else {
-                    //Do not offload AV streamnig if the property is not defined
-                    return false;
-                }
-            }
-            ALOGD("copl: isOffloadSupported: has_video == true, property\
-                    set to enable offload");
         }
+        ALOGD("copl: isOffloadSupported: has_video == true, property\
+                set to enable offload");
     }
 
     //If duration is less than minimum value defined in property, return false
