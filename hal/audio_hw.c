@@ -228,6 +228,7 @@ static int get_snd_codec_id(audio_format_t format)
 {
     int id = 0;
 
+#ifdef ENABLE_AV_ENHANCEMENTS
     switch (format) {
     case AUDIO_FORMAT_MP3:
         id = SND_AUDIOCODEC_MP3;
@@ -256,6 +257,7 @@ static int get_snd_codec_id(audio_format_t format)
     default:
         ALOGE("%s: Unsupported audio format :%x", __func__, format);
     }
+#endif // ENABLE_AV_ENHANCEMENTS
 
     return id;
 }
