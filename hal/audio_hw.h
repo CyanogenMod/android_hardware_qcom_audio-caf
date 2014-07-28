@@ -64,7 +64,17 @@ typedef enum {
     USECASE_AUDIO_PLAYBACK_LOW_LATENCY,
     USECASE_AUDIO_PLAYBACK_MULTI_CH,
     USECASE_AUDIO_PLAYBACK_OFFLOAD,
-    
+#ifdef MULTIPLE_OFFLOAD_ENABLED
+    USECASE_AUDIO_PLAYBACK_OFFLOAD2,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD3,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD4,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD5,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD6,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD7,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD8,
+    USECASE_AUDIO_PLAYBACK_OFFLOAD9,
+#endif
+
     /* FM usecase */
     USECASE_AUDIO_PLAYBACK_FM,
 
@@ -166,6 +176,7 @@ struct stream_out {
     void *offload_cookie;
     struct compr_gapless_mdata gapless_mdata;
     int send_new_metadata;
+    unsigned int bit_width;
 
     struct audio_device *dev;
 };
@@ -236,8 +247,10 @@ struct audio_device {
     unsigned int cur_wfd_channels;
 
     int snd_card;
+    unsigned int cur_codec_backend_samplerate;
+    unsigned int cur_codec_backend_bit_width;
     void *platform;
-
+    unsigned int offload_usecases_state;
     void *visualizer_lib;
     int (*visualizer_start_output)(audio_io_handle_t, int);
     int (*visualizer_stop_output)(audio_io_handle_t, int);
@@ -262,6 +275,10 @@ int enable_audio_route(struct audio_device *adev,
 
 struct audio_usecase *get_usecase_from_list(struct audio_device *adev,
                                                    audio_usecase_t uc_id);
+
+bool is_offload_usecase(audio_usecase_t uc_id);
+
+int pcm_ioctl(struct pcm *pcm, int request, ...);
 
 #define LITERAL_TO_STRING(x) #x
 #define CHECK(condition) LOG_ALWAYS_FATAL_IF(!(condition), "%s",\

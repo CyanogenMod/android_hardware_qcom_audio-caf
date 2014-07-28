@@ -1067,6 +1067,18 @@ audio_io_handle_t AudioPolicyManager::getOutput(AudioSystem::stream_type stream,
     if (profile != NULL) {
         AudioOutputDescriptor *outputDesc = NULL;
 
+#ifdef MULTIPLE_OFFLOAD_ENABLED
+        bool multiOffloadEnabled = false;
+        char value[PROPERTY_VALUE_MAX] = {0};
+        property_get("audio.offload.multiple.enabled", value, "false");
+        if (atoi(value) || !strncmp("true", value, 4))
+            multiOffloadEnabled = true;
+        // if multiple concurrent offload decode is supported
+        // do no check for reuse and also don't close previous output if its offload
+        // previous output will be closed during track destruction
+        if (multiOffloadEnabled)
+            goto get_output__new_output_desc;
+#endif
         for (size_t i = 0; i < mOutputs.size(); i++) {
             AudioOutputDescriptor *desc = mOutputs.valueAt(i);
             if (!desc->isDuplicated() && (profile == desc->mProfile)) {
@@ -1085,6 +1097,7 @@ audio_io_handle_t AudioPolicyManager::getOutput(AudioSystem::stream_type stream,
         if (outputDesc != NULL) {
             closeOutput(outputDesc->mId);
         }
+get_output__new_output_desc:
         outputDesc = new AudioOutputDescriptor(profile);
         outputDesc->mDevice = device;
         outputDesc->mSamplingRate = samplingRate;
@@ -1268,49 +1281,47 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
         }
     }
 
-    if (!pcmOffload) {
-        // Check if offload has been disabled
-        if (property_get("audio.offload.disable", propValue, "0")) {
-            if (atoi(propValue) != 0) {
-                ALOGD("copl: offload disabled by audio.offload.disable=%s", propValue );
+    // Check if offload has been disabled
+    if (property_get("audio.offload.disable", propValue, "0")) {
+        if (atoi(propValue) != 0) {
+            ALOGD("copl: offload disabled by audio.offload.disable=%s", propValue );
+            return false;
+        }
+    }
+
+    //check if it's multi-channel AAC format
+    if (AudioSystem::popCount(offloadInfo.channel_mask) > 2
+          && offloadInfo.format == AUDIO_FORMAT_AAC) {
+        ALOGD("copl: offload disabled for multi-channel AAC format");
+        return false;
+    }
+
+    if (offloadInfo.has_video)
+    {
+        if(property_get("av.offload.enable", propValue, "false")) {
+            bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+            if (!prop_enabled) {
+                ALOGW("offload disabled by av.offload.enable = %s ", propValue );
                 return false;
             }
-        }
-
-        //check if it's multi-channel AAC format
-        if (AudioSystem::popCount(offloadInfo.channel_mask) > 2
-              && offloadInfo.format == AUDIO_FORMAT_AAC) {
-            ALOGD("copl: offload disabled for multi-channel AAC format");
+        } else {
             return false;
         }
 
-        if (offloadInfo.has_video)
-        {
-            if(property_get("av.offload.enable", propValue, "false")) {
+        if(offloadInfo.is_streaming) {
+            if (property_get("av.streaming.offload.enable", propValue, "false")) {
                 bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
                 if (!prop_enabled) {
-                    ALOGW("offload disabled by av.offload.enable = %s ", propValue );
-                    return false;
+                   ALOGW("offload disabled by av.streaming.offload.enable = %s ", propValue );
+                   return false;
                 }
             } else {
+                //Do not offload AV streamnig if the property is not defined
                 return false;
             }
-
-            if(offloadInfo.is_streaming) {
-                if (property_get("av.streaming.offload.enable", propValue, "false")) {
-                    bool prop_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
-                    if (!prop_enabled) {
-                       ALOGW("offload disabled by av.streaming.offload.enable = %s ", propValue );
-                       return false;
-                    }
-                } else {
-                    //Do not offload AV streamnig if the property is not defined
-                    return false;
-                }
-            }
-            ALOGD("copl: isOffloadSupported: has_video == true, property\
-                    set to enable offload");
         }
+        ALOGD("copl: isOffloadSupported: has_video == true, property\
+                set to enable offload");
     }
 
     //If duration is less than minimum value defined in property, return false
@@ -1323,7 +1334,7 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
         ALOGD("copl: Offload denied by duration < default min(=%u)", OFFLOAD_DEFAULT_MIN_DURATION_SECS);
         //duration checks only valid for MP3/AAC formats,
         //do not check duration for other audio formats, e.g. dolby AAC/AC3 and amrwb+ formats
-        if (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC || pcmOffload)
+        if (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC || (pcmOffload && offloadInfo.bit_width < 24))
             return false;
     }
 
@@ -1337,6 +1348,16 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
         return false;
     }
 
+    // Check for soundcard status
+    String8 valueStr = mpClientInterface->getParameters((audio_io_handle_t)0,
+                                 String8(AUDIO_PARAMETER_KEY_SND_CARD_STATUS));
+    AudioParameter result = AudioParameter(valueStr);
+    int isonline = 0;
+    if ((result.getInt(String8(AUDIO_PARAMETER_KEY_SND_CARD_STATUS), isonline) == NO_ERROR)
+           && !isonline) {
+        ALOGD("copl: soundcard is offline rejecting offload request");
+        return false;
+    }
     // See if there is a profile to support this.
     // AUDIO_DEVICE_NONE
     IOProfile *profile = getProfileForDirectOutput(AUDIO_DEVICE_NONE /*ignore device */,
