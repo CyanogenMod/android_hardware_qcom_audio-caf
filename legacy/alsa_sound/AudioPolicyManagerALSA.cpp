@@ -188,7 +188,8 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(AudioOutputDescriptor *ou
     // one buffer size, usually 1/2 or 1/4 of the latency).
     muteWaitMs *= 2;
     // wait for the PCM output buffers to empty before proceeding with the rest of the command
-    if (muteWaitMs > delayMs) {
+    if ((muteWaitMs > delayMs) &&
+              (device != AUDIO_DEVICE_NONE && prevDevice != AUDIO_DEVICE_NONE )) {
         muteWaitMs -= delayMs;
         usleep(muteWaitMs * 1000);
         return muteWaitMs;
