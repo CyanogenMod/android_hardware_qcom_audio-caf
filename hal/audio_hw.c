@@ -129,6 +129,7 @@ const char * const use_case_table[AUDIO_USECASE_MAX] = {
     [USECASE_VOICE2_CALL] = "voice2-call",
     [USECASE_VOLTE_CALL] = "volte-call",
     [USECASE_QCHAT_CALL] = "qchat-call",
+    [USECASE_VOWLAN_CALL] = "vowlan-call",
     [USECASE_COMPRESS_VOIP_CALL] = "compress-voip-call",
     [USECASE_INCALL_REC_UPLINK] = "incall-rec-uplink",
     [USECASE_INCALL_REC_DOWNLINK] = "incall-rec-downlink",
@@ -364,6 +365,9 @@ int enable_snd_device(struct audio_device *adev,
               __func__, snd_device, device_name);
         return 0;
     }
+
+    if (audio_extn_spkr_prot_is_enabled())
+         audio_extn_spkr_prot_calib_cancel(adev);
 
     /* Set BT sample rate before enabling the devices. Adding sample rate mixer
      * control in use-case does not work because rate update takes place after
@@ -702,7 +706,8 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
         } else if (voice_extn_compress_voip_is_active(adev)) {
             voip_usecase = get_usecase_from_list(adev, USECASE_COMPRESS_VOIP_CALL);
             if ((voip_usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND) &&
-                (usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND)) {
+                (usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND) &&
+                 (voip_usecase->stream.out != adev->primary_output)) {
                     in_snd_device = voip_usecase->in_snd_device;
                     out_snd_device = voip_usecase->out_snd_device;
             }
