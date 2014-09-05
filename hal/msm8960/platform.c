@@ -1031,3 +1031,9 @@ int platform_set_snd_device_backend(snd_device_t snd_device __unused,
 {
     return -ENOSYS;
 }
+
+int platform_set_snd_device_name(snd_device_t snd_device __unused,
+                                 const char * name __unused)
+{
+    return -ENOSYS;
+}
