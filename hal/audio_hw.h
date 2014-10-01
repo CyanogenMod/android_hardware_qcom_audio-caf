@@ -62,6 +62,7 @@ typedef enum {
     /* Playback usecases */
     USECASE_AUDIO_PLAYBACK_DEEP_BUFFER = 0,
     USECASE_AUDIO_PLAYBACK_LOW_LATENCY,
+    USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY,
     USECASE_AUDIO_PLAYBACK_MULTI_CH,
     USECASE_AUDIO_PLAYBACK_OFFLOAD,
 #ifdef MULTIPLE_OFFLOAD_ENABLED
@@ -196,7 +197,6 @@ struct stream_in {
     bool enable_aec;
     bool enable_ns;
     audio_format_t format;
-
     struct audio_device *dev;
 };
 
@@ -258,6 +258,8 @@ struct audio_device {
     void *offload_effects_lib;
     int (*offload_effects_start_output)(audio_io_handle_t, int);
     int (*offload_effects_stop_output)(audio_io_handle_t, int);
+
+    bool low_latency_recording;
 
     struct sound_card_status snd_card_status;
 };
