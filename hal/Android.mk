@@ -39,12 +39,6 @@ LOCAL_SRC_FILES := \
 	platform_info.c \
 	$(AUDIO_PLATFORM)/platform.c
 
-ifneq ($(BOARD_USES_CUSTOM_AUDIO_PLATFORM_PATH),)
-    LOCAL_SRC_FILES += ../../../../$(BOARD_USES_CUSTOM_AUDIO_PLATFORM_PATH)/customplatform.c
-else
-    LOCAL_SRC_FILES += vendor-platform/customplatform.c
-endif
-
 LOCAL_SRC_FILES += audio_extn/audio_extn.c
 
 ifneq ($(strip $(AUDIO_FEATURE_DISABLED_ANC_HEADSET)),true)
@@ -125,12 +119,6 @@ endif
 endif
 
 ifneq ($(filter msm8974 msm8226 msm8610,$(TARGET_BOARD_PLATFORM)),)
-ifeq ($(strip $(AUDIO_FEATURE_SEPARATE_SPKR_BACKEND)),true)
-    LOCAL_CFLAGS += -DSEPARATE_SPKR_BACKEND
-endif
-endif
-
-ifneq ($(filter msm8974 msm8226 msm8610,$(TARGET_BOARD_PLATFORM)),)
 ifneq ($(strip $(AUDIO_FEATURE_DISABLED_WMA_OFFLOAD_DISABLED)),true)
     LOCAL_CFLAGS += -DWMA_OFFLOAD_ENABLED
     LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
@@ -175,8 +163,7 @@ LOCAL_C_INCLUDES += \
 	$(call include-path-for, audio-effects) \
 	$(LOCAL_PATH)/$(AUDIO_PLATFORM) \
 	$(LOCAL_PATH)/audio_extn \
-	$(LOCAL_PATH)/voice_extn \
-	$(LOCAL_PATH)/vendor-platform
+	$(LOCAL_PATH)/voice_extn
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_LISTEN)),true)
     LOCAL_CFLAGS += -DAUDIO_LISTEN_ENABLED

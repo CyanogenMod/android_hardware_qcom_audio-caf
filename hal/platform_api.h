@@ -65,6 +65,9 @@ int platform_update_usecase_from_source(int source, audio_usecase_t usecase);
 
 bool platform_listen_update_status(snd_device_t snd_device);
 
+int platform_set_snd_device_backend(snd_device_t snd_device, const char * backend);
+int platform_set_snd_device_name(snd_device_t snd_device, const char * name);
+
 /* From platform_info_parser.c */
 int platform_info_init(void);
 
@@ -74,4 +77,7 @@ uint32_t platform_get_pcm_offload_buffer_size(audio_offload_info_t* info);
 
 bool platform_check_and_set_codec_backend_cfg(struct audio_device* adev, struct audio_usecase *usecase);
 bool platform_check_24_bit_support();
+int platform_get_usecase_index(const char * usecase);
+int platform_set_usecase_pcm_id(audio_usecase_t usecase, int32_t type, int32_t pcm_id);
+
 #endif // AUDIO_PLATFORM_API_H
