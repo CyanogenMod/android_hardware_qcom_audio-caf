@@ -1426,16 +1426,20 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
 
     //If duration is less than minimum value defined in property, return false
     if (property_get("audio.offload.min.duration.secs", propValue, NULL)) {
-        if (offloadInfo.duration_us < (atoi(propValue) * 1000000 )) {
+        if (offloadInfo.duration_us < (atoi(propValue) * 1000000 ) &&
+                (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC ||
+                    (pcmOffload && offloadInfo.bit_width < 24))) {
             ALOGD("copl: Offload denied by duration < audio.offload.min.duration.secs(=%s)", propValue);
             return false;
         }
     } else if (offloadInfo.duration_us < OFFLOAD_DEFAULT_MIN_DURATION_SECS * 1000000) {
-        ALOGD("copl: Offload denied by duration < default min(=%u)", OFFLOAD_DEFAULT_MIN_DURATION_SECS);
         //duration checks only valid for MP3/AAC formats,
         //do not check duration for other audio formats, e.g. dolby AAC/AC3 and amrwb+ formats
-        if (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC || (pcmOffload && offloadInfo.bit_width < 24))
+        if (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC ||
+                (pcmOffload && offloadInfo.bit_width < 24)) {
+            ALOGD("copl: Offload denied by duration < default min(=%u)", OFFLOAD_DEFAULT_MIN_DURATION_SECS);
             return false;
+        }
     }
 
     // Do not allow offloading if one non offloadable effect is enabled. This prevents from
@@ -1445,6 +1449,18 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
     // This may prevent offloading in rare situations where effects are left active by apps
     // in the background.
     if (isNonOffloadableEffectEnabled()) {
+        return false;
+    }
+
+    // A2DP cannot currently be offloaded
+    if (mA2dpDeviceAddress != "") {
+        ALOGD("copl: offload rejected for a2dp device");
+        return false;
+    }
+
+    // USB audio cannot be offloaded with breaking Visualizer
+    if (mUsbCardAndDevice != "") {
+        ALOGD("copl: offload rejected for USB device");
         return false;
     }
 
