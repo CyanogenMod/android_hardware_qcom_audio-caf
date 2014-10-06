@@ -610,7 +610,7 @@ int platform_set_mic_mute(void *platform, bool state)
 
 int platform_set_device_mute(void *platform, bool state, char *dir)
 {
-    LOGE("%s: Not implemented", __func__);
+    ALOGE("%s: Not implemented", __func__);
     return -ENOSYS;
 }
 
