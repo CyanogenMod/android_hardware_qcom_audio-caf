@@ -126,7 +126,7 @@ struct platform_data {
     struct csd_data *csd;
 };
 
-static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
+static int pcm_device_table[AUDIO_USECASE_MAX][2] = {
     [USECASE_AUDIO_PLAYBACK_DEEP_BUFFER] = {DEEP_BUFFER_PCM_DEVICE,
                                             DEEP_BUFFER_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_LOW_LATENCY] = {LOWLATENCY_PCM_DEVICE,
@@ -171,7 +171,7 @@ static const int pcm_device_table[AUDIO_USECASE_MAX][2] = {
 };
 
 /* Array to store sound devices */
-static const char * const device_table[SND_DEVICE_MAX] = {
+static char * device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_NONE] = "none",
     /* Playback sound devices */
     [SND_DEVICE_OUT_HANDSET] = "handset",
@@ -318,7 +318,7 @@ static int acdb_device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_IN_CAPTURE_VI_FEEDBACK] = 102,
 };
 
-struct snd_device_index {
+struct name_to_index {
     char name[100];
     unsigned int index;
 };
@@ -326,7 +326,7 @@ struct snd_device_index {
 #define TO_NAME_INDEX(X)   #X, X
 
 /* Used to get index from parsed sting */
-struct snd_device_index snd_device_name_index[SND_DEVICE_MAX] = {
+struct name_to_index snd_device_name_index[SND_DEVICE_MAX] = {
     {TO_NAME_INDEX(SND_DEVICE_OUT_HANDSET)},
     {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER)},
     {TO_NAME_INDEX(SND_DEVICE_OUT_SPEAKER_REVERSE)},
@@ -394,6 +394,26 @@ struct snd_device_index snd_device_name_index[SND_DEVICE_MAX] = {
     {TO_NAME_INDEX(SND_DEVICE_IN_HANDSET_STEREO_DMIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_SPEAKER_STEREO_DMIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_CAPTURE_VI_FEEDBACK)},
+};
+
+static char * backend_table[SND_DEVICE_MAX] = {0};
+
+static struct name_to_index usecase_name_index[AUDIO_USECASE_MAX] = {
+    {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_DEEP_BUFFER)},
+    {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_LOW_LATENCY)},
+    {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_MULTI_CH)},
+    {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_OFFLOAD)},
+    {TO_NAME_INDEX(USECASE_AUDIO_RECORD)},
+    {TO_NAME_INDEX(USECASE_AUDIO_RECORD_LOW_LATENCY)},
+    {TO_NAME_INDEX(USECASE_VOICE_CALL)},
+    {TO_NAME_INDEX(USECASE_VOICE2_CALL)},
+    {TO_NAME_INDEX(USECASE_VOLTE_CALL)},
+    {TO_NAME_INDEX(USECASE_QCHAT_CALL)},
+    {TO_NAME_INDEX(USECASE_VOWLAN_CALL)},
+    {TO_NAME_INDEX(USECASE_INCALL_REC_UPLINK)},
+    {TO_NAME_INDEX(USECASE_INCALL_REC_DOWNLINK)},
+    {TO_NAME_INDEX(USECASE_INCALL_REC_UPLINK_AND_DOWNLINK)},
+    {TO_NAME_INDEX(USECASE_AUDIO_HFP_SCO)},
 };
 
 #define DEEP_BUFFER_PLATFORM_DELAY (29*1000LL)
@@ -811,6 +831,41 @@ int platform_get_pcm_device_id(audio_usecase_t usecase, int device_type)
     return device_id;
 }
 
+static int find_index(struct name_to_index * table, int32_t len, const char * name)
+{
+    int ret = 0;
+    int32_t i;
+
+    if (table == NULL) {
+        ALOGE("%s: table is NULL", __func__);
+        ret = -ENODEV;
+        goto done;
+    }
+
+    if (name == NULL) {
+        ALOGE("null key");
+        ret = -ENODEV;
+        goto done;
+    }
+
+    for (i=0; i < len; i++) {
+        const char* tn = table[i].name;
+        int32_t len = strlen(tn);
+        if (strncmp(tn, name, len) == 0) {
+            if (strlen(name) != len) {
+                continue; // substring
+            }
+            ret = table[i].index;
+            goto done;
+        }
+    }
+    ALOGE("%s: Could not find index for name = %s",
+            __func__, name);
+    ret = -ENODEV;
+done:
+    return ret;
+}
+
 int platform_get_snd_device_index(char *snd_device_index_name)
 {
     int ret = 0;
@@ -833,6 +888,11 @@ int platform_get_snd_device_index(char *snd_device_index_name)
     ret = -ENODEV;
 done:
     return ret;
+}
+
+int platform_get_usecase_index(const char *usecase_name)
+{
+    return find_index(usecase_name_index, AUDIO_USECASE_MAX, usecase_name);
 }
 
 int platform_set_snd_device_acdb_id(snd_device_t snd_device, unsigned int acdb_id)
@@ -1944,3 +2004,267 @@ uint32_t platform_get_pcm_offload_buffer_size(audio_offload_info_t* info)
     return fragment_size;
 }
 
+bool platform_check_24_bit_support() {
+
+    char value[PROPERTY_VALUE_MAX] = {0};
+    property_get("audio.offload.24bit.enable", value, "0");
+    if (atoi(value)) {
+        ALOGW("Property audio.offload.24bit.enable is set");
+        return true;
+    }
+    return false;
+}
+
+static unsigned int get_best_backend_sample_rate(unsigned int sample_rate) {
+
+    // codec backend can take 48K, 96K, and 192K
+    if (sample_rate <= 48000)
+        return 48000;
+    if (sample_rate <= 96000)
+        return 96000;
+    if (sample_rate <= 192000)
+        return 192000;
+    return CODEC_BACKEND_DEFAULT_SAMPLE_RATE;
+}
+
+static unsigned int get_best_backend_bit_width(unsigned int bit_width) {
+
+    if (bit_width == 24)
+        return 24;
+    return CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+}
+
+int platform_set_codec_backend_cfg(struct audio_device* adev,
+                         unsigned int bit_width, unsigned int sample_rate)
+{
+    ALOGV("platform_set_codec_backend_cfg bw %d, sr %d", bit_width, sample_rate);
+
+    int ret = 0;
+    if (bit_width != adev->cur_codec_backend_bit_width) {
+        const char * mixer_ctl_name = "SLIM_0_RX Format";
+        struct  mixer_ctl *ctl;
+        ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
+        if (!ctl) {
+            ALOGE("%s: Could not get ctl for mixer command - %s",
+                    __func__, mixer_ctl_name);
+            return -EINVAL;
+        }
+
+        if (bit_width == 24) {
+                mixer_ctl_set_enum_by_string(ctl, "S24_LE");
+        } else {
+            mixer_ctl_set_enum_by_string(ctl, "S16_LE");
+            sample_rate = CODEC_BACKEND_DEFAULT_SAMPLE_RATE;
+        }
+        adev->cur_codec_backend_bit_width = bit_width;
+        ALOGE("Backend bit width is set to %d ", bit_width);
+    }
+
+    if ((adev->cur_codec_backend_bit_width == CODEC_BACKEND_DEFAULT_BIT_WIDTH &&
+             adev->cur_codec_backend_samplerate != CODEC_BACKEND_DEFAULT_SAMPLE_RATE) ||
+        (adev->cur_codec_backend_samplerate != sample_rate)) {
+
+            char *rate_str = NULL;
+            const char * mixer_ctl_name = "SLIM_0_RX SampleRate";
+            struct  mixer_ctl *ctl;
+
+            switch (sample_rate) {
+            case 8000:
+                rate_str = "KHZ_8";
+                break;
+            case 11025:
+                rate_str = "KHZ_11_025";
+                break;
+            case 16000:
+                rate_str = "KHZ_16";
+                break;
+            case 22050:
+                rate_str = "KHZ_22_05";
+                break;
+            case 32000:
+                rate_str = "KHZ_32";
+                break;
+            case 44100:
+                rate_str = "KHZ_44_1";
+                break;
+            case 48000:
+                rate_str = "KHZ_48";
+                break;
+            case 64000:
+                rate_str = "KHZ_64";
+                break;
+            case 88200:
+                rate_str = "KHZ_88_2";
+                break;
+            case 96000:
+                rate_str = "KHZ_96";
+                break;
+            case 176400:
+                rate_str = "KHZ_176_4";
+                break;
+            case 192000:
+                rate_str = "KHZ_192";
+                break;
+            default:
+                rate_str = "KHZ_48";
+                break;
+            }
+
+            ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
+            if(!ctl) {
+                ALOGE("%s: Could not get ctl for mixer command - %s",
+                    __func__, mixer_ctl_name);
+                return -EINVAL;
+            }
+
+            ALOGV("Set sample rate as rate_str = %s", rate_str);
+            mixer_ctl_set_enum_by_string(ctl, rate_str);
+            adev->cur_codec_backend_samplerate = sample_rate;
+    }
+
+    return ret;
+}
+
+bool platform_check_codec_backend_cfg(struct audio_device* adev,
+                                   struct audio_usecase* usecase,
+                                   unsigned int* new_bit_width,
+                                   unsigned int* new_sample_rate)
+{
+    bool backend_change = false;
+    struct listnode *node;
+    struct stream_out *out = NULL;
+    unsigned int cur_sr, cur_bw, best_bw = 0, best_sr = 0;
+
+    // For voice calls use default configuration
+    // force routing is not required here, caller will do it anyway
+    if (adev->mode == AUDIO_MODE_IN_CALL ||
+        adev->mode == AUDIO_MODE_IN_COMMUNICATION) {
+        ALOGW("%s:Use default bw and sr for voice/voip calls ",__func__);
+        *new_bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        *new_sample_rate =  CODEC_BACKEND_DEFAULT_SAMPLE_RATE;
+        backend_change = true;
+    }
+
+
+    if (!backend_change) {
+        // go through all the offload usecases, and
+        // find the max bit width and samplerate
+        list_for_each(node, &adev->usecase_list) {
+            struct audio_usecase *curr_usecase;
+            curr_usecase = node_to_item(node, struct audio_usecase, list);
+            struct stream_out *out =
+                       (struct stream_out*) curr_usecase->stream.out;
+            if (out != NULL) {
+                cur_sr = get_best_backend_sample_rate(out->sample_rate);
+                cur_bw = get_best_backend_bit_width(out->bit_width);
+
+                ALOGV("Playback running bw %d sr %d standby %d",
+                          cur_bw, cur_sr, out->standby);
+
+                if (cur_bw > best_bw) {
+                    best_bw = cur_bw;
+                }
+
+                if (cur_sr > best_sr) {
+                    best_sr = cur_sr;
+                }
+            }
+        }
+    }
+    *new_bit_width = best_bw;
+    *new_sample_rate = best_sr;
+
+    // Force routing if the expected bitwdith or samplerate
+    // is not same as current backend comfiguration
+    if ((*new_bit_width != adev->cur_codec_backend_bit_width) ||
+        (*new_sample_rate != adev->cur_codec_backend_samplerate)) {
+        backend_change = true;
+        ALOGW("Codec backend needs to be updated");
+    }
+
+    return backend_change;
+}
+
+bool platform_check_and_set_codec_backend_cfg(struct audio_device* adev, struct audio_usecase *usecase)
+{
+    // check if 24bit configuration is enabled first
+    if (!platform_check_24_bit_support()) {
+        ALOGW("24bit not enable, no need to check for backend change");
+        return false;
+    }
+
+    ALOGV("platform_check_and_set_codec_backend_cfg usecase = %d",usecase->id );
+
+    unsigned int new_bit_width = 0, old_bit_width;
+    unsigned int new_sample_rate = 0, old_sample_rate;
+
+    old_bit_width = adev->cur_codec_backend_bit_width;
+    old_sample_rate = adev->cur_codec_backend_samplerate;
+
+    ALOGW("Codec backend bitwidth %d, samplerate %d", old_bit_width, old_sample_rate);
+    if (platform_check_codec_backend_cfg(adev, usecase,
+                                      &new_bit_width, &new_sample_rate)) {
+        platform_set_codec_backend_cfg(adev, new_bit_width, new_sample_rate);
+    }
+
+    if (old_bit_width != adev->cur_codec_backend_bit_width ||
+        old_sample_rate != adev->cur_codec_backend_samplerate) {
+        ALOGW("New codec backend bit width %d, sample rate %d",
+                    adev->cur_codec_backend_bit_width, adev->cur_codec_backend_samplerate);
+        return true;
+    }
+
+    return false;
+}
+
+int platform_set_snd_device_backend(snd_device_t device, const char *backend)
+{
+    int ret = 0;
+
+    if ((device < SND_DEVICE_MIN) || (device >= SND_DEVICE_MAX)) {
+        ALOGE("%s: Invalid snd_device = %d",
+            __func__, device);
+        ret = -EINVAL;
+        goto done;
+    }
+
+    if (backend_table[device]) {
+        free(backend_table[device]);
+    }
+    backend_table[device] = strdup(backend);
+done:
+    return ret;
+}
+
+int platform_set_usecase_pcm_id(audio_usecase_t usecase, int32_t type, int32_t pcm_id)
+{
+    int ret = 0;
+    if ((usecase <= USECASE_INVALID) || (usecase >= AUDIO_USECASE_MAX)) {
+        ALOGE("%s: invalid usecase case idx %d", __func__, usecase);
+        ret = -EINVAL;
+        goto done;
+    }
+
+    if ((type != 0) && (type != 1)) {
+        ALOGE("%s: invalid usecase type", __func__);
+        ret = -EINVAL;
+    }
+    pcm_device_table[usecase][type] = pcm_id;
+done:
+    return ret;
+}
+
+int platform_set_snd_device_name(snd_device_t device, const char *name)
+{
+    int ret = 0;
+
+    if ((device < SND_DEVICE_MIN) || (device >= SND_DEVICE_MAX)) {
+        ALOGE("%s:: Invalid snd_device = %d", __func__, device);
+        ret = -EINVAL;
+        goto done;
+    }
+
+    device_table[device] = strdup(name);
+done:
+    return ret;
+}
