@@ -1291,8 +1291,10 @@ int start_output_stream(struct stream_out *out)
         goto error_config;
     }
 
+#ifdef ULTRA_LOW_LATENCY_ENABLED
     if (out->sample_rate == 48000 && out->usecase == USECASE_AUDIO_PLAYBACK_LOW_LATENCY)
         out->usecase = USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY;
+#endif
 
     out->pcm_device_id = platform_get_pcm_device_id(out->usecase, PCM_PLAYBACK);
     if (out->pcm_device_id < 0) {
