@@ -127,8 +127,10 @@ static int pcm_device_table[AUDIO_USECASE_MAX][2] = {
                                             DEEP_BUFFER_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_LOW_LATENCY] = {LOWLATENCY_PCM_DEVICE,
                                            LOWLATENCY_PCM_DEVICE},
+#ifdef ULTRA_LOW_LATENCY_ENABLED
     [USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY] = {ULTRA_LOWLATENCY_PCM_DEVICE,
                                                  ULTRA_LOWLATENCY_PCM_DEVICE},
+#endif
     [USECASE_AUDIO_PLAYBACK_MULTI_CH] = {MULTIMEDIA2_PCM_DEVICE,
                                         MULTIMEDIA2_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_OFFLOAD] =
@@ -449,7 +451,9 @@ static char * backend_table[SND_DEVICE_MAX] = {0};
 static struct name_to_index usecase_name_index[AUDIO_USECASE_MAX] = {
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_DEEP_BUFFER)},
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_LOW_LATENCY)},
+#ifdef ULTRA_LOW_LATENCY_ENABLED
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY)},
+#endif
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_MULTI_CH)},
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_OFFLOAD)},
     {TO_NAME_INDEX(USECASE_AUDIO_RECORD)},
@@ -1936,7 +1940,9 @@ int64_t platform_render_latency(audio_usecase_t usecase)
     switch (usecase) {
         case USECASE_AUDIO_PLAYBACK_DEEP_BUFFER:
             return DEEP_BUFFER_PLATFORM_DELAY;
+#ifdef ULTRA_LOW_LATENCY_ENABLED
         case USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY:
+#endif
         case USECASE_AUDIO_PLAYBACK_LOW_LATENCY:
             return LOW_LATENCY_PLATFORM_DELAY;
         default:

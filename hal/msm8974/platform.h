@@ -223,7 +223,9 @@ enum {
 #define LOWLATENCY_PCM_DEVICE 12
 #define EC_REF_RX "I2S_RX"
 #else
+#ifdef ULTRA_LOW_LATENCY_ENABLED
 #define ULTRA_LOWLATENCY_PCM_DEVICE 4
+#endif
 #define LOWLATENCY_PCM_DEVICE 15
 #define EC_REF_RX "SLIM_RX"
 #endif
