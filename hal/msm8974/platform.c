@@ -32,7 +32,10 @@
 #include "audio_extn.h"
 #include "voice_extn.h"
 #include "sound/compress_params.h"
+
+#ifdef MDM_DETECT
 #include "mdm_detect.h"
+#endif
 
 #define MIXER_XML_PATH "/system/etc/mixer_paths.xml"
 #define MIXER_XML_PATH_AUXPCM "/system/etc/mixer_paths_auxpcm.xml"
@@ -634,6 +637,7 @@ void close_csd_client(struct csd_data *csd)
     }
 }
 
+#ifdef MDM_DETECT
 static void platform_csd_init(struct platform_data *plat_data)
 {
     struct dev_info mdm_detect_info;
@@ -653,6 +657,7 @@ static void platform_csd_init(struct platform_data *plat_data)
     if (mdm_detect_info.num_modems > 0)
         plat_data->csd = open_csd_client();
 }
+#endif
 
 static void set_platform_defaults(struct platform_data * my_data)
 {
@@ -677,8 +682,10 @@ static void set_platform_defaults(struct platform_data * my_data)
     backend_table[SND_DEVICE_IN_CAPTURE_FM] = strdup("capture-fm");
     backend_table[SND_DEVICE_OUT_TRANSMISSION_FM] = strdup("transmission-fm");
 
+#ifdef MDM_DETECT
     if (mdm_detect_info.num_modems > 0)
         plat_data->csd = open_csd_client(plat_data->is_i2s_ext_modem);
+#endif
 }
 
 static bool platform_is_i2s_ext_modem(const char *snd_card_name,
@@ -856,8 +863,10 @@ void *platform_init(struct audio_device *adev)
     else
         platform_info_init(PLATFORM_INFO_XML_PATH);
 
+#ifdef MDM_DETECT
     /* load csd client */
     platform_csd_init(my_data);
+#endif
 
     /* init usb */
     audio_extn_usb_init(adev);
