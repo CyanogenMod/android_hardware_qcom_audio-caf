@@ -84,13 +84,8 @@ struct pcm_config pcm_config_low_latency = {
     .avail_min = LOW_LATENCY_OUTPUT_PERIOD_SIZE / 4,
 };
 
-#ifdef ULTRA_LOW_LATENCY_ENABLED
-#define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_LOW_LATENCY
-#define pcm_config_primary pcm_config_low_latency
-#else
 #define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
 #define pcm_config_primary pcm_config_deep_buffer
-#endif
 
 struct pcm_config pcm_config_hdmi_multi = {
     .channels = HDMI_MULTI_DEFAULT_CHANNEL_COUNT, /* changed when the stream is opened */
