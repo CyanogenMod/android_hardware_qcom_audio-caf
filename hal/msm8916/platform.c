@@ -1952,6 +1952,14 @@ uint32_t platform_get_compress_offload_buffer_size(audio_offload_info_t* info)
         fragment_size =  atoi(value) * 1024;
     }
 
+    // For FLAC use max size since it is loss less, and has sampling rates
+    // upto 192kHZ
+    if (info != NULL && !info->has_video &&
+        info->format == AUDIO_FORMAT_FLAC) {
+       fragment_size = MAX_COMPRESS_OFFLOAD_FRAGMENT_SIZE;
+       ALOGV("FLAC fragment size %d", fragment_size);
+    }
+
     if (info != NULL && info->has_video && info->is_streaming) {
         fragment_size = COMPRESS_OFFLOAD_FRAGMENT_SIZE_FOR_AV_STREAMING;
         ALOGV("%s: offload fragment size reduced for AV streaming to %d",
@@ -2041,7 +2049,7 @@ int platform_set_codec_backend_cfg(struct audio_device* adev,
 
     int ret = 0;
     if (bit_width != adev->cur_codec_backend_bit_width) {
-        const char * mixer_ctl_name = "SLIM_0_RX Format";
+        const char * mixer_ctl_name = "MI2S_RX Format";
         struct  mixer_ctl *ctl;
         ctl = mixer_get_ctl_by_name(adev->mixer, mixer_ctl_name);
         if (!ctl) {
@@ -2065,7 +2073,7 @@ int platform_set_codec_backend_cfg(struct audio_device* adev,
         (adev->cur_codec_backend_samplerate != sample_rate)) {
 
             char *rate_str = NULL;
-            const char * mixer_ctl_name = "SLIM_0_RX SampleRate";
+            const char * mixer_ctl_name = "MI2S_RX SampleRate";
             struct  mixer_ctl *ctl;
 
             switch (sample_rate) {
