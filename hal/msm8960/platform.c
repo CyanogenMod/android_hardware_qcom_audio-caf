@@ -556,6 +556,11 @@ int platform_stop_voice_call(void *platform, uint32_t vsid)
     return ret;
 }
 
+int platform_get_sample_rate(void *platform, uint32_t *rate)
+{
+    return 0;
+}
+
 int platform_set_voice_volume(void *platform, int volume)
 {
     struct platform_data *my_data = (struct platform_data *)platform;
