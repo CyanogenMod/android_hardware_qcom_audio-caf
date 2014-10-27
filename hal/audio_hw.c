@@ -84,8 +84,13 @@ struct pcm_config pcm_config_low_latency = {
     .avail_min = LOW_LATENCY_OUTPUT_PERIOD_SIZE / 4,
 };
 
+#ifdef ULTRA_LOW_LATENCY_ENABLED
+#define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_LOW_LATENCY
+#define pcm_config_primary pcm_config_low_latency
+#else
 #define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
 #define pcm_config_primary pcm_config_deep_buffer
+#endif
 
 struct pcm_config pcm_config_hdmi_multi = {
     .channels = HDMI_MULTI_DEFAULT_CHANNEL_COUNT, /* changed when the stream is opened */
@@ -2563,8 +2568,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->compr_config.codec->ch_out = out->compr_config.codec->ch_in;
         out->bit_width = config->offload_info.bit_width;
 
-        if (config->offload_info.format == AUDIO_FORMAT_AAC)
-            out->compr_config.codec->format = SND_AUDIOSTREAMFORMAT_RAW;
+        out->compr_config.codec->format = SND_AUDIOSTREAMFORMAT_RAW;
         if (config->offload_info.format == AUDIO_FORMAT_PCM_16_BIT_OFFLOAD)
             out->compr_config.codec->format = SNDRV_PCM_FORMAT_S16_LE;
         if(config->offload_info.format == AUDIO_FORMAT_PCM_24_BIT_OFFLOAD)
