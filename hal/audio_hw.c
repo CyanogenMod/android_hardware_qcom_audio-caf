@@ -2578,7 +2578,8 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->compr_config.codec->ch_out = out->compr_config.codec->ch_in;
         out->bit_width = config->offload_info.bit_width;
 
-        out->compr_config.codec->format = SND_AUDIOSTREAMFORMAT_RAW;
+        if (config->offload_info.format == AUDIO_FORMAT_AAC)
+            out->compr_config.codec->format = SND_AUDIOSTREAMFORMAT_RAW;
         if (config->offload_info.format == AUDIO_FORMAT_PCM_16_BIT_OFFLOAD)
             out->compr_config.codec->format = SNDRV_PCM_FORMAT_S16_LE;
         if(config->offload_info.format == AUDIO_FORMAT_PCM_24_BIT_OFFLOAD)
