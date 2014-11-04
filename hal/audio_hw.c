@@ -1728,7 +1728,12 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
                     !voice_is_in_call(adev) &&
                     (out == adev->primary_output)) {
                 ret = voice_start_call(adev);
+#ifdef PLATFORM_MSM8960
+            } else if ((adev->mode == AUDIO_MODE_IN_CALL) &&
+                            voice_is_in_call(adev) &&
+# else
             } else if (voice_is_in_call(adev) &&
+# endif
                             (out == adev->primary_output)) {
                 voice_update_devices_for_all_voice_usecases(adev);
             }
