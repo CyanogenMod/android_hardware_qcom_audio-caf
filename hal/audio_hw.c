@@ -55,13 +55,16 @@
 #include "sound/compress_params.h"
 #include "sound/asound.h"
 
+#ifdef USES_AUDIO_AMPLIFIER
+#include <audio_amplifier.h>
+#endif
+
 #define COMPRESS_OFFLOAD_NUM_FRAGMENTS 4
 /* ToDo: Check and update a proper value in msec */
 #define COMPRESS_OFFLOAD_PLAYBACK_LATENCY 96
 #define COMPRESS_PLAYBACK_VOLUME_MAX 0x2000
 
 
-#define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
 
 struct pcm_config pcm_config_deep_buffer = {
     .channels = 2,
@@ -85,6 +88,14 @@ struct pcm_config pcm_config_low_latency = {
     .avail_min = LOW_LATENCY_OUTPUT_PERIOD_SIZE / 4,
 };
 
+#ifdef ULTRA_LOW_LATENCY_ENABLED
+#define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_LOW_LATENCY
+#define pcm_config_primary pcm_config_low_latency
+#else
+#define USECASE_AUDIO_PLAYBACK_PRIMARY USECASE_AUDIO_PLAYBACK_DEEP_BUFFER
+#define pcm_config_primary pcm_config_deep_buffer
+#endif
+
 struct pcm_config pcm_config_hdmi_multi = {
     .channels = HDMI_MULTI_DEFAULT_CHANNEL_COUNT, /* changed when the stream is opened */
     .rate = DEFAULT_OUTPUT_SAMPLING_RATE, /* changed when the stream is opened */
@@ -105,6 +116,9 @@ struct pcm_config pcm_config_audio_capture = {
 const char * const use_case_table[AUDIO_USECASE_MAX] = {
     [USECASE_AUDIO_PLAYBACK_DEEP_BUFFER] = "deep-buffer-playback",
     [USECASE_AUDIO_PLAYBACK_LOW_LATENCY] = "low-latency-playback",
+#ifdef ULTRA_LOW_LATENCY_ENABLED
+    [USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY] = "ultra-low-latency-playback",
+#endif
     [USECASE_AUDIO_PLAYBACK_MULTI_CH] = "multi-channel-playback",
     [USECASE_AUDIO_PLAYBACK_OFFLOAD] = "compress-offload-playback",
 #ifdef MULTIPLE_OFFLOAD_ENABLED
@@ -154,9 +168,7 @@ static const audio_usecase_t offload_usecases[] = {
     USECASE_AUDIO_PLAYBACK_OFFLOAD5,
     USECASE_AUDIO_PLAYBACK_OFFLOAD6,
     USECASE_AUDIO_PLAYBACK_OFFLOAD7,
-#endif
     USECASE_AUDIO_PLAYBACK_OFFLOAD8,
-#ifndef PLATFORM_MSM8974
     USECASE_AUDIO_PLAYBACK_OFFLOAD9,
 #endif
 #endif
@@ -313,6 +325,7 @@ int enable_audio_route(struct audio_device *adev,
     audio_extn_dolby_set_dmid(adev);
     audio_extn_dolby_set_endpoint(adev);
 #endif
+    audio_extn_listen_update_stream_status(usecase, LISTEN_EVENT_STREAM_BUSY);
     strcpy(mixer_path, use_case_table[usecase->id]);
     platform_add_backend_name(mixer_path, snd_device);
     ALOGV("%s: apply mixer and update path: %s", __func__, mixer_path);
@@ -339,6 +352,7 @@ int disable_audio_route(struct audio_device *adev,
     platform_add_backend_name(mixer_path, snd_device);
     ALOGV("%s: reset and update mixer path: %s", __func__, mixer_path);
     audio_route_reset_and_update_path(adev->audio_route, mixer_path);
+    audio_extn_listen_update_stream_status(usecase, LISTEN_EVENT_STREAM_FREE);
     ALOGV("%s: exit", __func__);
     return 0;
 }
@@ -398,17 +412,18 @@ int enable_snd_device(struct audio_device *adev,
       }
     }  else {
         ALOGV("%s: snd_device(%d: %s)", __func__,
-        snd_device, device_name);
+            snd_device, device_name);
         /* due to the possibility of calibration overwrite between listen
             and audio, notify listen hal before audio calibration is sent */
-        audio_extn_listen_update_status(snd_device,
-                       LISTEN_EVENT_SND_DEVICE_BUSY);
+        audio_extn_listen_update_device_status(snd_device,
+                                        LISTEN_EVENT_SND_DEVICE_BUSY);
         if (platform_send_audio_calibration(adev->platform, snd_device) < 0) {
             adev->snd_dev_ref_cnt[snd_device]--;
-            audio_extn_listen_update_status(snd_device,
-                           LISTEN_EVENT_SND_DEVICE_FREE);
+            audio_extn_listen_update_device_status(snd_device,
+                                        LISTEN_EVENT_SND_DEVICE_FREE);
             return -EINVAL;
         }
+
         audio_route_apply_and_update_path(adev->audio_route, device_name);
     }
     return 0;
@@ -454,7 +469,7 @@ int disable_snd_device(struct audio_device *adev,
         } else
             audio_route_reset_and_update_path(adev->audio_route, device_name);
 
-        audio_extn_listen_update_status(snd_device,
+        audio_extn_listen_update_device_status(snd_device,
                                         LISTEN_EVENT_SND_DEVICE_FREE);
     }
 
@@ -808,6 +823,12 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
     usecase->out_snd_device = out_snd_device;
 
     enable_audio_route(adev, usecase);
+
+#ifdef USES_AUDIO_AMPLIFIER
+    /* Rely on amplifier_set_devices to distinguish between in/out devices */
+    amplifier_set_devices(in_snd_device);
+    amplifier_set_devices(out_snd_device);
+#endif
 
 #ifndef PLATFORM_MSM8960
     /* Applicable only on the targets that has external modem.
@@ -1285,6 +1306,11 @@ int start_output_stream(struct stream_out *out)
         goto error_config;
     }
 
+#ifdef ULTRA_LOW_LATENCY_ENABLED
+    if (out->sample_rate == 48000 && out->usecase == USECASE_AUDIO_PLAYBACK_LOW_LATENCY)
+        out->usecase = USECASE_AUDIO_PLAYBACK_ULTRA_LOW_LATENCY;
+#endif
+
     out->pcm_device_id = platform_get_pcm_device_id(out->usecase, PCM_PLAYBACK);
     if (out->pcm_device_id < 0) {
         ALOGE("%s: Invalid PCM device id(%d) for the usecase(%d)",
@@ -1702,8 +1728,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
                     !voice_is_in_call(adev) &&
                     (out == adev->primary_output)) {
                 ret = voice_start_call(adev);
-            } else if ((adev->mode == AUDIO_MODE_IN_CALL) &&
-                            voice_is_in_call(adev) &&
+            } else if (voice_is_in_call(adev) &&
                             (out == adev->primary_output)) {
                 voice_update_devices_for_all_voice_usecases(adev);
             }
@@ -2596,14 +2621,20 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             goto error_open;
         }
 #endif
+    } else if (out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) {
+        out->usecase = USECASE_AUDIO_PLAYBACK_DEEP_BUFFER;
+        out->config = pcm_config_deep_buffer;
+        out->sample_rate = out->config.rate;
+
     } else if (out->flags & AUDIO_OUTPUT_FLAG_FAST) {
         out->usecase = USECASE_AUDIO_PLAYBACK_LOW_LATENCY;
         out->config = pcm_config_low_latency;
         out->sample_rate = out->config.rate;
+
     } else {
         /* primary path is the default path selected if no other outputs are available/suitable */
         out->usecase = USECASE_AUDIO_PLAYBACK_PRIMARY;
-        out->config = pcm_config_deep_buffer;
+        out->config = pcm_config_primary;
         out->sample_rate = out->config.rate;
     }
 
@@ -2895,6 +2926,10 @@ static int adev_set_mode(struct audio_hw_device *dev, audio_mode_t mode)
     pthread_mutex_lock(&adev->lock);
     if (adev->mode != mode) {
         ALOGD("%s mode %d\n", __func__, mode);
+#ifdef USES_AUDIO_AMPLIFIER
+        if (amplifier_set_mode(mode) != 0)
+            ALOGE("Failed setting amplifier mode");
+#endif
         adev->mode = mode;
     }
     pthread_mutex_unlock(&adev->lock);
@@ -3000,6 +3035,9 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
             (in->dev->mode != AUDIO_MODE_IN_COMMUNICATION)) {
         audio_extn_compr_cap_init(adev, in);
     } else {
+        in->usecase = adev->low_latency_recording ?
+            USECASE_AUDIO_RECORD_LOW_LATENCY : USECASE_AUDIO_RECORD;
+
         in->config.channels = channel_count;
         frame_size = audio_stream_frame_size((struct audio_stream *)in);
         buffer_size = get_input_buffer_size(config->sample_rate,
@@ -3061,6 +3099,10 @@ static int adev_close(hw_device_t *device)
     pthread_mutex_lock(&adev_init_lock);
 
     if ((--audio_device_ref_count) == 0) {
+#ifdef USES_AUDIO_AMPLIFIER
+        if (amplifier_close() != 0)
+            ALOGE("Amplifier close failed");
+#endif
         audio_extn_listen_deinit(adev);
         audio_route_free(adev->audio_route);
         free(adev->snd_dev_ref_cnt);
@@ -3076,6 +3118,7 @@ static int adev_open(const hw_module_t *module, const char *name,
                      hw_device_t **device)
 {
     int i, ret;
+    char value[PROPERTY_VALUE_MAX] = {0};
 
     ALOGD("%s: enter", __func__);
     if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0) return -EINVAL;
@@ -3138,6 +3181,9 @@ static int adev_open(const hw_module_t *module, const char *name,
     adev->cur_wfd_channels = 2;
     adev->offload_usecases_state = 0;
 
+    property_get("audio.lowlatency.record.enabled", value, "false");
+    adev->low_latency_recording = atoi(value) || !strncmp("true", value, 4);
+
     pthread_mutex_init(&adev->snd_card_status.lock, (const pthread_mutexattr_t *) NULL);
     adev->snd_card_status.state = SND_CARD_STATE_OFFLINE;
     /* Loads platform specific libraries dynamically */
@@ -3187,6 +3233,11 @@ static int adev_open(const hw_module_t *module, const char *name,
     }
 
     *device = &adev->device.common;
+
+#ifdef USES_AUDIO_AMPLIFIER
+    if (amplifier_open() != 0)
+        ALOGE("Amplifier initialization failed");
+#endif
 
     audio_device_ref_count++;
     pthread_mutex_unlock(&adev_init_lock);

@@ -556,6 +556,11 @@ int platform_stop_voice_call(void *platform, uint32_t vsid)
     return ret;
 }
 
+int platform_get_sample_rate(void *platform, uint32_t *rate)
+{
+    return 0;
+}
+
 int platform_set_voice_volume(void *platform, int volume)
 {
     struct platform_data *my_data = (struct platform_data *)platform;
@@ -606,6 +611,12 @@ int platform_set_mic_mute(void *platform, bool state)
     }
 
     return ret;
+}
+
+int platform_set_device_mute(void *platform, bool state, char *dir)
+{
+    ALOGE("%s: Not implemented", __func__);
+    return -ENOSYS;
 }
 
 snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devices)
@@ -1002,9 +1013,14 @@ int platform_update_usecase_from_source(int source, int usecase)
     return usecase;
 }
 
-bool platform_listen_update_status(snd_device_t snd_device)
+bool platform_listen_device_needs_event(snd_device_t snd_device)
 {
-     return false;
+    return false;
+}
+
+bool platform_listen_usecase_needs_event(audio_usecase_t uc_id)
+{
+    return false;
 }
 
 bool platform_check_24_bit_support() {

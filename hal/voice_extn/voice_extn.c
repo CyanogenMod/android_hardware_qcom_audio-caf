@@ -41,6 +41,9 @@
 #define AUDIO_PARAMETER_KEY_CALL_STATE          "call_state"
 #define AUDIO_PARAMETER_KEY_AUDIO_MODE          "audio_mode"
 #define AUDIO_PARAMETER_KEY_ALL_CALL_STATES     "all_call_states"
+#define AUDIO_PARAMETER_KEY_DEVICE_MUTE         "device_mute"
+#define AUDIO_PARAMETER_KEY_DIRECTION           "direction"
+#define AUDIO_PARAMETER_KEY_IN_CALL             "in_call"
 
 #define VOICE_EXTN_PARAMETER_VALUE_MAX_LEN 256
 
@@ -464,6 +467,7 @@ int voice_extn_set_parameters(struct audio_device *adev,
     int value;
     int ret = 0, err;
     char *kv_pairs = str_parms_to_str(parms);
+    char str_value[256] = {0};
 
     ALOGV_IF(kv_pairs != NULL, "%s: enter: %s", __func__, kv_pairs);
 
@@ -489,8 +493,43 @@ int voice_extn_set_parameters(struct audio_device *adev,
             ret = -EINVAL;
             goto done;
         }
-    } else {
-        ALOGV("%s: Not handled here", __func__);
+    }
+
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_DEVICE_MUTE, str_value,
+                            sizeof(str_value));
+    if (err >= 0) {
+        str_parms_del(parms, AUDIO_PARAMETER_KEY_DEVICE_MUTE);
+        bool mute = false;
+
+        if (!strncmp("true", str_value, sizeof("true"))) {
+            mute = true;
+        }
+
+        err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_DIRECTION, str_value,
+                                sizeof(str_value));
+        if (err >= 0) {
+            str_parms_del(parms, AUDIO_PARAMETER_KEY_DIRECTION);
+        } else {
+            ALOGE("%s: direction key not found", __func__);
+            ret = -EINVAL;
+            goto done;
+        }
+
+        ret = platform_set_device_mute(adev->platform, mute, str_value);
+        if (ret != 0) {
+            ALOGE("%s: Failed to set mute err:%d", __func__, ret);
+            ret = -EINVAL;
+            goto done;
+        }
+    }
+
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_IN_CALL, str_value,
+                            sizeof(str_value));
+    if (err >= 0) {
+          str_parms_del(parms, AUDIO_PARAMETER_KEY_IN_CALL);
+           if (!strncmp("true", str_value, sizeof("true"))) {
+           adev->voice.is_in_call = true;
+        }
     }
 
 done:
@@ -524,9 +563,18 @@ void voice_extn_get_parameters(const struct audio_device *adev,
     int ret;
     char value[VOICE_EXTN_PARAMETER_VALUE_MAX_LEN] = {0};
     char *str = str_parms_to_str(query);
+    int val = 0;
 
     ALOGV_IF(str != NULL, "%s: enter %s", __func__, str);
     free(str);
+
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_IN_CALL, value,
+                            sizeof(value));
+    if (ret >=0) {
+        if (adev->voice.is_in_call)
+            val = 1;
+        str_parms_add_int(reply, AUDIO_PARAMETER_KEY_IN_CALL, val);
+    }
 
     ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_AUDIO_MODE, value,
                             sizeof(value));

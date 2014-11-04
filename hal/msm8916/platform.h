@@ -26,11 +26,6 @@ enum {
     FLUENCE_QUAD_MIC = 0x2,
 };
 
-enum {
-    FLUENCE_ENDFIRE = 0x1,
-    FLUENCE_BROADSIDE = 0x2,
-};
-
 /*
  * Below are the devices for which is back end is same, SLIMBUS_0_RX.
  * All these devices are handled by the internal HW codec. We can
@@ -76,9 +71,6 @@ enum {
     SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET,
     SND_DEVICE_OUT_ANC_HANDSET,
     SND_DEVICE_OUT_SPEAKER_PROTECTED,
-    SND_DEVICE_OUT_VOIP_HANDSET,
-    SND_DEVICE_OUT_VOIP_SPEAKER,
-    SND_DEVICE_OUT_VOIP_HEADPHONES,
     SND_DEVICE_OUT_END,
 
     /*
@@ -117,7 +109,6 @@ enum {
     SND_DEVICE_IN_VOICE_TTY_FULL_HEADSET_MIC,
     SND_DEVICE_IN_VOICE_TTY_VCO_HANDSET_MIC,
     SND_DEVICE_IN_VOICE_TTY_HCO_HEADSET_MIC,
-    SND_DEVICE_IN_VOICE_REC_HEADSET_MIC,
     SND_DEVICE_IN_VOICE_REC_MIC,
     SND_DEVICE_IN_VOICE_REC_MIC_NS,
     SND_DEVICE_IN_VOICE_REC_DMIC_STEREO,
@@ -129,14 +120,6 @@ enum {
     SND_DEVICE_IN_HANDSET_STEREO_DMIC,
     SND_DEVICE_IN_SPEAKER_STEREO_DMIC,
     SND_DEVICE_IN_CAPTURE_VI_FEEDBACK,
-    SND_DEVICE_IN_VOIP_HANDSET_MIC,
-    SND_DEVICE_IN_VOIP_SPEAKER_MIC,
-    SND_DEVICE_IN_VOIP_HEADSET_MIC,
-    SND_DEVICE_IN_VOICE_SPEAKER_DMIC_BROADSIDE,
-    SND_DEVICE_IN_SPEAKER_DMIC_BROADSIDE,
-    SND_DEVICE_IN_SPEAKER_DMIC_AEC_BROADSIDE,
-    SND_DEVICE_IN_SPEAKER_DMIC_NS_BROADSIDE,
-    SND_DEVICE_IN_SPEAKER_DMIC_AEC_NS_BROADSIDE,
     SND_DEVICE_IN_END,
 
     SND_DEVICE_MAX = SND_DEVICE_IN_END,
@@ -146,7 +129,7 @@ enum {
 #define DEFAULT_OUTPUT_SAMPLING_RATE 48000
 
 #define ALL_SESSION_VSID                0xFFFFFFFF
-#define DEFAULT_MUTE_RAMP_DURATION_MS   20
+#define DEFAULT_MUTE_RAMP_DURATION      500
 #define DEFAULT_VOLUME_RAMP_DURATION_MS 20
 #define MIXER_PATH_MAX_LENGTH 100
 
@@ -185,99 +168,36 @@ enum {
 #define FM_PLAYBACK_PCM_DEVICE 5
 #define FM_CAPTURE_PCM_DEVICE  6
 #define HFP_PCM_RX 5
+#define HFP_SCO_RX 17
+#define HFP_ASM_RX_TX 18
 
 #define INCALL_MUSIC_UPLINK_PCM_DEVICE 1
-
-#ifdef PLATFORM_MSM8610
-#define INCALL_MUSIC_UPLINK2_PCM_DEVICE 14
-#elif PLATFORM_MSM8x26
 #define INCALL_MUSIC_UPLINK2_PCM_DEVICE 16
-#elif PLATFORM_MSM8974
-#define INCALL_MUSIC_UPLINK2_PCM_DEVICE 35
-#else
-#define INCALL_MUSIC_UPLINK2_PCM_DEVICE -1
-#endif
-
 #define SPKR_PROT_CALIB_RX_PCM_DEVICE 5
-#define SPKR_PROT_CALIB_TX_PCM_DEVICE 32
+#define SPKR_PROT_CALIB_TX_PCM_DEVICE 22
 #define PLAYBACK_OFFLOAD_DEVICE 9
-
-#ifdef MULTIPLE_OFFLOAD_ENABLED
-#define PLAYBACK_OFFLOAD_DEVICE2 17
-#define PLAYBACK_OFFLOAD_DEVICE3 18
-#ifdef PLATFORM_APQ8084
-#define PLAYBACK_OFFLOAD_DEVICE4 34
-#define PLAYBACK_OFFLOAD_DEVICE5 35
-#define PLAYBACK_OFFLOAD_DEVICE6 36
-#define PLAYBACK_OFFLOAD_DEVICE7 37
-#define PLAYBACK_OFFLOAD_DEVICE8 38
-#define PLAYBACK_OFFLOAD_DEVICE9 39
-#elif PLATFORM_MSM8974
-#define PLAYBACK_OFFLOAD_DEVICE8 19
-#endif
-#endif
-
 #define COMPRESS_VOIP_CALL_PCM_DEVICE 3
 
-#ifdef PLATFORM_MSM8610
+
 #define LOWLATENCY_PCM_DEVICE 12
 #define EC_REF_RX "I2S_RX"
-#else
-#ifdef ULTRA_LOW_LATENCY_ENABLED
-#define ULTRA_LOWLATENCY_PCM_DEVICE 4
-#endif
-#define LOWLATENCY_PCM_DEVICE 15
-#define EC_REF_RX "SLIM_RX"
-#endif
-#ifdef PLATFORM_MSM8x26
-#define COMPRESS_CAPTURE_DEVICE 20
-#else
 #define COMPRESS_CAPTURE_DEVICE 19
-#endif
 
-#ifdef PLATFORM_MSM8x26
-#define VOICE_CALL_PCM_DEVICE 2
-#define VOICE2_CALL_PCM_DEVICE 14
-#define VOLTE_CALL_PCM_DEVICE 17
-#define QCHAT_CALL_PCM_DEVICE 18
-#define VOWLAN_CALL_PCM_DEVICE 30
-#elif PLATFORM_APQ8084
-#define VOICE_CALL_PCM_DEVICE 20
-#define VOICE2_CALL_PCM_DEVICE 28
-#define VOLTE_CALL_PCM_DEVICE 21
-#define QCHAT_CALL_PCM_DEVICE 06
-#define VOWLAN_CALL_PCM_DEVICE -1
-#elif PLATFORM_MSM8610
 #define VOICE_CALL_PCM_DEVICE 2
 #define VOICE2_CALL_PCM_DEVICE 13
 #define VOLTE_CALL_PCM_DEVICE 15
 #define QCHAT_CALL_PCM_DEVICE 14
-#define VOWLAN_CALL_PCM_DEVICE -1
-#else
-#define VOICE_CALL_PCM_DEVICE 2
-#define VOICE2_CALL_PCM_DEVICE 22
-#define VOLTE_CALL_PCM_DEVICE 14
-#define QCHAT_CALL_PCM_DEVICE 20
-#define VOWLAN_CALL_PCM_DEVICE 36
-#endif
-
-#ifdef PLATFORM_MSM8x26
-#define HFP_SCO_RX 28
-#define HFP_ASM_RX_TX 29
-#else
-#define HFP_SCO_RX 23
-#define HFP_ASM_RX_TX 24
-#endif
+#define VOWLAN_CALL_PCM_DEVICE 16
 
 #define LIB_CSD_CLIENT "libcsd-client.so"
 /* CSD-CLIENT related functions */
-typedef int (*init_t)(bool);
+typedef int (*init_t)();
 typedef int (*deinit_t)();
 typedef int (*disable_device_t)();
 typedef int (*enable_device_config_t)(int, int);
 typedef int (*enable_device_t)(int, int, uint32_t);
-typedef int (*volume_t)(uint32_t, int, uint16_t);
-typedef int (*mic_mute_t)(uint32_t, int, uint16_t);
+typedef int (*volume_t)(uint32_t, int);
+typedef int (*mic_mute_t)(uint32_t, int);
 typedef int (*slow_talk_t)(uint32_t, uint8_t);
 typedef int (*start_voice_t)(uint32_t);
 typedef int (*stop_voice_t)(uint32_t);
@@ -285,7 +205,6 @@ typedef int (*start_playback_t)(uint32_t);
 typedef int (*stop_playback_t)(uint32_t);
 typedef int (*start_record_t)(uint32_t, int);
 typedef int (*stop_record_t)(uint32_t);
-typedef int (*get_sample_rate_t)(uint32_t *);
 /* CSD Client structure */
 struct csd_data {
     void *csd_client;
@@ -303,6 +222,6 @@ struct csd_data {
     stop_playback_t stop_playback;
     start_record_t start_record;
     stop_record_t stop_record;
-    get_sample_rate_t get_sample_rate;
 };
+
 #endif // QCOM_AUDIO_PLATFORM_H

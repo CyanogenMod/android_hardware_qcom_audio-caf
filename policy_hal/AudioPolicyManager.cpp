@@ -45,6 +45,7 @@ namespace android_audio_legacy {
 // AudioPolicyInterface implementation
 // ----------------------------------------------------------------------------
 const char* AudioPolicyManager::HDMI_SPKR_STR = "hdmi_spkr";
+int AudioPolicyManager::mvoice_call_state = 0;
 
 status_t AudioPolicyManager::setDeviceConnectionState(audio_devices_t device,
                                                       AudioSystem::device_connection_state state,
@@ -416,7 +417,62 @@ audio_io_handle_t AudioPolicyManager::getInput(int inputSource,
         return 0;
     }
 
+#ifdef VOICE_CONCURRENCY
 
+    char propValue[PROPERTY_VALUE_MAX];
+    bool prop_rec_enabled=false, prop_voip_enabled = false;
+
+    if(property_get("voice.record.conc.disabled", propValue, NULL)) {
+        prop_rec_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    if(property_get("voice.voip.conc.disabled", propValue, NULL)) {
+        prop_voip_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    if (prop_rec_enabled && mvoice_call_state) {
+         //check if voice call is active  / running in background
+         //some of VoIP apps(like SIP2SIP call) supports resume of VoIP call when call in progress
+         //Need to block input request
+        if((AudioSystem::MODE_IN_CALL == mPhoneState) ||
+           ((AudioSystem::MODE_IN_CALL == mPrevPhoneState) &&
+             (AudioSystem::MODE_IN_COMMUNICATION == mPhoneState)))
+        {
+            switch(inputSource) {
+                case AUDIO_SOURCE_VOICE_UPLINK:
+                case AUDIO_SOURCE_VOICE_DOWNLINK:
+                case AUDIO_SOURCE_VOICE_CALL:
+                    ALOGD("Creating input during incall mode for inputSource: %d ",inputSource);
+                break;
+
+                case AUDIO_SOURCE_VOICE_COMMUNICATION:
+                    if(prop_voip_enabled) {
+                       ALOGD("BLOCKING VoIP request during incall mode for inputSource: %d ",inputSource);
+                       return 0;
+                    }
+                break;
+                default:
+                    ALOGD("BLOCKING input during incall mode for inputSource: %d ",inputSource);
+                return 0;
+            }
+        }
+    }//check for VoIP flag
+    else if(prop_voip_enabled && mvoice_call_state) {
+         //check if voice call is active  / running in background
+         //some of VoIP apps(like SIP2SIP call) supports resume of VoIP call when call in progress
+         //Need to block input request
+        if((AudioSystem::MODE_IN_CALL == mPhoneState) ||
+           ((AudioSystem::MODE_IN_CALL == mPrevPhoneState) &&
+             (AudioSystem::MODE_IN_COMMUNICATION == mPhoneState)))
+        {
+            if(inputSource == AUDIO_SOURCE_VOICE_COMMUNICATION) {
+                ALOGD("BLOCKING VoIP request during incall mode for inputSource: %d ",inputSource);
+                return 0;
+            }
+        }
+    }
+
+#endif
     IOProfile *profile = getInputProfile(device,
                                          samplingRate,
                                          format,
@@ -975,13 +1031,49 @@ audio_io_handle_t AudioPolicyManager::getOutput(AudioSystem::stream_type stream,
     IOProfile *profile = NULL;
 
 #ifdef VOICE_CONCURRENCY
-    if (isInCall()) {
-        ALOGV(" IN call mode adding ULL flags .. flags: %x ", flags );
-        //For voip paths
-        if(flags & AudioSystem::OUTPUT_FLAG_DIRECT)
-            flags = AudioSystem::OUTPUT_FLAG_DIRECT;
-        else //route every thing else to ULL path
-            flags = (AudioSystem::output_flags)AUDIO_OUTPUT_FLAG_FAST;
+    char propValue[PROPERTY_VALUE_MAX];
+    bool prop_play_enabled=false, prop_voip_enabled = false;
+
+    if(property_get("voice.playback.conc.disabled", propValue, NULL)) {
+       prop_play_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    if(property_get("voice.voip.conc.disabled", propValue, NULL)) {
+       prop_voip_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    if (prop_play_enabled && mvoice_call_state) {
+        //check if voice call is active  / running in background
+        if((AudioSystem::MODE_IN_CALL == mPhoneState) ||
+             ((AudioSystem::MODE_IN_CALL == mPrevPhoneState)
+                && (AudioSystem::MODE_IN_COMMUNICATION == mPhoneState)))
+        {
+            if(AUDIO_OUTPUT_FLAG_VOIP_RX  & flags) {
+                if(prop_voip_enabled) {
+                    ALOGD(" IN call mode returing no output .. for VoIP usecase flags: %x ", flags );
+                   // flags = (AudioSystem::output_flags)AUDIO_OUTPUT_FLAG_FAST;
+                   return 0;
+                }
+            }
+            else {
+                ALOGD(" IN call mode adding ULL flags .. flags: %x ", flags );
+                flags = (AudioSystem::output_flags)AUDIO_OUTPUT_FLAG_FAST;
+            }
+        }
+    } else if (prop_voip_enabled && mvoice_call_state) {
+        //check if voice call is active  / running in background
+        //some of VoIP apps(like SIP2SIP call) supports resume of VoIP call when call in progress
+        //return only ULL ouput
+        if((AudioSystem::MODE_IN_CALL == mPhoneState) ||
+             ((AudioSystem::MODE_IN_CALL == mPrevPhoneState)
+                && (AudioSystem::MODE_IN_COMMUNICATION == mPhoneState)))
+        {
+            if(AUDIO_OUTPUT_FLAG_VOIP_RX  & flags) {
+                ALOGD(" IN call mode returing no output .. for VoIP usecase flags: %x ", flags );
+               // flags = (AudioSystem::output_flags)AUDIO_OUTPUT_FLAG_FAST;
+               return 0;
+            }
+        }
     }
 #endif
 
@@ -1252,11 +1344,19 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
      offloadInfo.has_video);
 
 #ifdef VOICE_CONCURRENCY
-    if(isInCall())
-    {
-        ALOGD("\n  blocking  compress offload on call mode\n");
-        return false;
+    char concpropValue[PROPERTY_VALUE_MAX];
+    if(property_get("voice.playback.conc.disabled", concpropValue, NULL)) {
+         bool propenabled = atoi(concpropValue) || !strncmp("true", concpropValue, 4);
+         if (propenabled) {
+            if(isInCall())
+            {
+                ALOGD("\n  blocking  compress offload on call mode\n");
+                return false;
+            }
+         }
     }
+
+
 #endif
     // Check if stream type is music, then only allow offload as of now.
     if (offloadInfo.stream_type != AUDIO_STREAM_MUSIC)
@@ -1326,16 +1426,20 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
 
     //If duration is less than minimum value defined in property, return false
     if (property_get("audio.offload.min.duration.secs", propValue, NULL)) {
-        if (offloadInfo.duration_us < (atoi(propValue) * 1000000 )) {
+        if (offloadInfo.duration_us < (atoi(propValue) * 1000000 ) &&
+                (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC ||
+                    (pcmOffload && offloadInfo.bit_width < 24))) {
             ALOGD("copl: Offload denied by duration < audio.offload.min.duration.secs(=%s)", propValue);
             return false;
         }
     } else if (offloadInfo.duration_us < OFFLOAD_DEFAULT_MIN_DURATION_SECS * 1000000) {
-        ALOGD("copl: Offload denied by duration < default min(=%u)", OFFLOAD_DEFAULT_MIN_DURATION_SECS);
         //duration checks only valid for MP3/AAC formats,
         //do not check duration for other audio formats, e.g. dolby AAC/AC3 and amrwb+ formats
-        if (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC || (pcmOffload && offloadInfo.bit_width < 24))
+        if (offloadInfo.format == AUDIO_FORMAT_MP3 || offloadInfo.format == AUDIO_FORMAT_AAC ||
+                (pcmOffload && offloadInfo.bit_width < 24)) {
+            ALOGD("copl: Offload denied by duration < default min(=%u)", OFFLOAD_DEFAULT_MIN_DURATION_SECS);
             return false;
+        }
     }
 
     // Do not allow offloading if one non offloadable effect is enabled. This prevents from
@@ -1345,6 +1449,18 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
     // This may prevent offloading in rare situations where effects are left active by apps
     // in the background.
     if (isNonOffloadableEffectEnabled()) {
+        return false;
+    }
+
+    // A2DP cannot currently be offloaded
+    if (mA2dpDeviceAddress != "") {
+        ALOGD("copl: offload rejected for a2dp device");
+        return false;
+    }
+
+    // USB audio cannot be offloaded with breaking Visualizer
+    if (mUsbCardAndDevice != "") {
+        ALOGD("copl: offload rejected for USB device");
         return false;
     }
 
@@ -1372,7 +1488,7 @@ bool AudioPolicyManager::isOffloadSupported(const audio_offload_info_t& offloadI
 void AudioPolicyManager::setPhoneState(int state)
 
 {
-    ALOGV("setPhoneState() state %d", state);
+    ALOGD("setPhoneState() state %d", state);
     audio_devices_t newDevice = AUDIO_DEVICE_NONE;
     if (state < 0 || state >= AudioSystem::NUM_MODES) {
         ALOGW("setPhoneState() invalid state %d", state);
@@ -1397,6 +1513,7 @@ void AudioPolicyManager::setPhoneState(int state)
     int oldState = mPhoneState;
     mPhoneState = state;
     bool force = false;
+    int voice_call_state = 0;
 
     // are we entering or starting a call
     if (!isStateInCall(oldState) && isStateInCall(state)) {
@@ -1437,6 +1554,135 @@ void AudioPolicyManager::setPhoneState(int state)
     if (isStateInCall(oldState) && newDevice == AUDIO_DEVICE_NONE) {
         newDevice = hwOutputDesc->device();
     }
+#ifdef VOICE_CONCURRENCY
+    char propValue[PROPERTY_VALUE_MAX];
+    bool prop_playback_enabled = false, prop_rec_enabled=false, prop_voip_enabled = false;
+
+    if(property_get("voice.playback.conc.disabled", propValue, NULL)) {
+        prop_playback_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    if(property_get("voice.record.conc.disabled", propValue, NULL)) {
+        prop_rec_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    if(property_get("voice.voip.conc.disabled", propValue, NULL)) {
+        prop_voip_enabled = atoi(propValue) || !strncmp("true", propValue, 4);
+    }
+
+    bool mode_in_call = (AudioSystem::MODE_IN_CALL != oldState) && (AudioSystem::MODE_IN_CALL == state);
+    //query if it is a actual voice call initiated by telephony
+    if (mode_in_call) {
+        String8 valueStr = mpClientInterface->getParameters((audio_io_handle_t)0, String8("in_call"));
+        AudioParameter result = AudioParameter(valueStr);
+        if (result.getInt(String8("in_call"), voice_call_state) == NO_ERROR)
+            ALOGD("SetPhoneState: Voice call state = %d", voice_call_state);
+    }
+
+    if (mode_in_call && voice_call_state) {
+        ALOGD("Entering to call mode oldState :: %d state::%d ",oldState, state);
+        mvoice_call_state = voice_call_state;
+        if (prop_playback_enabled) {
+            //Call invalidate to reset all opened non ULL audio tracks
+            // Move tracks associated to this strategy from previous output to new output
+            for (int i = AudioSystem::SYSTEM; i < (int)AudioSystem::NUM_STREAM_TYPES; i++) {
+                ALOGV(" Invalidate on call mode for stream :: %d ", i);
+                //FIXME see fixme on name change
+                mpClientInterface->setStreamOutput((AudioSystem::stream_type)i,
+                                                  0 /* ignored */);
+            }
+        }
+
+        if (prop_rec_enabled) {
+            //Close all active inputs
+            audio_io_handle_t activeInput = getActiveInput();
+            if (activeInput != 0) {
+               AudioInputDescriptor *activeDesc = mInputs.valueFor(activeInput);
+               switch(activeDesc->mInputSource) {
+                   case AUDIO_SOURCE_VOICE_UPLINK:
+                   case AUDIO_SOURCE_VOICE_DOWNLINK:
+                   case AUDIO_SOURCE_VOICE_CALL:
+                       ALOGD("FOUND active input during call active: %d",activeDesc->mInputSource);
+                   break;
+
+                   case  AUDIO_SOURCE_VOICE_COMMUNICATION:
+                        if(prop_voip_enabled) {
+                            ALOGD("CLOSING VoIP input source on call setup :%d ",activeDesc->mInputSource);
+                            stopInput(activeInput);
+                            releaseInput(activeInput);
+                        }
+                   break;
+
+                   default:
+                       ALOGD("CLOSING input on call setup  for inputSource: %d",activeDesc->mInputSource);
+                       stopInput(activeInput);
+                       releaseInput(activeInput);
+                   break;
+               }
+           }
+        } else if (prop_voip_enabled) {
+            audio_io_handle_t activeInput = getActiveInput();
+            if (activeInput != 0) {
+               AudioInputDescriptor *activeDesc = mInputs.valueFor(activeInput);
+                if (AUDIO_SOURCE_VOICE_COMMUNICATION == activeDesc->mInputSource) {
+                    ALOGD("CLOSING VoIP on call setup : %d",activeDesc->mInputSource);
+                    stopInput(activeInput);
+                    releaseInput(activeInput);
+                }
+            }
+        }
+
+        //suspend  PCM (deep-buffer) output & close  compress & direct tracks
+        for (size_t i = 0; i < mOutputs.size(); i++) {
+            AudioOutputDescriptor *outputDesc = mOutputs.valueAt(i);
+            if (!outputDesc || !outputDesc->mProfile) {
+               ALOGD("ouput desc / profile is NULL");
+               continue;
+            }
+            if (((!outputDesc->isDuplicated() &&outputDesc->mProfile->mFlags & AUDIO_OUTPUT_FLAG_PRIMARY))
+                        && prop_playback_enabled) {
+                ALOGD(" calling suspendOutput on call mode for primary output");
+                mpClientInterface->suspendOutput(mOutputs.keyAt(i));
+            } //Close compress all sessions
+            else if ((outputDesc->mProfile->mFlags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)
+                            &&  prop_playback_enabled) {
+                ALOGD(" calling closeOutput on call mode for COMPRESS output");
+                closeOutput(mOutputs.keyAt(i));
+            }
+            else if ((outputDesc->mProfile->mFlags & AUDIO_OUTPUT_FLAG_VOIP_RX)
+                            && prop_voip_enabled) {
+                ALOGD(" calling closeOutput on call mode for DIRECT  output");
+                closeOutput(mOutputs.keyAt(i));
+            }
+        }
+   }
+
+   if ((AudioSystem::MODE_IN_CALL == oldState) && (AudioSystem::MODE_IN_CALL != state)
+        && prop_playback_enabled && mvoice_call_state) {
+        ALOGD("EXITING from call mode oldState :: %d state::%d \n",oldState, state);
+        mvoice_call_state = 0;
+        //restore PCM (deep-buffer) output after call termination
+        for (size_t i = 0; i < mOutputs.size(); i++) {
+            AudioOutputDescriptor *outputDesc = mOutputs.valueAt(i);
+            if (!outputDesc || !outputDesc->mProfile) {
+               ALOGD("ouput desc / profile is NULL");
+               continue;
+            }
+            if (!outputDesc->isDuplicated() &&outputDesc->mProfile->mFlags & AUDIO_OUTPUT_FLAG_PRIMARY) {
+                ALOGD("calling restoreOutput after call mode for primary output");
+                mpClientInterface->restoreOutput(mOutputs.keyAt(i));
+            }
+       }
+       //call invalidate tracks so that any open streams can fall back to deep buffer/compress path from ULL
+       for (int i = AudioSystem::SYSTEM; i < (int)AudioSystem::NUM_STREAM_TYPES; i++) {
+           ALOGD("Invalidate on call mode for stream :: %d ", i);
+           //FIXME see fixme on name change
+           mpClientInterface->setStreamOutput((AudioSystem::stream_type)i,
+                                                  0 /* ignored */);
+       }
+    }
+#endif
+    mPrevPhoneState = oldState;
 
     int delayMs = 0;
     if (isStateInCall(state)) {
@@ -1483,21 +1729,13 @@ void AudioPolicyManager::setPhoneState(int state)
     } else {
         mLimitRingtoneVolume = false;
     }
+    ALOGD(" End of setPhoneState ... mPhoneState: %d ",mPhoneState);
+}
 
-#ifdef VOICE_CONCURRENCY
-    //Call invalidate to reset all opened non ULL audio tracks
-    if(isInCall())
-    {
-        // Move tracks associated to this strategy from previous output to new output
-        for (int i = AudioSystem::SYSTEM; i < (int)AudioSystem::NUM_STREAM_TYPES; i++) {
-                ALOGV("\n Invalidate on call mode for stream :: %d  \n", i);
-                //FIXME see fixme on name change
-                mpClientInterface->setStreamOutput((AudioSystem::stream_type)i,
-                                                  0 /* ignored */);
-        }
-    }
-#endif
-
+bool AudioPolicyManager::isStateInCall(int state)
+{
+    return ((state == AudioSystem::MODE_IN_CALL) || (state == AudioSystem::MODE_IN_COMMUNICATION) ||
+       ((state == AudioSystem::MODE_RINGTONE) && (mPrevPhoneState == AudioSystem::MODE_IN_CALL)));
 }
 
 extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface)

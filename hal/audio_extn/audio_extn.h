@@ -103,18 +103,23 @@ void hw_info_append_hw_type(void *hw_info, snd_device_t snd_device,
 #ifndef AUDIO_LISTEN_ENABLED
 #define audio_extn_listen_init(adev, snd_card)                  (0)
 #define audio_extn_listen_deinit(adev)                          (0)
-#define audio_extn_listen_update_status(uc_info, event)         (0)
+#define audio_extn_listen_update_device_status(snd_dev, event)  (0)
+#define audio_extn_listen_update_stream_status(uc_info, event)  (0)
 #define audio_extn_listen_set_parameters(adev, parms)           (0)
 #else
 enum listen_event_type {
     LISTEN_EVENT_SND_DEVICE_FREE,
-    LISTEN_EVENT_SND_DEVICE_BUSY
+    LISTEN_EVENT_SND_DEVICE_BUSY,
+    LISTEN_EVENT_STREAM_FREE,
+    LISTEN_EVENT_STREAM_BUSY
 };
 typedef enum listen_event_type listen_event_type_t;
 
 int audio_extn_listen_init(struct audio_device *adev, unsigned int snd_card);
 void audio_extn_listen_deinit(struct audio_device *adev);
-void audio_extn_listen_update_status(snd_device_t snd_device,
+void audio_extn_listen_update_device_status(snd_device_t snd_device,
+                                     listen_event_type_t event);
+void audio_extn_listen_update_stream_status(struct audio_usecase *uc_info,
                                      listen_event_type_t event);
 void audio_extn_listen_set_parameters(struct audio_device *adev,
                                       struct str_parms *parms);
@@ -166,8 +171,10 @@ void audio_extn_compr_cap_deinit();
 
 #if defined(DS1_DOLBY_DDP_ENABLED) || defined(DS1_DOLBY_DAP_ENABLED)
 void audio_extn_dolby_set_dmid(struct audio_device *adev);
+void audio_extn_dolby_set_license(struct audio_device *adev);
 #else
 #define audio_extn_dolby_set_dmid(adev)                 (0)
+#define audio_extn_dolby_set_license(adev)              (0)
 #endif
 
 #ifndef DS1_DOLBY_DDP_ENABLED

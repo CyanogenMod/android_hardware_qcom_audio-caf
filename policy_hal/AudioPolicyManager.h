@@ -65,6 +65,9 @@ public:
         virtual bool isOffloadSupported(const audio_offload_info_t& offloadInfo);
 
         virtual void setPhoneState(int state);
+
+        // true if given state represents a device in a telephony or VoIP call
+        virtual bool isStateInCall(int state);
 protected:
         // return the strategy corresponding to a given stream type
         static routing_strategy getStrategy(AudioSystem::stream_type stream);
@@ -106,8 +109,14 @@ protected:
         //parameter indicates if HDMI plug in/out detected
         bool mHdmiAudioEvent;
 
+
 private:
         void handleNotificationRoutingForStream(AudioSystem::stream_type stream);
+
+        // Used for voip + voice concurrency usecase
+        int mPrevPhoneState;
+        static int mvoice_call_state;
+
 
 };
 };

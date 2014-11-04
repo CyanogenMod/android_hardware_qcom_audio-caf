@@ -38,7 +38,6 @@
 #include "platform_api.h"
 #include <platform.h>
 
-#define PLATFORM_INFO_XML_PATH      "/system/etc/audio_platform_info.xml"
 #define BUF_SIZE                    1024
 
 typedef enum {
@@ -190,19 +189,19 @@ static void process_acdb_id(const XML_Char **attr)
 
     index = platform_get_snd_device_index((char *)attr[1]);
     if (index < 0) {
-        ALOGE("%s: Device %s in %s not found, no ACDB ID set!",
-              __func__, attr[1], PLATFORM_INFO_XML_PATH);
+        ALOGE("%s: Device %s in platform info xml not found, no ACDB ID set!",
+              __func__, attr[1]);
         goto done;
     }
 
     if (strcmp(attr[2], "acdb_id") != 0) {
-        ALOGE("%s: Device %s in %s has no acdb_id, no ACDB ID set!",
-              __func__, attr[1], PLATFORM_INFO_XML_PATH);
+        ALOGE("%s: Device %s in platform info xml has no acdb_id, no ACDB ID set!",
+              __func__, attr[1]);
         goto done;
     }
 
-    if (platform_set_snd_device_acdb_id(index, atoi((char *)attr[3])) < 0) {
-        ALOGE("%s: Device %s, ACDB ID %d was not set!",
+    if(platform_set_snd_device_acdb_id(index, atoi((char *)attr[3])) < 0) {
+        ALOGE("%s: Device %s in platform info xml ACDB ID %d was not set!",
               __func__, attr[1], atoi((char *)attr[3]));
         goto done;
     }
@@ -222,14 +221,14 @@ static void process_device_name(const XML_Char **attr)
 
     index = platform_get_snd_device_index((char *)attr[1]);
     if (index < 0) {
-        ALOGE("%s: Device %s in %s not found, no alias set!",
-              __func__, attr[1], PLATFORM_INFO_XML_PATH);
+        ALOGE("%s: Device %s in platform info xml not found, no alias set!",
+              __func__, attr[1]);
         goto done;
     }
 
     if (strcmp(attr[2], "alias") != 0) {
-        ALOGE("%s: Device %s in %s has no alias, no alias set!",
-              __func__, attr[1], PLATFORM_INFO_XML_PATH);
+        ALOGE("%s: Device %s in platform info xml has no alias, no alias set!",
+              __func__, attr[1]);
         goto done;
     }
 
@@ -294,7 +293,7 @@ static void end_tag(void *userdata __unused, const XML_Char *tag_name)
     }
 }
 
-int platform_info_init(void)
+int platform_info_init(const char *filename)
 {
     XML_Parser      parser;
     FILE            *file;
@@ -302,12 +301,12 @@ int platform_info_init(void)
     int             bytes_read;
     void            *buf;
 
-    file = fopen(PLATFORM_INFO_XML_PATH, "r");
+    file = fopen(filename, "r");
     section = ROOT;
 
     if (!file) {
         ALOGD("%s: Failed to open %s, using defaults.",
-            __func__, PLATFORM_INFO_XML_PATH);
+            __func__, filename);
         ret = -ENODEV;
         goto done;
     }
@@ -339,7 +338,7 @@ int platform_info_init(void)
         if (XML_ParseBuffer(parser, bytes_read,
                             bytes_read == 0) == XML_STATUS_ERROR) {
             ALOGE("%s: XML_ParseBuffer failed, for %s",
-                __func__, PLATFORM_INFO_XML_PATH);
+                __func__, filename);
             ret = -EINVAL;
             goto err_free_parser;
         }
